@@ -21,20 +21,32 @@ export default function Bestellingen() {
   const [fvMaanden, setFvMaanden] = useState([]);
   const [fvMaandId, setFvMaandId] = useState(null);
   const [bezig, setBezig] = useState(false);
+  const [globaleProducten, setGlobaleProducten] = useState({});
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
   const ladenBestellingen = () => fetch("/api/bestellingen").then((r) => r.json()).then((d) => setBestellingen(d.bestellingen || []));
+
+  const ladenGlobaleProducten = () =>
+    fetch("/api/bestellingen/producten").then((r) => r.json()).then((d) => {
+      const map = {};
+      (d.producten || []).forEach((p) => { map[p.naam] = p.prijs; });
+      setGlobaleProducten(map);
+    });
 
   useEffect(() => {
     Promise.all([
       fetch("/api/bestellingen").then((r) => r.json()),
       fetch("/api/gebruikers/lijst").then((r) => r.json()),
       fetch("/api/werkjaren").then((r) => r.json()),
-    ]).then(([b, g, w]) => {
+      fetch("/api/bestellingen/producten").then((r) => r.json()),
+    ]).then(([b, g, w, p]) => {
       setBestellingen(b.bestellingen || []);
       setGebruikers(g.users || []);
       if (w.werkjaren?.length) { setWerkjaren(w.werkjaren); setWerkjaarId(w.werkjaren[0].id); }
+      const map = {};
+      (p.producten || []).forEach((prod) => { map[prod.naam] = prod.prijs; });
+      setGlobaleProducten(map);
       setLoading(false);
     });
   }, []);
@@ -92,6 +104,7 @@ export default function Bestellingen() {
     // voor dezelfde persoon toe te voegen (bv. frietjes, vlees, saus).
     setNieuweRegel((prev) => ({ userId: prev.userId, product: "", aantal: "1", prijsPerStuk: "" }));
     ladenOverzicht(bestellingId);
+    ladenGlobaleProducten();
   };
 
   const regelVerwijderen = async (id) => {
@@ -136,8 +149,10 @@ export default function Bestellingen() {
   const totaalBestelling = (overzicht?.personen || []).reduce((s, p) => s + p.totaal, 0);
   const openstaandeBestellingen = bestellingen.filter((b) => !b.verdeeld_naar_fv_maand_id);
 
-  // Bekende producten binnen deze bestelling: naam (originele schrijfwijze) -> laatst gebruikte prijs per stuk.
-  const productPrijzen = {};
+  // Bekende producten: eerst alle producten die ooit besteld zijn (over alle
+  // bestellingen heen, bv. "Pizza salami" bij Anatolia), aangevuld/overschreven
+  // door wat binnen déze bestelling al is ingevuld.
+  const productPrijzen = { ...globaleProducten };
   (overzicht?.personen || []).forEach((p) => {
     p.regels.forEach((r) => {
       productPrijzen[r.product.trim()] = r.prijsPerStuk;
@@ -255,7 +270,7 @@ export default function Bestellingen() {
                     <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Regel toevoegen</div>
                     <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
                       Tip: na het toevoegen blijft de persoon geselecteerd — handig om meteen het volgende product voor diezelfde persoon in te geven (bv. frietjes, vlees, saus). Enter werkt ook om toe te voegen.
-                      Typ een productnaam die al gebruikt is in deze bestelling (bv. "Pizza salami") en de prijs wordt automatisch overgenomen.
+                      Typ een productnaam die al ooit besteld is (ook in een vorige bestelling, bv. "Pizza salami" bij Anatolia) en de prijs wordt automatisch overgenomen.
                     </p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                       <select value={nieuweRegel.userId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, userId: e.target.value })}>
