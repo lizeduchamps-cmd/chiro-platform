@@ -15,7 +15,19 @@ create table if not exists users (
   -- Platformrecht wordt handmatig toegekend door een admin via het beheerscherm
   -- (niet automatisch uit Discord-rollen gehaald — zie README).
   platform_recht text not null default 'lid' check (platform_recht in ('admin', 'financieel_verantwoordelijke', 'lid')),
+  -- Streepjes & online drank (zie /streepjes)
+  fysieke_streepjes numeric(10,2) not null default 0,   -- handmatig ingevoerd, in aantal streepjes
+  online_streepjes_bedrag numeric(10,2) not null default 0,  -- laatst geüploade bedrag uit de Discord-bot-CSV
   created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+-- ============ INSTELLINGEN ============
+-- Generieke key/waarde-tabel voor platforminstellingen (bv. prijs per streepje).
+
+create table if not exists instellingen (
+  key text primary key,
+  waarde text,
   updated_at timestamptz default now()
 );
 
@@ -45,6 +57,28 @@ create table if not exists categorieen (
   is_standaard boolean default false,      -- true voor de vooraf ingestelde lijst, false voor zelf toegevoegde
   created_at timestamptz default now()
 );
+
+insert into categorieen (naam, is_standaard) values
+  ('4-uurtje', true),
+  ('Bier', true),
+  ('Drank leiding', true),
+  ('Financieel Verslag', true),
+  ('Fuif', true),
+  ('Huur', true),
+  ('Kamp', true),
+  ('Kerstfeestje', true),
+  ('Ledenactiviteit', true),
+  ('Lidgeld', true),
+  ('Papierslag', true),
+  ('Payconiq/SumUp', true),
+  ('Sinterklaas', true),
+  ('Subsidie', true),
+  ('Taartenslag', true),
+  ('Uniformen', true),
+  ('Wifi', true),
+  ('Winkellijst', true),
+  ('Onduidelijk/Nog in te vullen', true)
+on conflict (naam) do nothing;
 
 create table if not exists categorisatie_regels (
   id uuid primary key default gen_random_uuid(),
