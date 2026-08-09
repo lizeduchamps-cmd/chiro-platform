@@ -187,7 +187,15 @@ export default function Bestellingen() {
   };
 
   const plakRijWijzigen = (index, veld, waarde) => {
-    setPlakPreview((prev) => prev.map((r, i) => (i === index ? { ...r, [veld]: waarde } : r)));
+    setPlakPreview((prev) => {
+      const bijgewerkt = prev.map((r, i) => (i === index ? { ...r, [veld]: waarde } : r));
+      // Prijs invullen voor één product vult meteen dezelfde prijs in bij elk
+      // ander persoon met datzelfde product in deze plak-preview.
+      if (veld !== "prijsPerStuk") return bijgewerkt;
+      const product = bijgewerkt[index].product.trim().toLowerCase();
+      if (!product) return bijgewerkt;
+      return bijgewerkt.map((r) => (r.product.trim().toLowerCase() === product ? { ...r, prijsPerStuk: waarde } : r));
+    });
   };
 
   const plakRijVerwijderen = (index) => {
