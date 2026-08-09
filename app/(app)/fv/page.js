@@ -17,10 +17,13 @@ function huidigeMaandString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-// FV-groepering: Aspi (groep) telt apart, de rest valt onder Leiding of Logistiek (type).
+// FV-groepering op basis van type (niet groep!): groep is enkel de afdeling
+// die iemand leidt (bv. een Leiding-lid dat de Aspi's leidt heeft groep='Aspi'
+// maar hoort wel degelijk bij "Leiding"). Enkel wie zelf type='Aspi' is,
+// hoort in de Aspi-groep.
 const GROEP_VOLGORDE = ["Leiding", "Logistiek", "Aspi"];
 function fvGroep(user) {
-  if (user.groep === "Aspi") return "Aspi";
+  if (user.type === "Aspi") return "Aspi";
   if (user.type === "Logistiek") return "Logistiek";
   return "Leiding";
 }

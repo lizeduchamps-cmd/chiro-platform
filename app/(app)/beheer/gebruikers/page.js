@@ -3,7 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 
 const GROEPEN = ["Sloebers", "Speelclub", "Rakwi", "Tito", "Keti", "Aspi"];
-const TYPES = ["Hoofdleiding", "Leiding", "Logistiek"];
+const TYPES = ["Hoofdleiding", "Leiding", "Logistiek", "Aspi"];
 const RECHTEN = [
   { value: "admin", label: "Admin (alles)" },
   { value: "financieel_verantwoordelijke", label: "Financieel verantwoordelijke" },

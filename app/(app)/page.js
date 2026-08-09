@@ -32,6 +32,7 @@ export default function Jaaroverzicht() {
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [data, setData] = useState(null);
+  const [evenementenWinst, setEvenementenWinst] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export default function Jaaroverzicht() {
   useEffect(() => {
     if (!werkjaarId) return;
     fetch(`/api/jaaroverzicht?werkjaarId=${werkjaarId}`).then((r) => r.json()).then(setData);
+    fetch(`/api/evenementen/afgerond?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setEvenementenWinst(d.evenementen || []));
   }, [werkjaarId]);
 
   if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
@@ -93,6 +95,32 @@ export default function Jaaroverzicht() {
             </div>
             <MaandGrafiek perMaand={data.perMaand} />
           </div>
+
+          {evenementenWinst.length > 0 && (
+            <div className="card" style={{ marginBottom: 24 }}>
+              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Afgeronde evenementen</div>
+              <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>Winst/verlies uit Evenementen (kassabeheer + kosten/inkomsten).</p>
+              <table>
+                <tbody>
+                  {evenementenWinst.map((e) => (
+                    <tr key={e.id}>
+                      <td style={{ border: "none", padding: "4px 0" }}>{e.naam}</td>
+                      <td className="subtle" style={{ border: "none", padding: "4px 0" }}>{e.datum || ""}</td>
+                      <td className={e.nettoWinst < 0 ? "amount-neg" : ""} style={{ border: "none", padding: "4px 0", textAlign: "right", fontWeight: 700 }}>
+                        {euro(e.nettoWinst)}
+                      </td>
+                    </tr>
+                  ))}
+                  <tr style={{ fontWeight: 700 }}>
+                    <td style={{ borderTop: "1px solid var(--border)", padding: "6px 0" }} colSpan={2}>Totaal</td>
+                    <td style={{ borderTop: "1px solid var(--border)", padding: "6px 0", textAlign: "right" }}>
+                      {euro(evenementenWinst.reduce((s, e) => s + e.nettoWinst, 0))}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="table-wrap">
             <table>

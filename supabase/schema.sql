@@ -10,7 +10,7 @@ create table if not exists users (
   naam text not null,
   email text,
   iban text,                               -- eigen rekeningnummer, voor terugbetalingen (bv. kilometers)
-  type text not null default 'Leiding' check (type in ('Hoofdleiding', 'Leiding', 'Logistiek')),
+  type text not null default 'Leiding' check (type in ('Hoofdleiding', 'Leiding', 'Logistiek', 'Aspi')),
   groep text check (groep in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi') or groep is null),
   verantwoordelijkheden text[] default '{}',
   -- Platformrecht wordt handmatig toegekend door een admin via het beheerscherm
@@ -207,6 +207,7 @@ create table if not exists bestelling_regels (
 
 create table if not exists evenementen (
   id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete set null,
   naam text not null,                        -- bv. 'Fuif 2026'
   datum date,
   status text not null default 'gepland' check (status in ('gepland', 'lopend', 'afgerond')),
@@ -223,15 +224,22 @@ create table if not exists evenement_kassas (
   created_at timestamptz default now()
 );
 
--- De 6 universele hoofdcategorieën uit het budgetteringsmodel; hergebruikt
--- als check-constraint op zowel budgetten als transacties.
+-- Hoofdcategorieën zijn per evenement aanpasbaar (niet elk evenement heeft
+-- dezelfde kostenposten) — elk nieuw evenement start met de 6 universele
+-- standaardcategorieën, en je kan er tijdens het ingeven van transacties
+-- meteen zelf bij maken.
+create table if not exists evenement_categorieen (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  naam text not null,
+  created_at timestamptz default now(),
+  unique(evenement_id, naam)
+);
+
 create table if not exists evenement_budgetten (
   id uuid primary key default gen_random_uuid(),
   evenement_id uuid references evenementen(id) on delete cascade,
-  hoofdcategorie text not null check (hoofdcategorie in (
-    'Infrastructuur & Materiaal', 'Drank & Food', 'Programmatie & Entertainment',
-    'Marketing & Promo', 'Veiligheid & Logistiek', 'Organisatie & Medewerkers'
-  )),
+  hoofdcategorie text not null,               -- naam uit evenement_categorieen van hetzelfde evenement
   budget_toegewezen numeric(10,2),
   created_at timestamptz default now(),
   unique(evenement_id, hoofdcategorie)
@@ -257,10 +265,7 @@ create table if not exists evenement_transacties (
   omschrijving text not null,
   type_geldstroom text not null check (type_geldstroom in ('inkomst', 'uitgave')),
   type_kostenpost text check (type_kostenpost in ('kost', 'investering') or type_kostenpost is null),
-  hoofdcategorie text check (hoofdcategorie in (
-    'Infrastructuur & Materiaal', 'Drank & Food', 'Programmatie & Entertainment',
-    'Marketing & Promo', 'Veiligheid & Logistiek', 'Organisatie & Medewerkers'
-  ) or hoofdcategorie is null),
+  hoofdcategorie text,                        -- naam uit evenement_categorieen van hetzelfde evenement
   subcategorie text,
   bedrag_excl_btw numeric(10,2) not null,
   btw_tarief numeric(4,2) not null default 0 check (btw_tarief in (0, 6, 12, 21)),

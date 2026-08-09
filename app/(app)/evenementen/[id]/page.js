@@ -1,19 +1,12 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { evenementMatchTag } from "@/lib/evenementMatch";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
-const HOOFDCATEGORIEEN = [
-  "Infrastructuur & Materiaal",
-  "Drank & Food",
-  "Programmatie & Entertainment",
-  "Marketing & Promo",
-  "Veiligheid & Logistiek",
-  "Organisatie & Medewerkers",
-];
 const BETAALMETHODES = ["Overschrijving", "Cash", "Bancontact/Kaart", "Factuur op termijn"];
 const STATUSSEN = ["Gepland", "Te vergoeden", "Betaald", "Afgerond"];
 const STATUS_LABEL = { gepland: "Gepland", lopend: "Lopend", afgerond: "Afgerond" };
@@ -44,8 +37,6 @@ export default function EvenementDetail({ params }) {
   const [nieuweTransactie, setNieuweTransactie] = useState(LEGE_TRANSACTIE);
   const [toonTransactieForm, setToonTransactieForm] = useState(false);
 
-  const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
-
   const laden = () => fetch(`/api/evenementen/overzicht?evenementId=${id}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
 
   useEffect(() => {
@@ -56,6 +47,13 @@ export default function EvenementDetail({ params }) {
 
   if (loading || !overzicht) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
   if (overzicht.error) return <p className="amount-neg" style={{ padding: 32 }}>{overzicht.error}</p>;
+
+  // Admin/financieel_verantwoordelijke mogen altijd; daarnaast wie een
+  // verantwoordelijkheid-tag heeft die overeenkomt met de naam van dit
+  // evenement (bv. "Taartenslag" bij evenement "Taartenslag 2026").
+  const magBewerken =
+    ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht) ||
+    evenementMatchTag(session?.user?.verantwoordelijkheden, overzicht.evenement.naam);
 
   const statusWijzigen = async (status) => {
     await fetch("/api/evenementen", {
@@ -149,7 +147,21 @@ export default function EvenementDetail({ params }) {
     laden();
   };
 
-  const { evenement, kassas, kassaOmzetTotaal, transacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
+  const categorieToevoegen = async () => {
+    const naam = prompt("Naam van de nieuwe categorie:");
+    if (!naam?.trim()) return;
+    const res = await fetch("/api/evenementen/categorieen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evenementId: id, naam: naam.trim() }),
+    });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam.trim() }));
+    laden();
+  };
+
+  const { evenement, kassas, kassaOmzetTotaal, categorieen, transacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
 
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
@@ -254,10 +266,14 @@ export default function EvenementDetail({ params }) {
               </tr>
             </thead>
             <tbody>
-              {HOOFDCATEGORIEEN.map((cat) => {
+              {categorieen.length === 0 && (
+                <tr><td colSpan={4} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen categorieën.</td></tr>
+              )}
+              {categorieen.map((c) => {
+                const cat = c.naam;
                 const rij = budgetBurnRate.find((b) => b.hoofdcategorie === cat);
                 return (
-                  <tr key={cat}>
+                  <tr key={c.id}>
                     <td>{cat}</td>
                     <td style={{ textAlign: "right" }}>
                       {magBewerken ? (
@@ -331,10 +347,13 @@ export default function EvenementDetail({ params }) {
                   <option value="investering">Investering (blijft mee)</option>
                 </select>
               )}
-              <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })}>
-                <option value="">Hoofdcategorie...</option>
-                {HOOFDCATEGORIEEN.map((c) => <option key={c} value={c}>{c}</option>)}
-              </select>
+              <div style={{ display: "flex", gap: 4 }}>
+                <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
+                  <option value="">Hoofdcategorie...</option>
+                  {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                </select>
+                <button type="button" onClick={categorieToevoegen} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
+              </div>
               <input placeholder="Subcategorie (optioneel)" value={nieuweTransactie.subcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, subcategorie: e.target.value })} />
               <input type="number" step="0.01" placeholder="Bedrag excl. btw" value={nieuweTransactie.bedragExclBtw} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedragExclBtw: e.target.value })} />
               <select value={nieuweTransactie.btwTarief} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, btwTarief: e.target.value })}>

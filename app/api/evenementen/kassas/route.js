@@ -2,15 +2,16 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { magEvenementBewerken, evenementIdVanKassa } from "@/lib/evenementPermissies";
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
-    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
-  }
-
   const { evenementId, naam, type, wisselgeldStart } = await req.json();
   if (!evenementId || !naam) return NextResponse.json({ error: "evenementId en naam zijn verplicht" }, { status: 400 });
+
+  if (!(await magEvenementBewerken(session, evenementId))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
 
   const { data, error } = await supabaseAdmin
     .from("evenement_kassas")
@@ -29,12 +30,13 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
-    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
-  }
-
   const { id, naam, wisselgeldStart, inhoudEinde } = await req.json();
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const evenementId = await evenementIdVanKassa(id);
+  if (!(await magEvenementBewerken(session, evenementId))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
 
   const updateFields = {};
   if (naam !== undefined) updateFields.naam = naam;
@@ -48,12 +50,13 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
-    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
-  }
-
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const evenementId = await evenementIdVanKassa(id);
+  if (!(await magEvenementBewerken(session, evenementId))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
 
   const { error } = await supabaseAdmin.from("evenement_kassas").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

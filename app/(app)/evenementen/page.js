@@ -7,6 +7,8 @@ const STATUS_LABEL = { gepland: "Gepland", lopend: "Lopend", afgerond: "Afgerond
 
 export default function Evenementen() {
   const { data: session } = useSession();
+  const [werkjaren, setWerkjaren] = useState([]);
+  const [werkjaarId, setWerkjaarId] = useState(null);
   const [evenementen, setEvenementen] = useState([]);
   const [loading, setLoading] = useState(true);
   const [nieuweNaam, setNieuweNaam] = useState("");
@@ -14,9 +16,17 @@ export default function Evenementen() {
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
-  const laden = () => fetch("/api/evenementen").then((r) => r.json()).then((d) => { setEvenementen(d.evenementen || []); setLoading(false); });
+  useEffect(() => {
+    fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
+      if (d.werkjaren?.length) { setWerkjaren(d.werkjaren); setWerkjaarId(d.werkjaren[0].id); }
+      else setLoading(false);
+    });
+  }, []);
 
-  useEffect(() => { laden(); }, []);
+  useEffect(() => {
+    if (!werkjaarId) return;
+    fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => { setEvenementen(d.evenementen || []); setLoading(false); });
+  }, [werkjaarId]);
 
   if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
 
@@ -25,7 +35,7 @@ export default function Evenementen() {
     const res = await fetch("/api/evenementen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ naam: nieuweNaam.trim(), datum: nieuweDatum || null }),
+      body: JSON.stringify({ naam: nieuweNaam.trim(), datum: nieuweDatum || null, werkjaarId }),
     });
     const data = await res.json();
     if (data.error) return alert("⚠️ " + data.error);
@@ -42,9 +52,16 @@ export default function Evenementen() {
 
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Evenementen</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Evenementen</h1>
+        {werkjaren.length > 0 && (
+          <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
+            {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
+          </select>
+        )}
+      </div>
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Kassabeheer en winst/verliesbalans per evenement (fuif, taartenslag, ...).
+        Kassabeheer en winst/verliesbalans per evenement (fuif, taartenslag, ...). Winst van afgeronde evenementen verschijnt automatisch op het Jaaroverzicht.
       </p>
 
       {magBewerken && (
@@ -70,7 +87,7 @@ export default function Evenementen() {
           </thead>
           <tbody>
             {evenementen.length === 0 && (
-              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen evenementen.</td></tr>
+              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen evenementen dit werkjaar.</td></tr>
             )}
             {evenementen.map((e) => (
               <tr key={e.id}>

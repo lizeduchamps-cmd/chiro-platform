@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { magEvenementBewerken, evenementIdVanTransactie } from "@/lib/evenementPermissies";
 
 function berekenBedragTotaal(exclBtw, btwTarief) {
   return Math.round(Number(exclBtw) * (1 + Number(btwTarief) / 100) * 100) / 100;
@@ -9,10 +10,6 @@ function berekenBedragTotaal(exclBtw, btwTarief) {
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
-    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
-  }
-
   const body = await req.json();
   const {
     evenementId, datum, omschrijving, typeGeldstroom, typeKostenpost, hoofdcategorie, subcategorie,
@@ -21,6 +18,9 @@ export async function POST(req) {
 
   if (!evenementId || !datum || !omschrijving || !typeGeldstroom || bedragExclBtw === undefined) {
     return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
+  }
+  if (!(await magEvenementBewerken(session, evenementId))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
   const { count } = await supabaseAdmin.from("evenement_transacties").select("id", { count: "exact", head: true });
@@ -56,13 +56,14 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
-    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
-  }
-
   const body = await req.json();
   const { id, status, bedragExclBtw, btwTarief } = body;
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const evenementId = await evenementIdVanTransactie(id);
+  if (!(await magEvenementBewerken(session, evenementId))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
 
   const updateFields = {};
   if (status !== undefined) updateFields.status = status;
@@ -82,12 +83,13 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
-    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
-  }
-
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const evenementId = await evenementIdVanTransactie(id);
+  if (!(await magEvenementBewerken(session, evenementId))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
 
   const { error } = await supabaseAdmin.from("evenement_transacties").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
