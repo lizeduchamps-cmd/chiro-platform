@@ -24,6 +24,11 @@ export default function Dashboard() {
           </a>
         </p>
       )}
+      <p style={{ marginTop: 8 }}>
+        <a href="/kasboek" style={{ color: "#2F4A3C", fontWeight: 600 }}>
+          → Kasboek
+        </a>
+      </p>
       <p style={{ color: "#9A9A8C", fontSize: 12, marginTop: 24 }}>
         Dit is de eerste werkende versie: login + rechten-koppeling staan. De
         schermen voor kasboek, fv en rollenbeheer bouwen we hierop verder.
