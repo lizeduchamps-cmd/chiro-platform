@@ -88,7 +88,9 @@ export default function Bestellingen() {
     });
     const data = await res.json();
     if (data.error) return alert("⚠️ " + data.error);
-    setNieuweRegel({ userId: "", product: "", aantal: "1", prijsPerStuk: "" });
+    // Persoon blijft geselecteerd: handig om meteen het volgende product
+    // voor dezelfde persoon toe te voegen (bv. frietjes, vlees, saus).
+    setNieuweRegel((prev) => ({ userId: prev.userId, product: "", aantal: "1", prijsPerStuk: "" }));
     ladenOverzicht(bestellingId);
   };
 
@@ -252,7 +254,8 @@ export default function Bestellingen() {
                   <div className="card" style={{ marginBottom: 16 }}>
                     <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Regel toevoegen</div>
                     <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
-                      Tip: typ een productnaam die al gebruikt is in deze bestelling (bv. "Pizza salami") en de prijs wordt automatisch overgenomen.
+                      Tip: na het toevoegen blijft de persoon geselecteerd — handig om meteen het volgende product voor diezelfde persoon in te geven (bv. frietjes, vlees, saus). Enter werkt ook om toe te voegen.
+                      Typ een productnaam die al gebruikt is in deze bestelling (bv. "Pizza salami") en de prijs wordt automatisch overgenomen.
                     </p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                       <select value={nieuweRegel.userId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, userId: e.target.value })}>
@@ -268,12 +271,23 @@ export default function Bestellingen() {
                           const bekendePrijs = zoekBekendePrijs(product);
                           setNieuweRegel((prev) => ({ ...prev, product, prijsPerStuk: bekendePrijs !== undefined ? String(bekendePrijs) : prev.prijsPerStuk }));
                         }}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); regelToevoegen(); } }}
                       />
                       <datalist id="bekende-producten">
                         {Object.keys(productPrijzen).map((naam) => <option key={naam} value={naam} />)}
                       </datalist>
-                      <input type="number" step="1" placeholder="Aantal" value={nieuweRegel.aantal} onChange={(e) => setNieuweRegel({ ...nieuweRegel, aantal: e.target.value })} />
-                      <input type="number" step="0.01" placeholder="Prijs per stuk" value={nieuweRegel.prijsPerStuk} onChange={(e) => setNieuweRegel({ ...nieuweRegel, prijsPerStuk: e.target.value })} />
+                      <input
+                        type="number" step="1" placeholder="Aantal"
+                        value={nieuweRegel.aantal}
+                        onChange={(e) => setNieuweRegel({ ...nieuweRegel, aantal: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); regelToevoegen(); } }}
+                      />
+                      <input
+                        type="number" step="0.01" placeholder="Prijs per stuk"
+                        value={nieuweRegel.prijsPerStuk}
+                        onChange={(e) => setNieuweRegel({ ...nieuweRegel, prijsPerStuk: e.target.value })}
+                        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); regelToevoegen(); } }}
+                      />
                     </div>
                     <button className="btn-primary" onClick={regelToevoegen}>+ Regel toevoegen</button>
                   </div>
