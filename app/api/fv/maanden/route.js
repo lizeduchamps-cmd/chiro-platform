@@ -20,9 +20,9 @@ export async function GET(req) {
   return NextResponse.json({ fvMaanden: data });
 }
 
-// Nieuwe FV-maand aanmaken. Neemt de huidige streepjes-stand van iedereen over
-// als een "Streepjes"-regel op hun FV, en zet de tellers nadien terug op 0 —
-// zodat de volgende maand weer vanaf nul begint (zoals dit nu ook handmatig gaat).
+// Nieuwe FV-maand aanmaken. Iedereen krijgt meteen een (lege) plaats op het
+// overzicht; streepjes worden er bewust vanaf de Streepjes-pagina aan
+// toegevoegd (zie /api/fv/streepjes-toevoegen), niet automatisch hier.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
@@ -51,38 +51,11 @@ export async function POST(req) {
 
   const { data: users } = await supabaseAdmin
     .from("users")
-    .select("id, type, fysieke_streepjes, online_streepjes_bedrag")
+    .select("id")
     .in("type", ["Hoofdleiding", "Leiding", "Logistiek"]);
 
-  const { data: instellingen } = await supabaseAdmin.from("instellingen").select("key, waarde");
-  const prijsPerStreepje = Number(instellingen?.find((i) => i.key === "prijs_per_streepje")?.waarde ?? 0.25);
-
-  const statusRows = [];
-  const regelRows = [];
-  (users || []).forEach((u) => {
-    statusRows.push({ fv_maand_id: fvMaand.id, user_id: u.id, status: "openstaand" });
-
-    const fysiekBedrag = Number(u.fysieke_streepjes || 0) * prijsPerStreepje;
-    const onlineBedrag = Number(u.online_streepjes_bedrag || 0);
-    const streepjesTotaal = fysiekBedrag + onlineBedrag;
-    if (streepjesTotaal > 0) {
-      regelRows.push({
-        fv_maand_id: fvMaand.id,
-        user_id: u.id,
-        omschrijving: "Streepjes",
-        bedrag: Math.round(streepjesTotaal * 100) / 100,
-        bron: "streepjes_bot",
-      });
-    }
-  });
-
+  const statusRows = (users || []).map((u) => ({ fv_maand_id: fvMaand.id, user_id: u.id, status: "openstaand" }));
   if (statusRows.length) await supabaseAdmin.from("fv_status").insert(statusRows);
-  if (regelRows.length) await supabaseAdmin.from("fv_regels").insert(regelRows);
-
-  await supabaseAdmin
-    .from("users")
-    .update({ fysieke_streepjes: 0, online_streepjes_bedrag: 0 })
-    .in("type", ["Hoofdleiding", "Leiding", "Logistiek"]);
 
   return NextResponse.json({ fvMaand });
 }

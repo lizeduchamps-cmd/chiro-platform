@@ -10,7 +10,7 @@ function euro(n) {
 
 function MaandGrafiek({ perMaand }) {
   const maanden = Object.keys(perMaand).sort();
-  if (maanden.length === 0) return <p style={{ color: "#9A9A8C", fontStyle: "italic" }}>Nog geen transacties dit werkjaar.</p>;
+  if (maanden.length === 0) return <p className="subtle" style={{ fontStyle: "italic" }}>Nog geen transacties dit werkjaar.</p>;
 
   const max = Math.max(1, ...maanden.map((m) => Math.max(perMaand[m].inkomsten, perMaand[m].uitgaven)));
 
@@ -19,10 +19,10 @@ function MaandGrafiek({ perMaand }) {
       {maanden.map((m) => (
         <div key={m} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 56 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 130 }}>
-            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "#2F4A3C", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 3 }} />
-            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "#B24C4C", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 3 }} />
+            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "#1b315c", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 3 }} />
+            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "#B3261E", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 3 }} />
           </div>
-          <div style={{ fontSize: 10, color: "#6B6B5F", marginTop: 6 }}>{m.slice(5)}/{m.slice(2, 4)}</div>
+          <div className="subtle" style={{ fontSize: 10, marginTop: 6 }}>{m.slice(5)}/{m.slice(2, 4)}</div>
         </div>
       ))}
     </div>
@@ -56,14 +56,14 @@ export default function Jaaroverzicht() {
     <Layout session={session}>
       <div style={{ padding: 32, maxWidth: 1100 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22" }}>Jaaroverzicht</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 600 }}>Jaaroverzicht</h1>
           {werkjaren.length > 0 && (
-            <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ padding: 8, fontWeight: 600 }}>
+            <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
               {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
             </select>
           )}
         </div>
-        <p style={{ color: "#6B6B5F", fontSize: 14, marginBottom: 24 }}>
+        <p className="muted" style={{ fontSize: 14, marginBottom: 24 }}>
           Welkom, {session.user.name}. Voor de details kan je naar Kasboek of CSV Upload in de zijbalk.
         </p>
 
@@ -74,46 +74,46 @@ export default function Jaaroverzicht() {
         ) : (
           <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
-              <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16 }}>
-                <div style={{ fontSize: 12, color: "#6B6B5F" }}>Totale inkomsten</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#2F4A3C" }}>{euro(data.totaalInkomsten)}</div>
-                {data.vorigJaarTotalen && <div style={{ fontSize: 11, color: "#9A9A8C" }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
+              <div className="stat">
+                <div className="muted" style={{ fontSize: 12 }}>Totale inkomsten</div>
+                <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>
+                {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 11 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
               </div>
-              <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16 }}>
-                <div style={{ fontSize: 12, color: "#6B6B5F" }}>Totale uitgaven</div>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#B24C4C" }}>{euro(data.totaalUitgaven)}</div>
-                {data.vorigJaarTotalen && <div style={{ fontSize: 11, color: "#9A9A8C" }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
+              <div className="stat">
+                <div className="muted" style={{ fontSize: 12 }}>Totale uitgaven</div>
+                <div className="amount-neg" style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalUitgaven)}</div>
+                {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 11 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
               </div>
-              <div style={{ background: "#2F4A3C", color: "white", borderRadius: 12, padding: 16 }}>
-                <div style={{ fontSize: 12, color: "#D9A62E" }}>Netto resultaat</div>
+              <div className="stat-primary">
+                <div style={{ fontSize: 12, opacity: 0.75 }}>Netto resultaat</div>
                 <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.netto)}</div>
               </div>
             </div>
 
-            <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16, marginBottom: 24 }}>
+            <div className="card" style={{ marginBottom: 24 }}>
               <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Inkomsten &amp; uitgaven per maand</div>
-              <div style={{ display: "flex", gap: 16, fontSize: 11, color: "#6B6B5F", marginBottom: 4 }}>
-                <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#2F4A3C", borderRadius: 2, marginRight: 4 }}></span>Inkomsten</span>
-                <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#B24C4C", borderRadius: 2, marginRight: 4 }}></span>Uitgaven</span>
+              <div className="muted" style={{ display: "flex", gap: 16, fontSize: 11, marginBottom: 4 }}>
+                <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#1b315c", borderRadius: 2, marginRight: 4 }}></span>Inkomsten</span>
+                <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#B3261E", borderRadius: 2, marginRight: 4 }}></span>Uitgaven</span>
               </div>
               <MaandGrafiek perMaand={data.perMaand} />
             </div>
 
-            <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, overflow: "hidden" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div className="table-wrap">
+              <table>
                 <thead>
-                  <tr style={{ background: "#F5F3EE", textAlign: "left" }}>
-                    <th style={{ padding: 8 }}>Categorie</th>
-                    <th style={{ padding: 8, textAlign: "right" }}>Inkomsten</th>
-                    <th style={{ padding: 8, textAlign: "right" }}>Uitgaven</th>
+                  <tr>
+                    <th>Categorie</th>
+                    <th style={{ textAlign: "right" }}>Inkomsten</th>
+                    <th style={{ textAlign: "right" }}>Uitgaven</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.entries(data.perCategorie).sort((a, b) => (b[1].uitgaven + b[1].inkomsten) - (a[1].uitgaven + a[1].inkomsten)).map(([naam, v]) => (
-                    <tr key={naam} style={{ borderTop: "1px solid #F0EEE5" }}>
-                      <td style={{ padding: 8 }}>{naam}</td>
-                      <td style={{ padding: 8, textAlign: "right", color: "#2F4A3C" }}>{v.inkomsten ? euro(v.inkomsten) : "-"}</td>
-                      <td style={{ padding: 8, textAlign: "right", color: "#B24C4C" }}>{v.uitgaven ? euro(v.uitgaven) : "-"}</td>
+                    <tr key={naam}>
+                      <td>{naam}</td>
+                      <td style={{ textAlign: "right" }}>{v.inkomsten ? euro(v.inkomsten) : "-"}</td>
+                      <td className="amount-neg" style={{ textAlign: "right" }}>{v.uitgaven ? euro(v.uitgaven) : "-"}</td>
                     </tr>
                   ))}
                 </tbody>

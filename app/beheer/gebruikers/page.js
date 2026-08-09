@@ -46,7 +46,7 @@ export default function GebruikersBeheer() {
       </Layout>
     );
   }
-  if (error) return <Layout session={session}><p style={{ padding: 32, color: "#B24C4C" }}>{error}</p></Layout>;
+  if (error) return <Layout session={session}><p className="amount-neg" style={{ padding: 32 }}>{error}</p></Layout>;
 
   const updateUser = (id, fields) => {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...fields } : u)));
@@ -91,42 +91,42 @@ export default function GebruikersBeheer() {
     <Layout session={session}>
     <div style={{ padding: 32 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22" }}>Gebruikers &amp; rollen</h1>
-        <button onClick={nieuweGebruiker} style={{ background: "#2F4A3C", color: "white", padding: "8px 14px", borderRadius: 8, border: "none" }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Gebruikers &amp; rollen</h1>
+        <button className="btn-primary" onClick={nieuweGebruiker}>
           + Gebruiker toevoegen
         </button>
       </div>
-      <p style={{ color: "#6B6B5F", fontSize: 14, marginBottom: 24 }}>
+      <p className="muted" style={{ fontSize: 14, marginBottom: 24 }}>
         Wijs hier per persoon het type, de groep, verantwoordelijkheden en platformrecht toe.
         Wijzigingen worden meteen opgeslagen.
       </p>
-      <div style={{ overflowX: "auto" }}>
-        <table style={{ borderCollapse: "collapse", width: "100%", background: "white" }}>
+      <div className="table-wrap" style={{ overflowX: "auto" }}>
+        <table>
           <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #E4E0D4", background: "#F5F3EE" }}>
-              <th style={{ padding: 10 }}>Naam</th>
-              <th style={{ padding: 10 }}>Type</th>
-              <th style={{ padding: 10 }}>Groep</th>
-              <th style={{ padding: 10 }}>Verantwoordelijkheden</th>
-              <th style={{ padding: 10 }}>Platformrecht</th>
-              <th style={{ padding: 10 }}></th>
+            <tr>
+              <th>Naam</th>
+              <th>Type</th>
+              <th>Groep</th>
+              <th>Verantwoordelijkheden</th>
+              <th>Platformrecht</th>
+              <th></th>
             </tr>
           </thead>
           <tbody>
             {users.map((u) => (
-              <tr key={u.id} style={{ borderBottom: "1px solid #F0EEE5" }}>
-                <td style={{ padding: 10 }}>
+              <tr key={u.id}>
+                <td>
                   {u.naam}
-                  <div style={{ fontSize: 11, color: "#9A9A8C" }}>@{u.discord_username}</div>
+                  <div className="subtle" style={{ fontSize: 11 }}>@{u.discord_username}</div>
                 </td>
-                <td style={{ padding: 10 }}>
+                <td>
                   <select value={u.type || ""} onChange={(e) => updateUser(u.id, { type: e.target.value })}>
                     {TYPES.map((t) => (
                       <option key={t} value={t}>{t}</option>
                     ))}
                   </select>
                 </td>
-                <td style={{ padding: 10 }}>
+                <td>
                   <select value={u.groep || ""} onChange={(e) => updateUser(u.id, { groep: e.target.value })}>
                     <option value="">-</option>
                     {GROEPEN.map((g) => (
@@ -134,7 +134,7 @@ export default function GebruikersBeheer() {
                     ))}
                   </select>
                 </td>
-                <td style={{ padding: 10 }}>
+                <td>
                   {VERANTWOORDELIJKHEDEN.map((v) => (
                     <label key={v} style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 10, fontSize: 12 }}>
                       <input
@@ -146,15 +146,15 @@ export default function GebruikersBeheer() {
                     </label>
                   ))}
                 </td>
-                <td style={{ padding: 10 }}>
+                <td>
                   <select value={u.platform_recht || "lid"} onChange={(e) => updateUser(u.id, { platform_recht: e.target.value })}>
                     {RECHTEN.map((r) => (
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
                 </td>
-                <td style={{ padding: 10 }}>
-                  <button onClick={() => verwijderGebruiker(u)} title="Verwijderen" style={{ color: "#B24C4C", background: "none", border: "none", cursor: "pointer" }}>
+                <td>
+                  <button className="btn-danger" onClick={() => verwijderGebruiker(u)} title="Verwijderen">
                     🗑️
                   </button>
                 </td>

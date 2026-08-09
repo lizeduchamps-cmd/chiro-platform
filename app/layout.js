@@ -1,4 +1,5 @@
 import Providers from "./providers";
+import "./globals.css";
 
 export const metadata = {
   title: "Chiro Hoepertingen — Financiën",
@@ -8,7 +9,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="nl">
-      <body style={{ fontFamily: "system-ui, sans-serif", background: "#F5F3EE", margin: 0 }}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>

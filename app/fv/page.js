@@ -113,19 +113,21 @@ export default function FinancieelVerslag() {
   };
 
   const kmToevoegen = async (userId) => {
-    const km = parseFloat(nieuweKm[userId]);
+    const veld = nieuweKm[userId] || {};
+    const km = parseFloat(veld.km);
     if (!km) return alert("Vul een aantal kilometer in.");
     const tarief = overzicht.fvMaand.km_tarief_leiding;
     if (!tarief) return alert("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
     const bedrag = -(Math.round(km * tarief * 100) / 100);
+    const omschrijving = veld.reden ? `Kilometervergoeding ${veld.reden} (${km} km)` : `Kilometervergoeding (${km} km)`;
     const res = await fetch("/api/fv/regels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fvMaandId, userId, omschrijving: `Kilometervergoeding (${km} km)`, bedrag }),
+      body: JSON.stringify({ fvMaandId, userId, omschrijving, bedrag }),
     });
     const data = await res.json();
     if (data.error) return alert("⚠️ " + data.error);
-    setNieuweKm((prev) => ({ ...prev, [userId]: "" }));
+    setNieuweKm((prev) => ({ ...prev, [userId]: { km: "", reden: "" } }));
     ladenOverzicht(fvMaandId);
   };
 
@@ -150,129 +152,124 @@ export default function FinancieelVerslag() {
       <div style={{ padding: 32, maxWidth: 1100 }}>
         <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 4 }}>
           <div>
-            <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22", marginBottom: 4 }}>Financieel Verslag</h1>
-            <p style={{ color: "#6B6B5F", fontSize: 14 }}>Maandelijkse afrekening per persoon: streepjes, kilometers en overige kosten.</p>
+            <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Financieel Verslag</h1>
+            <p className="muted" style={{ fontSize: 14 }}>Maandelijkse afrekening per persoon: streepjes, kilometers en overige kosten.</p>
           </div>
           {overzicht && (
-            <button onClick={() => window.print()} style={{ padding: "8px 14px" }}>🖨️ Afdrukken / PDF</button>
+            <button onClick={() => window.print()}>🖨️ Afdrukken / PDF</button>
           )}
         </div>
 
         <div className="no-print" style={{ display: "flex", gap: 12, alignItems: "center", margin: "16px 0", flexWrap: "wrap" }}>
-          <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ padding: 8 }}>
+          <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
-          <select value={fvMaandId || ""} onChange={(e) => setFvMaandId(e.target.value)} style={{ padding: 8 }}>
+          <select value={fvMaandId || ""} onChange={(e) => setFvMaandId(e.target.value)}>
             {fvMaanden.length === 0 && <option value="">Nog geen FV-maand</option>}
             {fvMaanden.map((m) => <option key={m.id} value={m.id}>{maandLabel(m.maand)}</option>)}
           </select>
           {magBewerken && (
-            <button onClick={() => setNieuweMaandOpen(!nieuweMaandOpen)} style={{ padding: "8px 12px" }}>
+            <button onClick={() => setNieuweMaandOpen(!nieuweMaandOpen)}>
               + Nieuwe FV-maand
             </button>
           )}
         </div>
 
         {nieuweMaandOpen && (
-          <div className="no-print" style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <div className="no-print card" style={{ marginBottom: 20 }}>
             <div style={{ fontWeight: 600, marginBottom: 10 }}>Nieuwe FV-maand</div>
-            <p style={{ fontSize: 12, color: "#9A9A8C", marginBottom: 10 }}>
-              Bij het aanmaken wordt de huidige streepjes-stand van iedereen automatisch overgenomen als FV-regel, waarna de tellers op de Streepjes-pagina terug op 0 gaan.
+            <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+              Iedereen krijgt meteen een lege plaats op dit FV. Streepjes voeg je bewust toe vanaf de Streepjes-pagina.
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 10 }}>
               <label style={{ fontSize: 12 }}>
                 Maand (JJJJ-MM)
-                <input value={nieuweMaand.maand} onChange={(e) => setNieuweMaand({ ...nieuweMaand, maand: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
+                <input value={nieuweMaand.maand} onChange={(e) => setNieuweMaand({ ...nieuweMaand, maand: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />
               </label>
               <label style={{ fontSize: 12 }}>
                 Betaaldeadline
-                <input type="date" value={nieuweMaand.betaaldeadline} onChange={(e) => setNieuweMaand({ ...nieuweMaand, betaaldeadline: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
+                <input type="date" value={nieuweMaand.betaaldeadline} onChange={(e) => setNieuweMaand({ ...nieuweMaand, betaaldeadline: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />
               </label>
               <label style={{ fontSize: 12 }}>
                 Dieselprijs (€/L)
-                <input type="number" step="0.01" value={nieuweMaand.dieselprijs} onChange={(e) => setNieuweMaand({ ...nieuweMaand, dieselprijs: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
+                <input type="number" step="0.01" value={nieuweMaand.dieselprijs} onChange={(e) => setNieuweMaand({ ...nieuweMaand, dieselprijs: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />
               </label>
               <label style={{ fontSize: 12 }}>
                 Gem. verbruik (L/100km)
-                <input type="number" step="0.1" value={nieuweMaand.verbruik} onChange={(e) => setNieuweMaand({ ...nieuweMaand, verbruik: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
+                <input type="number" step="0.1" value={nieuweMaand.verbruik} onChange={(e) => setNieuweMaand({ ...nieuweMaand, verbruik: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />
               </label>
             </div>
-            <p style={{ fontSize: 12, color: "#6B6B5F", marginBottom: 10 }}>
+            <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
               Km-vergoeding voor iedereen: {berekendKmTarief() ? `€${berekendKmTarief()}/km` : "vul dieselprijs en verbruik in"}
               {" "}(dieselprijs × verbruik ÷ 100)
             </p>
-            <button onClick={nieuweMaandAanmaken} style={{ background: "#2F4A3C", color: "white", padding: "8px 16px", borderRadius: 8, border: "none" }}>
+            <button className="btn-primary" onClick={nieuweMaandAanmaken}>
               Aanmaken
             </button>
           </div>
         )}
 
         {!overzicht ? (
-          <p style={{ color: "#9A9A8C", fontStyle: "italic" }}>
+          <p className="muted" style={{ fontStyle: "italic" }}>
             {fvMaanden.length === 0 ? "Nog geen FV-maand aangemaakt voor dit werkjaar." : "Laden…"}
           </p>
         ) : (
           <>
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: "#1E2A22", margin: "8px 0 16px" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, margin: "8px 0 16px" }}>
               {maandLabel(overzicht.fvMaand.maand)}
               {overzicht.fvMaand.betaaldeadline && (
-                <span style={{ fontSize: 12, color: "#9A9A8C", fontWeight: 400, marginLeft: 10 }}>
+                <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginLeft: 10 }}>
                   Betaaldeadline: {overzicht.fvMaand.betaaldeadline}
                 </span>
               )}
               {overzicht.fvMaand.km_tarief_leiding && (
-                <span style={{ fontSize: 12, color: "#9A9A8C", fontWeight: 400, marginLeft: 10 }}>
+                <span className="muted" style={{ fontSize: 12, fontWeight: 400, marginLeft: 10 }}>
                   Km-vergoeding: €{overzicht.fvMaand.km_tarief_leiding}/km
                 </span>
               )}
             </h2>
 
             {overzicht.personen.length === 0 && (
-              <p style={{ color: "#9A9A8C", fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
+              <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
             )}
 
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {overzicht.personen.map((p) => (
-                <div key={p.user.id} style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16, pageBreakInside: "avoid" }}>
+                <div key={p.user.id} className="card" style={{ pageBreakInside: "avoid" }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
                     <div>
-                      <div style={{ fontWeight: 700, color: "#1E2A22" }}>{p.user.naam}</div>
-                      <div style={{ fontSize: 11, color: "#9A9A8C" }}>{p.user.type}{p.user.groep ? ` · ${p.user.groep}` : ""}</div>
+                      <div style={{ fontWeight: 700 }}>{p.user.naam}</div>
+                      <div className="subtle" style={{ fontSize: 11 }}>{p.user.type}{p.user.groep ? ` · ${p.user.groep}` : ""}</div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: p.totaal < 0 ? "#2F4A3C" : "#B24C4C" }}>
+                      <div className={p.totaal >= 0 ? "amount-neg" : ""} style={{ fontSize: 18, fontWeight: 700 }}>
                         {p.totaal < 0 ? "Terug te krijgen: " : "Te betalen: "}{euro(Math.abs(p.totaal))}
                       </div>
                       <button
-                        className="no-print"
+                        className={`no-print badge ${p.status === "betaald" ? "badge-primary" : "badge-neutral"}`}
                         onClick={() => magBewerken && statusToggle(p.user.id, p.status)}
                         disabled={!magBewerken}
-                        style={{
-                          fontSize: 11, padding: "4px 10px", borderRadius: 20, border: "none",
-                          background: p.status === "betaald" ? "#DCE9DE" : "#FBEFE0",
-                          color: p.status === "betaald" ? "#2F4A3C" : "#9A6A1E",
-                          cursor: magBewerken ? "pointer" : "default",
-                        }}
+                        style={{ border: "none", cursor: magBewerken ? "pointer" : "default" }}
                       >
                         {p.status === "betaald" ? "✅ Betaald" : "⏳ Openstaand"}
                       </button>
                     </div>
                   </div>
 
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginBottom: magBewerken ? 8 : 0 }}>
+                  <table style={{ marginBottom: magBewerken ? 8 : 0 }}>
                     <tbody>
                       {p.regels.length === 0 && (
-                        <tr><td style={{ padding: "4px 0", color: "#9A9A8C", fontStyle: "italic" }}>Nog geen regels.</td></tr>
+                        <tr><td className="muted" style={{ padding: "4px 0", border: "none", fontStyle: "italic" }}>Nog geen regels.</td></tr>
                       )}
                       {p.regels.map((r) => (
-                        <tr key={r.id} style={{ borderTop: "1px solid #F0EEE5" }}>
-                          <td style={{ padding: "6px 0", color: "#6B6B5F" }}>{r.omschrijving}</td>
-                          <td style={{ padding: "6px 0", textAlign: "right", fontWeight: 600, color: r.bedrag < 0 ? "#2F4A3C" : "#1E2A22", width: 100 }}>
+                        <tr key={r.id}>
+                          <td className="muted" style={{ padding: "6px 0", border: "none" }}>{r.omschrijving}</td>
+                          <td style={{ padding: "6px 0", border: "none", textAlign: "right", fontWeight: 600, width: 100 }}>
                             {r.bedrag < 0 ? "-" : ""}{euro(Math.abs(r.bedrag))}
                           </td>
                           {magBewerken && (
-                            <td className="no-print" style={{ padding: "6px 0", width: 24, textAlign: "right" }}>
-                              <button onClick={() => regelVerwijderen(r.id)} title="Verwijderen" style={{ fontSize: 12 }}>🗑️</button>
+                            <td className="no-print" style={{ padding: "6px 0", border: "none", width: 24, textAlign: "right" }}>
+                              <button className="btn-danger" onClick={() => regelVerwijderen(r.id)} title="Verwijderen" style={{ fontSize: 12 }}>🗑️</button>
                             </td>
                           )}
                         </tr>
@@ -281,28 +278,34 @@ export default function FinancieelVerslag() {
                   </table>
 
                   {magBewerken && (
-                    <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid #F0EEE5", paddingTop: 8 }}>
+                    <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 8 }}>
                       <input
                         placeholder="Omschrijving, bv. Frituur 16/05"
                         value={nieuweRegel[p.user.id]?.omschrijving || ""}
                         onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
-                        style={{ padding: 6, fontSize: 12, flex: 1, minWidth: 140 }}
+                        style={{ fontSize: 12, flex: 1, minWidth: 140 }}
                       />
                       <input
                         type="number" step="0.01" placeholder="Bedrag"
                         value={nieuweRegel[p.user.id]?.bedrag || ""}
                         onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
-                        style={{ padding: 6, fontSize: 12, width: 90 }}
+                        style={{ fontSize: 12, width: 90 }}
                       />
-                      <button onClick={() => regelToevoegen(p.user.id)} style={{ padding: "6px 10px", fontSize: 12 }}>+ Regel</button>
+                      <button onClick={() => regelToevoegen(p.user.id)} style={{ fontSize: 12 }}>+ Regel</button>
 
                       <input
                         type="number" step="1" placeholder="Km gereden"
-                        value={nieuweKm[p.user.id] || ""}
-                        onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: e.target.value }))}
-                        style={{ padding: 6, fontSize: 12, width: 90 }}
+                        value={nieuweKm[p.user.id]?.km || ""}
+                        onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], km: e.target.value } }))}
+                        style={{ fontSize: 12, width: 90 }}
                       />
-                      <button onClick={() => kmToevoegen(p.user.id)} style={{ padding: "6px 10px", fontSize: 12 }}>+ Km-vergoeding</button>
+                      <input
+                        placeholder="Waarvoor? bv. Weekend"
+                        value={nieuweKm[p.user.id]?.reden || ""}
+                        onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], reden: e.target.value } }))}
+                        style={{ fontSize: 12, width: 130 }}
+                      />
+                      <button onClick={() => kmToevoegen(p.user.id)} style={{ fontSize: 12 }}>+ Km-vergoeding</button>
                     </div>
                   )}
                 </div>

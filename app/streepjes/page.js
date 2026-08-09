@@ -8,6 +8,12 @@ function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
+function maandLabel(maand) {
+  const namen = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  const [j, m] = maand.split("-");
+  return `${namen[parseInt(m, 10) - 1]} ${j}`;
+}
+
 // Robuuste CSV-parser die rekening houdt met aanhalingstekens (bv. "0,25")
 function parseCSVLine(line, delimiter) {
   const result = [];
@@ -35,6 +41,9 @@ export default function Streepjes() {
   const [users, setUsers] = useState([]);
   const [prijsPerStreepje, setPrijsPerStreepje] = useState(0.25);
   const [loading, setLoading] = useState(true);
+  const [fvMaanden, setFvMaanden] = useState([]);
+  const [fvMaandId, setFvMaandId] = useState(null);
+  const [bezig, setBezig] = useState(false);
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
@@ -49,6 +58,18 @@ export default function Streepjes() {
   useEffect(() => {
     if (status === "authenticated") laden();
   }, [status]);
+
+  useEffect(() => {
+    if (status !== "authenticated" || !magBewerken) return;
+    fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
+      const werkjaarId = d.werkjaren?.[0]?.id;
+      if (!werkjaarId) return;
+      fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((m) => {
+        setFvMaanden(m.fvMaanden || []);
+        setFvMaandId(m.fvMaanden?.[0]?.id || null);
+      });
+    });
+  }, [status, magBewerken]);
 
   if (status === "loading" || loading) return <p style={{ padding: 32 }}>Laden…</p>;
   if (status === "unauthenticated") redirect("/inloggen");
@@ -69,6 +90,21 @@ export default function Streepjes() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prijsPerStreepje: parseFloat(waarde) || 0 }),
     });
+  };
+
+  const toevoegenAanFv = async (userIds) => {
+    if (!fvMaandId) return alert("Kies eerst een FV-maand.");
+    setBezig(true);
+    const res = await fetch("/api/fv/streepjes-toevoegen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fvMaandId, userIds }),
+    });
+    const data = await res.json();
+    setBezig(false);
+    if (data.error) return alert("⚠️ " + data.error);
+    alert(`✅ ${data.aantal} streepjes-regel(s) toegevoegd aan het FV. Tellers zijn terug op 0 gezet.`);
+    laden();
   };
 
   const onCsv = (e) => {
@@ -117,12 +153,13 @@ export default function Streepjes() {
 
   const totaalFysiekBedrag = users.reduce((s, u) => s + (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje, 0);
   const totaalOnline = users.reduce((s, u) => s + (Number(u.online_streepjes_bedrag) || 0), 0);
+  const gebruikersMetSaldo = users.filter((u) => (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje + (Number(u.online_streepjes_bedrag) || 0) > 0);
 
   return (
     <Layout session={session}>
       <div style={{ padding: 32, maxWidth: 1000 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22", marginBottom: 4 }}>Streepjes &amp; online drank</h1>
-        <p style={{ color: "#6B6B5F", fontSize: 14, marginBottom: 20 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Streepjes &amp; online drank</h1>
+        <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
           Fysieke streepjes (op papier bijgehouden) vul je hier handmatig in. Online streepjes (via de Discord-bot) upload je als CSV.
         </p>
 
@@ -130,62 +167,96 @@ export default function Streepjes() {
           <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
             <label style={{ fontSize: 13 }}>
               Prijs per streepje: €
-              <input type="number" step="0.01" value={prijsPerStreepje} onChange={(e) => updatePrijs(e.target.value)} style={{ width: 70, marginLeft: 6, padding: 4 }} />
+              <input type="number" step="0.01" value={prijsPerStreepje} onChange={(e) => updatePrijs(e.target.value)} style={{ width: 70, marginLeft: 6 }} />
             </label>
-            <label style={{ background: "#2F4A3C", color: "white", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
+            <label className="btn-primary" style={{ padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, display: "inline-block" }}>
               📄 Online streepjes CSV uploaden
               <input type="file" accept=".csv" onChange={onCsv} style={{ display: "none" }} />
             </label>
           </div>
         )}
 
-        <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, overflow: "hidden" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        {magBewerken && (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Toevoegen aan Financieel Verslag</div>
+            <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+              Kies de FV-maand en voeg de huidige streepjes-stand van iedereen (of van één persoon) daaraan toe. De tellers gaan daarna terug op 0.
+            </p>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <select value={fvMaandId || ""} onChange={(e) => setFvMaandId(e.target.value)}>
+                {fvMaanden.length === 0 && <option value="">Nog geen FV-maand aangemaakt</option>}
+                {fvMaanden.map((m) => <option key={m.id} value={m.id}>{maandLabel(m.maand)}</option>)}
+              </select>
+              <button
+                className="btn-primary"
+                disabled={bezig || !fvMaandId || gebruikersMetSaldo.length === 0}
+                onClick={() => toevoegenAanFv(gebruikersMetSaldo.map((u) => u.id))}
+              >
+                Voeg iedereen met streepjes toe ({gebruikersMetSaldo.length})
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="table-wrap">
+          <table>
             <thead>
-              <tr style={{ background: "#F5F3EE", textAlign: "left" }}>
-                <th style={{ padding: 10 }}>Naam</th>
-                <th style={{ padding: 10 }}>Fysieke streepjes</th>
-                <th style={{ padding: 10, textAlign: "right" }}>Bedrag fysiek</th>
-                <th style={{ padding: 10, textAlign: "right" }}>Bedrag online</th>
-                <th style={{ padding: 10, textAlign: "right" }}>Totaal</th>
+              <tr>
+                <th>Naam</th>
+                <th>Fysieke streepjes</th>
+                <th style={{ textAlign: "right" }}>Bedrag fysiek</th>
+                <th style={{ textAlign: "right" }}>Bedrag online</th>
+                <th style={{ textAlign: "right" }}>Totaal</th>
+                {magBewerken && <th></th>}
               </tr>
             </thead>
             <tbody>
               {users.map((u) => {
                 const fysiekBedrag = (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje;
                 const online = Number(u.online_streepjes_bedrag) || 0;
+                const totaal = fysiekBedrag + online;
                 return (
-                  <tr key={u.id} style={{ borderTop: "1px solid #F0EEE5" }}>
-                    <td style={{ padding: 10 }}>
+                  <tr key={u.id}>
+                    <td>
                       {u.naam}
-                      <div style={{ fontSize: 11, color: "#9A9A8C" }}>@{u.discord_username}</div>
+                      <div className="subtle" style={{ fontSize: 11 }}>@{u.discord_username}</div>
                     </td>
-                    <td style={{ padding: 10 }}>
+                    <td>
                       {magBewerken ? (
                         <input
                           type="number"
                           step="0.25"
                           value={u.fysieke_streepjes || 0}
                           onChange={(e) => updateFysiek(u.id, e.target.value)}
-                          style={{ width: 70, padding: 4 }}
+                          style={{ width: 70 }}
                         />
                       ) : (
                         u.fysieke_streepjes || 0
                       )}
                     </td>
-                    <td style={{ padding: 10, textAlign: "right" }}>{euro(fysiekBedrag)}</td>
-                    <td style={{ padding: 10, textAlign: "right" }}>{euro(online)}</td>
-                    <td style={{ padding: 10, textAlign: "right", fontWeight: 700, color: "#2F4A3C" }}>{euro(fysiekBedrag + online)}</td>
+                    <td style={{ textAlign: "right" }}>{euro(fysiekBedrag)}</td>
+                    <td style={{ textAlign: "right" }}>{euro(online)}</td>
+                    <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(totaal)}</td>
+                    {magBewerken && (
+                      <td style={{ textAlign: "right" }}>
+                        {totaal > 0 && (
+                          <button disabled={bezig || !fvMaandId} onClick={() => toevoegenAanFv([u.id])} style={{ fontSize: 11, padding: "4px 8px" }}>
+                            + FV
+                          </button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 );
               })}
             </tbody>
             <tfoot>
-              <tr style={{ borderTop: "2px solid #E4E0D4", fontWeight: 700 }}>
-                <td style={{ padding: 10 }} colSpan={2}>Totaal</td>
-                <td style={{ padding: 10, textAlign: "right" }}>{euro(totaalFysiekBedrag)}</td>
-                <td style={{ padding: 10, textAlign: "right" }}>{euro(totaalOnline)}</td>
-                <td style={{ padding: 10, textAlign: "right" }}>{euro(totaalFysiekBedrag + totaalOnline)}</td>
+              <tr style={{ fontWeight: 700 }}>
+                <td colSpan={2}>Totaal</td>
+                <td style={{ textAlign: "right" }}>{euro(totaalFysiekBedrag)}</td>
+                <td style={{ textAlign: "right" }}>{euro(totaalOnline)}</td>
+                <td style={{ textAlign: "right" }}>{euro(totaalFysiekBedrag + totaalOnline)}</td>
+                {magBewerken && <td></td>}
               </tr>
             </tfoot>
           </table>
