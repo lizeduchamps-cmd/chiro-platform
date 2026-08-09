@@ -41,6 +41,8 @@ export default function Streepjes() {
   const [users, setUsers] = useState([]);
   const [prijsPerStreepje, setPrijsPerStreepje] = useState(0.25);
   const [loading, setLoading] = useState(true);
+  const [werkjaren, setWerkjaren] = useState([]);
+  const [werkjaarId, setWerkjaarId] = useState(null);
   const [fvMaanden, setFvMaanden] = useState([]);
   const [fvMaandId, setFvMaandId] = useState(null);
   const [bezig, setBezig] = useState(false);
@@ -64,14 +66,20 @@ export default function Streepjes() {
   useEffect(() => {
     if (status !== "authenticated" || !magBewerken) return;
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
-      const werkjaarId = d.werkjaren?.[0]?.id;
-      if (!werkjaarId) return;
-      fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((m) => {
-        setFvMaanden(m.fvMaanden || []);
-        setFvMaandId(m.fvMaanden?.[0]?.id || null);
-      });
+      if (d.error) return alert("⚠️ Kon werkjaren niet ophalen: " + d.error);
+      setWerkjaren(d.werkjaren || []);
+      if (d.werkjaren?.length) setWerkjaarId(d.werkjaren[0].id);
     });
   }, [status, magBewerken]);
+
+  useEffect(() => {
+    if (!werkjaarId) return;
+    fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((m) => {
+      if (m.error) return alert("⚠️ Kon FV-maanden niet ophalen: " + m.error);
+      setFvMaanden(m.fvMaanden || []);
+      setFvMaandId(m.fvMaanden?.[0]?.id || null);
+    });
+  }, [werkjaarId]);
 
   if (status === "loading" || loading) return <p style={{ padding: 32 }}>Laden…</p>;
   if (status === "unauthenticated") redirect("/inloggen");
@@ -185,6 +193,11 @@ export default function Streepjes() {
               Kies de FV-maand en voeg de huidige streepjes-stand van iedereen (of van één persoon) daaraan toe. De tellers gaan daarna terug op 0.
             </p>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              {werkjaren.length > 1 && (
+                <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)}>
+                  {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
+                </select>
+              )}
               <select value={fvMaandId || ""} onChange={(e) => setFvMaandId(e.target.value)}>
                 {fvMaanden.length === 0 && <option value="">Nog geen FV-maand aangemaakt</option>}
                 {fvMaanden.map((m) => <option key={m.id} value={m.id}>{maandLabel(m.maand)}</option>)}
