@@ -68,13 +68,17 @@ insert into categorieen (naam, is_standaard) values
   ('Kamp', true),
   ('Kerstfeestje', true),
   ('Ledenactiviteit', true),
+  ('Ledenweekend', true),
+  ('Leidingsweekend', true),
   ('Lidgeld', true),
   ('Papierslag', true),
   ('Payconiq/SumUp', true),
   ('Sinterklaas', true),
   ('Subsidie', true),
   ('Taartenslag', true),
+  ('Trooper', true),
   ('Uniformen', true),
+  ('Vlaams Weekend', true),
   ('Wifi', true),
   ('Winkellijst', true),
   ('Onduidelijk/Nog in te vullen', true)
@@ -87,6 +91,35 @@ create table if not exists categorisatie_regels (
   categorie_id uuid references categorieen(id) on delete cascade,
   prioriteit int default 100,               -- lager = eerder toegepast
   created_at timestamptz default now()
+);
+
+insert into categorisatie_regels (veld, bevat_tekst, categorie_id, prioriteit)
+select 'vrije_mededeling', regel.tekst, cat.id, regel.volgorde
+from (values
+  ('stripe', 'Trooper', 1), ('trooper', 'Trooper', 2), ('anatolia', 'Financieel Verslag', 3),
+  ('proxy hoepertingen', '4-uurtje', 4), ('proxy', '4-uurtje', 5),
+  ('financieelverslag', 'Financieel Verslag', 6), ('financieel verslag', 'Financieel Verslag', 7),
+  ('financieel', 'Financieel Verslag', 8), ('fin verslag', 'Financieel Verslag', 9),
+  ('fin', 'Financieel Verslag', 10), ('fv', 'Financieel Verslag', 11),
+  ('leidingsweekend', 'Leidingsweekend', 12), ('leidingweekend', 'Leidingsweekend', 13),
+  ('vlaams weekend', 'Vlaams Weekend', 14), ('vlaamsweekend', 'Vlaams Weekend', 15),
+  ('ledenweekend', 'Ledenweekend', 16), ('lazarus', 'Fuif', 17), ('fuif', 'Fuif', 18),
+  ('kerstfeestje', 'Kerstfeestje', 19), ('kerst', 'Kerstfeestje', 20),
+  ('sinterklaas', 'Sinterklaas', 21), ('sint', 'Sinterklaas', 22),
+  ('4-uurtje', '4-uurtje', 23), ('viertje', '4-uurtje', 24),
+  ('sumup', 'Payconiq/SumUp', 25), ('payconiq', 'Payconiq/SumUp', 26),
+  ('papierslag', 'Papierslag', 27), ('papier', 'Papierslag', 28),
+  ('ons heem', 'Huur', 29), ('huur', 'Huur', 30),
+  ('taart', 'Taartenslag', 31), ('lidgeld', 'Lidgeld', 32),
+  ('colruyt', 'Winkellijst', 33), ('delhaize', 'Winkellijst', 34),
+  ('lidl', 'Winkellijst', 35), ('bier', 'Bier', 36)
+) as regel(tekst, catnaam, volgorde)
+join categorieen cat on cat.naam = regel.catnaam
+where not exists (
+  select 1
+  from categorisatie_regels cr
+  where cr.veld = 'vrije_mededeling'
+    and lower(cr.bevat_tekst) = lower(regel.tekst)
 );
 
 -- ============ TRANSACTIES (KASBOEK) ============
