@@ -68,10 +68,12 @@ export default function Jaaroverzicht() {
     if (!werkjaarId || !magBewerken) { setAandacht(null); return; }
     let actief = true;
     (async () => {
-      const [fvMaandenData, evenementenData, transactiesData] = await Promise.all([
+      const [fvMaandenData, evenementenData, transactiesData, groepsbudgettenData, wisselgeldData] = await Promise.all([
         fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()),
         fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()),
         fetch(`/api/transacties?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+        fetch(`/api/kampbudgetten?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+        fetch(`/api/wisselgeld?werkjaarId=${werkjaarId}`).then((r) => r.json()),
       ]);
 
       let fvOpenstaand = 0;
@@ -93,7 +95,10 @@ export default function Jaaroverzicht() {
         (t) => !t.categorie_id || t.categorieen?.naam === ONBEKENDE_CATEGORIE
       ).length;
 
-      if (actief) setAandacht({ fvOpenstaand, fvMaandLabel, evenementenTeVergoeden, kasboekOngecategoriseerd });
+      const budgettenOverschreden = (groepsbudgettenData.groepsbudgetten || []).filter((g) => g.statusBudget === "Overschreden").length;
+      const wisselgeldNogKlaarzetten = (wisselgeldData.wisselgeldAanvragen || []).filter((w) => w.status === "Aangevraagd" || w.status === "Goedgekeurd").length;
+
+      if (actief) setAandacht({ fvOpenstaand, fvMaandLabel, evenementenTeVergoeden, kasboekOngecategoriseerd, budgettenOverschreden, wisselgeldNogKlaarzetten });
     })();
     return () => { actief = false; };
   }, [werkjaarId, magBewerken]);
@@ -127,7 +132,7 @@ export default function Jaaroverzicht() {
         <SkeletonStatRow count={3} />
       ) : (
         <>
-          {aandacht && (aandacht.fvOpenstaand > 0 || aandacht.evenementenTeVergoeden > 0 || aandacht.kasboekOngecategoriseerd > 0) && (
+          {aandacht && (aandacht.fvOpenstaand > 0 || aandacht.evenementenTeVergoeden > 0 || aandacht.kasboekOngecategoriseerd > 0 || aandacht.budgettenOverschreden > 0 || aandacht.wisselgeldNogKlaarzetten > 0) && (
             <div className="card" style={{ marginBottom: 24, borderColor: "var(--primary)" }}>
               <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Aandachtspunten</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -146,6 +151,18 @@ export default function Jaaroverzicht() {
                 {aandacht.kasboekOngecategoriseerd > 0 && (
                   <Link href="/kasboek" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
                     <span>🏷️ {aandacht.kasboekOngecategoriseerd} kasboektransactie(s) zonder (duidelijke) categorie</span>
+                    <span className="muted">Bekijken →</span>
+                  </Link>
+                )}
+                {aandacht.budgettenOverschreden > 0 && (
+                  <Link href="/kampbudgetten" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
+                    <span>⚠️ {aandacht.budgettenOverschreden} groepsbudget(ten) overschreden</span>
+                    <span className="muted">Bekijken →</span>
+                  </Link>
+                )}
+                {aandacht.wisselgeldNogKlaarzetten > 0 && (
+                  <Link href="/wisselgeld" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
+                    <span>💶 {aandacht.wisselgeldNogKlaarzetten} wisselgeld-aanvra(a)g(en) nog klaar te zetten</span>
                     <span className="muted">Bekijken →</span>
                   </Link>
                 )}

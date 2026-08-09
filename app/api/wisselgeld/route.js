@@ -1,0 +1,115 @@
+import { NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { supabaseAdmin } from "@/lib/supabase";
+import { magAfdelingBewerken, afdelingVanWisselgeld } from "@/lib/kampPermissies";
+
+export async function GET(req) {
+  const session = await getServerSession(authOptions);
+  if (!session) return NextResponse.json({ error: "Niet ingelogd" }, { status: 401 });
+
+  const url = new URL(req.url);
+  const werkjaarId = url.searchParams.get("werkjaarId");
+  const afdeling = url.searchParams.get("afdeling");
+  if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
+
+  let query = supabaseAdmin
+    .from("wisselgeld_aanvragen")
+    .select("id, aanvraag_code, afdeling, datum_nodig, bedrag_gevraagd, samenstelling_cash, doel_activiteit, status, aanvrager_user_id, users(naam)")
+    .eq("werkjaar_id", werkjaarId)
+    .order("datum_nodig", { ascending: true });
+  if (afdeling) query = query.eq("afdeling", afdeling);
+
+  const { data, error } = await query;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ wisselgeldAanvragen: data });
+}
+
+// Aanmaken creëert meteen ook een kalender-item op de gevraagde datum, zodat
+// de financieel verantwoordelijke het als "aandachtspunt" ziet zonder dat er
+// een e-mail/Discord-bericht verstuurd moet worden — het platform is zelf de melding.
+export async function POST(req) {
+  const session = await getServerSession(authOptions);
+  const { werkjaarId, afdeling, datumNodig, bedragGevraagd, samenstellingCash, doelActiviteit } = await req.json();
+  if (!werkjaarId || !afdeling || !datumNodig || !bedragGevraagd) {
+    return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
+  }
+  if (!(await magAfdelingBewerken(session, afdeling))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
+
+  const { count } = await supabaseAdmin.from("wisselgeld_aanvragen").select("id", { count: "exact", head: true });
+  const aanvraagCode = `WS-${1001 + (count || 0)}`;
+
+  const { data: aanvraag, error } = await supabaseAdmin
+    .from("wisselgeld_aanvragen")
+    .insert({
+      werkjaar_id: werkjaarId,
+      aanvraag_code: aanvraagCode,
+      afdeling,
+      aanvrager_user_id: session.user.userId || null,
+      datum_nodig: datumNodig,
+      bedrag_gevraagd: Number(bedragGevraagd),
+      samenstelling_cash: samenstellingCash || null,
+      doel_activiteit: doelActiviteit || null,
+    })
+    .select("id, aanvraag_code, afdeling, datum_nodig, bedrag_gevraagd, samenstelling_cash, doel_activiteit, status")
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await supabaseAdmin.from("kalender_items").insert({
+    werkjaar_id: werkjaarId,
+    titel: `Wisselgeld klaarleggen voor ${afdeling} (${aanvraagCode})`,
+    type: "Wisselgeld Deadline",
+    datum_deadline: datumNodig,
+    toegewezen_aan: "Financieel verantwoordelijke",
+    gerelateerd_type: "wisselgeld_aanvraag",
+    gerelateerd_id: aanvraag.id,
+  });
+
+  return NextResponse.json({ aanvraag });
+}
+
+// Statuswijziging: financiën mag alles zetten (goedkeuren/klaarzetten); de
+// aanvragende afdeling zelf mag enkel bevestigen dat ze het opgehaald hebben.
+export async function PATCH(req) {
+  const session = await getServerSession(authOptions);
+  const { id, status } = await req.json();
+  if (!id || !status) return NextResponse.json({ error: "id en status zijn verplicht" }, { status: 400 });
+
+  const isFinancien = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
+  if (!isFinancien) {
+    const afdeling = await afdelingVanWisselgeld(id);
+    const magEigenAfdeling = await magAfdelingBewerken(session, afdeling);
+    if (!magEigenAfdeling || status !== "Opgehaald") {
+      return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+    }
+  }
+
+  const { error } = await supabaseAdmin.from("wisselgeld_aanvragen").update({ status }).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Zodra het wisselgeld effectief klaarligt, is het bijhorende kalender-item
+  // afgerond — geen aparte handeling nodig op de Kalender-pagina.
+  if (status === "Klaargezet") {
+    await supabaseAdmin.from("kalender_items").update({ is_voltooid: true }).eq("gerelateerd_type", "wisselgeld_aanvraag").eq("gerelateerd_id", id);
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
+export async function DELETE(req) {
+  const session = await getServerSession(authOptions);
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const afdeling = await afdelingVanWisselgeld(id);
+  if (!(await magAfdelingBewerken(session, afdeling))) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
+
+  await supabaseAdmin.from("kalender_items").delete().eq("gerelateerd_type", "wisselgeld_aanvraag").eq("gerelateerd_id", id);
+  const { error } = await supabaseAdmin.from("wisselgeld_aanvragen").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}

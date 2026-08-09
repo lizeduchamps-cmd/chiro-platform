@@ -298,6 +298,75 @@ create table if not exists evenement_transacties (
 
 create index if not exists idx_evenement_transacties_evenement on evenement_transacties(evenement_id);
 
+-- ============ FASE 4: KAMPBUDGETTEN, WISSELGELD & KALENDER ============
+
+-- Eén rij per afdeling per werkjaar. Totaal_toegewezen/uitgegeven/resterend
+-- worden niet opgeslagen maar berekend bij het opvragen (net als bij
+-- evenement-budgetten), zodat ze altijd in sync zijn met de uitgaven.
+create table if not exists groepsbudgetten (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  afdeling text not null check (afdeling in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi', 'Algemeen/Keuken')),
+  aantal_leden integer not null default 0,
+  budget_per_lid_winkelen numeric(10,2) not null default 0,
+  budget_per_lid_dropping numeric(10,2) not null default 0,   -- enkel van toepassing op Tito/Keti/Aspi
+  budget_per_lid_weekend numeric(10,2) not null default 0,    -- enkel van toepassing op Tito/Keti/Aspi
+  created_at timestamptz default now(),
+  unique(werkjaar_id, afdeling)
+);
+
+-- Uitgaven/bonnetjes die van een groepsbudget worden afgetrokken (winkelen
+-- voor kamp, dropping, weekend, ...) — zelfde bonnetje-patroon als
+-- evenement_transacties, maar bewust eenvoudiger (geen BTW-splitsing nodig).
+create table if not exists groepsbudget_uitgaven (
+  id uuid primary key default gen_random_uuid(),
+  groepsbudget_id uuid references groepsbudgetten(id) on delete cascade,
+  datum date not null,
+  omschrijving text not null,
+  bedrag numeric(10,2) not null,
+  ingediend_door_user_id uuid references users(id) on delete set null,
+  bewijsstuk_url text,
+  status text not null default 'Ingediend' check (status in ('Ingediend', 'Goedgekeurd', 'Afgekeurd')),
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_groepsbudget_uitgaven_budget on groepsbudget_uitgaven(groepsbudget_id);
+
+create table if not exists wisselgeld_aanvragen (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  aanvraag_code text,                          -- bv. 'WS-1001', automatisch gegenereerd
+  afdeling text not null,
+  aanvrager_user_id uuid references users(id) on delete set null,
+  datum_nodig date not null,
+  bedrag_gevraagd numeric(10,2) not null,
+  samenstelling_cash text,                     -- vrije tekst, bv. '10x€5, 5x€10'
+  doel_activiteit text,
+  status text not null default 'Aangevraagd' check (status in ('Aangevraagd', 'Goedgekeurd', 'Klaargezet', 'Opgehaald')),
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_wisselgeld_werkjaar on wisselgeld_aanvragen(werkjaar_id);
+
+-- Notificaties zijn bewust in-app (geen e-mail/Discord-bot-infrastructuur nu):
+-- een wisselgeld-aanvraag maakt automatisch een kalender-item aan, en zowel
+-- dat item als een overschreden groepsbudget verschijnen als "aandachtspunt"
+-- op het Jaaroverzicht voor admin/financieel verantwoordelijke.
+create table if not exists kalender_items (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  titel text not null,
+  type text not null check (type in ('Wisselgeld Deadline', 'Jaarlijks Actiepunt', 'Voorschot Deadline', 'Factuur Vervaldatum')),
+  datum_deadline date not null,
+  toegewezen_aan text,                          -- rol of naam, bv. 'Financieel verantwoordelijke'
+  gerelateerd_type text check (gerelateerd_type in ('wisselgeld_aanvraag') or gerelateerd_type is null),
+  gerelateerd_id uuid,                          -- geen FK: kan in de toekomst naar meerdere tabellen wijzen
+  is_voltooid boolean not null default false,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_kalender_werkjaar on kalender_items(werkjaar_id, datum_deadline);
+
 -- ============ ROW LEVEL SECURITY ============
 -- Ingeschakeld zodat enkel de backend (via service_role key) mag schrijven;
 -- gedetailleerde policies per rol voegen we toe zodra de rolmapping compleet is.

@@ -36,6 +36,14 @@ export default function Layout({ session, children }) {
       label: "Evenementen",
       children: [],
     },
+    {
+      href: "/kampbudgetten",
+      label: "Kampbudgetten",
+      children: [
+        { href: "/wisselgeld", label: "Wisselgeld" },
+        { href: "/kalender", label: "Kalender" },
+      ],
+    },
   ];
   if (recht === "admin") {
     groups.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen", children: [] });
