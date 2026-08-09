@@ -114,7 +114,37 @@ export default function Bestellingen() {
     ladenOverzicht(bestellingId);
   };
 
+  const verdelenAllesAction = async () => {
+    if (!fvMaandId) return alert("Kies eerst een FV-maand.");
+    if (!confirm(`Alle openstaande bestellingen (${openstaandeBestellingen.length}) in één keer verdelen over de gekozen FV-maand?`)) return;
+    setBezig(true);
+    const res = await fetch("/api/bestellingen/verdelen-alles", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fvMaandId }),
+    });
+    const data = await res.json();
+    setBezig(false);
+    if (data.error) return alert("⚠️ " + data.error);
+    alert(`✅ ${data.aantalBestellingen} bestelling(en) verdeeld, ${data.aantalRegels} FV-regels toegevoegd.`);
+    ladenBestellingen();
+    if (bestellingId) ladenOverzicht(bestellingId);
+  };
+
   const totaalBestelling = (overzicht?.personen || []).reduce((s, p) => s + p.totaal, 0);
+  const openstaandeBestellingen = bestellingen.filter((b) => !b.verdeeld_naar_fv_maand_id);
+
+  // Bekende producten binnen deze bestelling: naam (originele schrijfwijze) -> laatst gebruikte prijs per stuk.
+  const productPrijzen = {};
+  (overzicht?.personen || []).forEach((p) => {
+    p.regels.forEach((r) => {
+      productPrijzen[r.product.trim()] = r.prijsPerStuk;
+    });
+  });
+  const zoekBekendePrijs = (product) => {
+    const match = Object.keys(productPrijzen).find((naam) => naam.toLowerCase() === product.trim().toLowerCase());
+    return match !== undefined ? productPrijzen[match] : undefined;
+  };
 
   return (
     <div style={{ padding: 32, maxWidth: 1000 }}>
@@ -122,6 +152,28 @@ export default function Bestellingen() {
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
         Splits een rekening (frituur, pizza, ...) per persoon op en verdeel het automatisch over hun Financieel Verslag.
       </p>
+
+      {magBewerken && openstaandeBestellingen.length > 0 && (
+        <div className="card" style={{ marginBottom: 20, background: "var(--primary-tint)", borderColor: "var(--primary)" }}>
+          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
+            {openstaandeBestellingen.length} bestelling{openstaandeBestellingen.length > 1 ? "en" : ""} nog niet verdeeld
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            {werkjaren.length > 1 && (
+              <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)}>
+                {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
+              </select>
+            )}
+            <select value={fvMaandId || ""} onChange={(e) => setFvMaandId(e.target.value)}>
+              {fvMaanden.length === 0 && <option value="">Nog geen FV-maand</option>}
+              {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
+            </select>
+            <button className="btn-primary" disabled={bezig || !fvMaandId} onClick={verdelenAllesAction}>
+              Verdeel alle {openstaandeBestellingen.length} in één keer
+            </button>
+          </div>
+        </div>
+      )}
 
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div style={{ width: 260, flexShrink: 0 }}>
@@ -199,12 +251,27 @@ export default function Bestellingen() {
                 <>
                   <div className="card" style={{ marginBottom: 16 }}>
                     <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Regel toevoegen</div>
+                    <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                      Tip: typ een productnaam die al gebruikt is in deze bestelling (bv. "Pizza salami") en de prijs wordt automatisch overgenomen.
+                    </p>
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
                       <select value={nieuweRegel.userId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, userId: e.target.value })}>
                         <option value="">Persoon...</option>
                         {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
                       </select>
-                      <input placeholder="Product, bv. Frietjes groot" value={nieuweRegel.product} onChange={(e) => setNieuweRegel({ ...nieuweRegel, product: e.target.value })} />
+                      <input
+                        placeholder="Product, bv. Frietjes groot"
+                        value={nieuweRegel.product}
+                        list="bekende-producten"
+                        onChange={(e) => {
+                          const product = e.target.value;
+                          const bekendePrijs = zoekBekendePrijs(product);
+                          setNieuweRegel((prev) => ({ ...prev, product, prijsPerStuk: bekendePrijs !== undefined ? String(bekendePrijs) : prev.prijsPerStuk }));
+                        }}
+                      />
+                      <datalist id="bekende-producten">
+                        {Object.keys(productPrijzen).map((naam) => <option key={naam} value={naam} />)}
+                      </datalist>
                       <input type="number" step="1" placeholder="Aantal" value={nieuweRegel.aantal} onChange={(e) => setNieuweRegel({ ...nieuweRegel, aantal: e.target.value })} />
                       <input type="number" step="0.01" placeholder="Prijs per stuk" value={nieuweRegel.prijsPerStuk} onChange={(e) => setNieuweRegel({ ...nieuweRegel, prijsPerStuk: e.target.value })} />
                     </div>
