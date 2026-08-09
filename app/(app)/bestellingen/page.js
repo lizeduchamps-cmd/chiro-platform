@@ -1,6 +1,7 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { parseNaamRegels, vindGebruiker, splitProducten } from "@/lib/smartPaste";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -22,6 +23,9 @@ export default function Bestellingen() {
   const [fvMaandId, setFvMaandId] = useState(null);
   const [bezig, setBezig] = useState(false);
   const [globaleProducten, setGlobaleProducten] = useState({});
+  const [plakOpen, setPlakOpen] = useState(false);
+  const [plakTekst, setPlakTekst] = useState("");
+  const [plakPreview, setPlakPreview] = useState(null);
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
@@ -163,6 +167,54 @@ export default function Bestellingen() {
     return match !== undefined ? productPrijzen[match] : undefined;
   };
 
+  // Zet geplakte tekst ("Naam: item1 met item2 en item3" per regel) om in een
+  // bewerkbare preview: per regel de gematchte persoon en per product de
+  // gekende prijs (indien bekend) zodat je enkel nog nieuwe prijzen moet invullen.
+  const plakVerwerken = () => {
+    const regels = parseNaamRegels(plakTekst);
+    if (regels.length === 0) return alert("Geen regels herkend. Verwacht formaat: 'Naam: product1 met product2 en product3'.");
+    const rijen = regels.flatMap(({ naam, rest }) => {
+      const gebruiker = vindGebruiker(gebruikers, naam);
+      return splitProducten(rest).map((product) => ({
+        naam,
+        userId: gebruiker?.id || "",
+        product,
+        aantal: "1",
+        prijsPerStuk: zoekBekendePrijs(product) !== undefined ? String(zoekBekendePrijs(product)) : "",
+      }));
+    });
+    setPlakPreview(rijen);
+  };
+
+  const plakRijWijzigen = (index, veld, waarde) => {
+    setPlakPreview((prev) => prev.map((r, i) => (i === index ? { ...r, [veld]: waarde } : r)));
+  };
+
+  const plakRijVerwijderen = (index) => {
+    setPlakPreview((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const plakBevestigen = async () => {
+    const onvolledig = plakPreview.filter((r) => !r.userId || !r.product || !r.prijsPerStuk);
+    if (onvolledig.length > 0) return alert("Vul voor elke regel een persoon, product en prijs in (of verwijder de regel).");
+    setBezig(true);
+    await Promise.all(
+      plakPreview.map((r) =>
+        fetch("/api/bestellingen/regels", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bestellingId, userId: r.userId, product: r.product, aantal: r.aantal, prijsPerStuk: r.prijsPerStuk }),
+        })
+      )
+    );
+    setBezig(false);
+    setPlakTekst("");
+    setPlakPreview(null);
+    setPlakOpen(false);
+    ladenOverzicht(bestellingId);
+    ladenGlobaleProducten();
+  };
+
   return (
     <div style={{ padding: 32, maxWidth: 1000 }}>
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Bestellingen</h1>
@@ -266,6 +318,72 @@ export default function Bestellingen() {
 
               {magBewerken && !overzicht.bestelling.verdeeld_naar_fv_maand_id && (
                 <>
+                  <div className="card" style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: plakOpen ? 8 : 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>Slim plakken</div>
+                      <button onClick={() => setPlakOpen(!plakOpen)} style={{ fontSize: 12 }}>{plakOpen ? "Annuleren" : "📋 Lijst plakken"}</button>
+                    </div>
+                    {plakOpen && (
+                      <>
+                        <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                          Plak een lijst zoals "Aline: mini friet met tomaten ketchup en boulet" (één persoon per regel, producten gescheiden door "met"/"en"). Nadien kan je alles controleren en aanpassen voor je bevestigt.
+                        </p>
+                        <textarea
+                          value={plakTekst}
+                          onChange={(e) => setPlakTekst(e.target.value)}
+                          placeholder={"Aline: mini friet met tomaten ketchup en boulet\nToon: kleine friet met joppie en broodje mexicano"}
+                          rows={5}
+                          style={{ width: "100%", marginBottom: 8, fontFamily: "inherit", fontSize: 13 }}
+                        />
+                        {!plakPreview ? (
+                          <button className="btn-primary" onClick={plakVerwerken}>Verwerken</button>
+                        ) : (
+                          <>
+                            {plakPreview.length === 0 ? (
+                              <p className="muted" style={{ fontStyle: "italic", marginBottom: 8 }}>Niets meer om toe te voegen.</p>
+                            ) : (
+                              <div className="table-wrap" style={{ marginBottom: 8 }}>
+                                <table>
+                                  <thead>
+                                    <tr>
+                                      <th>Persoon</th>
+                                      <th>Product</th>
+                                      <th>Aantal</th>
+                                      <th>Prijs/stuk</th>
+                                      <th></th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {plakPreview.map((r, i) => (
+                                      <tr key={i}>
+                                        <td>
+                                          <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ fontSize: 12, borderColor: r.userId ? undefined : "var(--danger)" }}>
+                                            <option value="">{r.naam} (niet gevonden)</option>
+                                            {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                                          </select>
+                                        </td>
+                                        <td><input value={r.product} onChange={(e) => plakRijWijzigen(i, "product", e.target.value)} style={{ fontSize: 12, width: 160 }} /></td>
+                                        <td><input type="number" step="1" value={r.aantal} onChange={(e) => plakRijWijzigen(i, "aantal", e.target.value)} style={{ fontSize: 12, width: 50 }} /></td>
+                                        <td><input type="number" step="0.01" value={r.prijsPerStuk} onChange={(e) => plakRijWijzigen(i, "prijsPerStuk", e.target.value)} style={{ fontSize: 12, width: 70 }} /></td>
+                                        <td><button className="btn-danger" onClick={() => plakRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button></td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            <div style={{ display: "flex", gap: 8 }}>
+                              {plakPreview.length > 0 && (
+                                <button className="btn-primary" disabled={bezig} onClick={plakBevestigen}>Alles toevoegen ({plakPreview.length})</button>
+                              )}
+                              <button onClick={() => setPlakPreview(null)}>Opnieuw verwerken</button>
+                            </div>
+                          </>
+                        )}
+                      </>
+                    )}
+                  </div>
+
                   <div className="card" style={{ marginBottom: 16 }}>
                     <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Regel toevoegen</div>
                     <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>

@@ -1,6 +1,7 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { parseNaamRegels, vindGebruiker, haalKmEruit } from "@/lib/smartPaste";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -45,6 +46,11 @@ export default function FinancieelVerslag() {
   });
   const [nieuweRegel, setNieuweRegel] = useState({});
   const [nieuweKm, setNieuweKm] = useState({});
+  const [plakOpen, setPlakOpen] = useState(false);
+  const [plakTekst, setPlakTekst] = useState("");
+  const [plakReden, setPlakReden] = useState("");
+  const [plakPreview, setPlakPreview] = useState(null);
+  const [plakBezig, setPlakBezig] = useState(false);
 
   const magBewerken = session?.user?.platformRecht === "admin" || session?.user?.platformRecht === "financieel_verantwoordelijke";
 
@@ -135,6 +141,54 @@ export default function FinancieelVerslag() {
     const data = await res.json();
     if (data.error) return alert("⚠️ " + data.error);
     setNieuweKm((prev) => ({ ...prev, [userId]: { km: "", reden: "" } }));
+    ladenOverzicht(fvMaandId);
+  };
+
+  // Zet geplakte tekst ("Naam: NNNkm" per regel) om in een bewerkbare preview
+  // met gematchte persoon en herkend aantal kilometer.
+  const plakVerwerken = () => {
+    const gebruikersLijst = overzicht?.personen.map((p) => p.user) || [];
+    const regels = parseNaamRegels(plakTekst);
+    if (regels.length === 0) return alert("Geen regels herkend. Verwacht formaat: 'Naam: 250km' (één per regel).");
+    const rijen = regels.map(({ naam, rest }) => {
+      const gebruiker = vindGebruiker(gebruikersLijst, naam);
+      const km = haalKmEruit(rest);
+      return { naam, userId: gebruiker?.id || "", km: km !== null ? String(km) : "" };
+    });
+    setPlakPreview(rijen);
+  };
+
+  const plakRijWijzigen = (index, veld, waarde) => {
+    setPlakPreview((prev) => prev.map((r, i) => (i === index ? { ...r, [veld]: waarde } : r)));
+  };
+
+  const plakRijVerwijderen = (index) => {
+    setPlakPreview((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const plakBevestigen = async () => {
+    const tarief = overzicht.fvMaand.km_tarief_leiding;
+    if (!tarief) return alert("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
+    const onvolledig = plakPreview.filter((r) => !r.userId || !r.km);
+    if (onvolledig.length > 0) return alert("Vul voor elke regel een persoon en aantal kilometer in (of verwijder de regel).");
+    setPlakBezig(true);
+    await Promise.all(
+      plakPreview.map((r) => {
+        const km = parseFloat(r.km);
+        const bedrag = -(Math.round(km * tarief * 100) / 100);
+        const omschrijving = plakReden ? `Kilometervergoeding ${plakReden} (${km} km)` : `Kilometervergoeding (${km} km)`;
+        return fetch("/api/fv/regels", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fvMaandId, userId: r.userId, omschrijving, bedrag }),
+        });
+      })
+    );
+    setPlakBezig(false);
+    setPlakTekst("");
+    setPlakReden("");
+    setPlakPreview(null);
+    setPlakOpen(false);
     ladenOverzicht(fvMaandId);
   };
 
@@ -237,6 +291,76 @@ export default function FinancieelVerslag() {
 
           {overzicht.personen.length === 0 && (
             <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
+          )}
+
+          {magBewerken && (
+            <div className="no-print card" style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: plakOpen ? 8 : 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>Slim plakken: kilometers</div>
+                <button onClick={() => setPlakOpen(!plakOpen)} style={{ fontSize: 12 }}>{plakOpen ? "Annuleren" : "📋 Lijst plakken"}</button>
+              </div>
+              {plakOpen && (
+                <>
+                  <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                    Plak een lijst zoals "Lize: 250km" (één persoon per regel). Vul eventueel hieronder in waarvoor de kilometers waren — dat komt in de omschrijving van elke regel.
+                  </p>
+                  <input
+                    placeholder="Waarvoor? bv. Ledenweekend (optioneel)"
+                    value={plakReden}
+                    onChange={(e) => setPlakReden(e.target.value)}
+                    style={{ width: "100%", marginBottom: 8, fontSize: 13 }}
+                  />
+                  <textarea
+                    value={plakTekst}
+                    onChange={(e) => setPlakTekst(e.target.value)}
+                    placeholder={"Lize: 250km\nLucas: 300km\nDries: 150km"}
+                    rows={5}
+                    style={{ width: "100%", marginBottom: 8, fontFamily: "inherit", fontSize: 13 }}
+                  />
+                  {!plakPreview ? (
+                    <button className="btn-primary" onClick={plakVerwerken}>Verwerken</button>
+                  ) : (
+                    <>
+                      {plakPreview.length === 0 ? (
+                        <p className="muted" style={{ fontStyle: "italic", marginBottom: 8 }}>Niets meer om toe te voegen.</p>
+                      ) : (
+                        <div className="table-wrap" style={{ marginBottom: 8 }}>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Persoon</th>
+                                <th>Kilometer</th>
+                                <th></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {plakPreview.map((r, i) => (
+                                <tr key={i}>
+                                  <td>
+                                    <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ fontSize: 12, borderColor: r.userId ? undefined : "var(--danger)" }}>
+                                      <option value="">{r.naam} (niet gevonden)</option>
+                                      {overzicht.personen.map((p) => <option key={p.user.id} value={p.user.id}>{p.user.naam}</option>)}
+                                    </select>
+                                  </td>
+                                  <td><input type="number" step="1" value={r.km} onChange={(e) => plakRijWijzigen(i, "km", e.target.value)} style={{ fontSize: 12, width: 70 }} /></td>
+                                  <td><button className="btn-danger" onClick={() => plakRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {plakPreview.length > 0 && (
+                          <button className="btn-primary" disabled={plakBezig} onClick={plakBevestigen}>Alles toevoegen ({plakPreview.length})</button>
+                        )}
+                        <button onClick={() => setPlakPreview(null)}>Opnieuw verwerken</button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
           )}
 
           {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((groep) => {
