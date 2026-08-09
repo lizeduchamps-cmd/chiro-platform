@@ -215,6 +215,44 @@ export default function Kasboek() {
         </div>
       )}
 
+      {magBewerken && (
+        <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16, marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, marginBottom: 10 }}>Nieuwe transactie</div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
+            <select value={nieuw.rekeningType} onChange={(e) => setNieuw({ ...nieuw, rekeningType: e.target.value })}>
+              <option value="zicht">Algemene zichtrekening</option>
+              <option value="spaar">Spaarrekening</option>
+            </select>
+            <select value={nieuw.soort} onChange={(e) => setNieuw({ ...nieuw, soort: e.target.value })}>
+              <option value="uitgave">Uitgave</option>
+              <option value="inkomst">Inkomst</option>
+              <option value="interne_transactie">Interne transactie</option>
+            </select>
+            {nieuw.soort === "interne_transactie" && (
+              <select value={nieuw.interneBestemmingRekening} onChange={(e) => setNieuw({ ...nieuw, interneBestemmingRekening: e.target.value })}>
+                <option value="spaar">Naar spaarrekening</option>
+                <option value="zicht">Naar zichtrekening</option>
+              </select>
+            )}
+            <input type="date" value={nieuw.datum} onChange={(e) => setNieuw({ ...nieuw, datum: e.target.value })} />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
+            <input placeholder="Tegenpartij / naam" value={nieuw.tegenpartij} onChange={(e) => setNieuw({ ...nieuw, tegenpartij: e.target.value })} />
+            <input placeholder="Vrije mededeling" value={nieuw.vrijeMededeling} onChange={(e) => setNieuw({ ...nieuw, vrijeMededeling: e.target.value })} />
+            <select value={nieuw.categorieId} onChange={(e) => setNieuw({ ...nieuw, categorieId: e.target.value })}>
+              <option value="">Categorie...</option>
+              {categorieen.map((c) => (
+                <option key={c.id} value={c.id}>{c.naam}</option>
+              ))}
+            </select>
+            <input type="number" step="0.01" placeholder="Bedrag" value={nieuw.bedrag} onChange={(e) => setNieuw({ ...nieuw, bedrag: e.target.value })} />
+          </div>
+          <button onClick={opslaanNieuw} style={{ background: "#2F4A3C", color: "white", padding: "8px 16px", borderRadius: 8, border: "none" }}>
+            Opslaan
+          </button>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
         <input
           placeholder="🔍 Zoek op naam, mededeling, bedrag, datum..."
@@ -284,44 +322,6 @@ export default function Kasboek() {
           </tbody>
         </table>
       </div>
-
-      {magBewerken && (
-        <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16 }}>
-          <div style={{ fontWeight: 600, marginBottom: 10 }}>Nieuwe transactie</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
-            <select value={nieuw.rekeningType} onChange={(e) => setNieuw({ ...nieuw, rekeningType: e.target.value })}>
-              <option value="zicht">Algemene zichtrekening</option>
-              <option value="spaar">Spaarrekening</option>
-            </select>
-            <select value={nieuw.soort} onChange={(e) => setNieuw({ ...nieuw, soort: e.target.value })}>
-              <option value="uitgave">Uitgave</option>
-              <option value="inkomst">Inkomst</option>
-              <option value="interne_transactie">Interne transactie</option>
-            </select>
-            {nieuw.soort === "interne_transactie" && (
-              <select value={nieuw.interneBestemmingRekening} onChange={(e) => setNieuw({ ...nieuw, interneBestemmingRekening: e.target.value })}>
-                <option value="spaar">Naar spaarrekening</option>
-                <option value="zicht">Naar zichtrekening</option>
-              </select>
-            )}
-            <input type="date" value={nieuw.datum} onChange={(e) => setNieuw({ ...nieuw, datum: e.target.value })} />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
-            <input placeholder="Tegenpartij / naam" value={nieuw.tegenpartij} onChange={(e) => setNieuw({ ...nieuw, tegenpartij: e.target.value })} />
-            <input placeholder="Vrije mededeling" value={nieuw.vrijeMededeling} onChange={(e) => setNieuw({ ...nieuw, vrijeMededeling: e.target.value })} />
-            <select value={nieuw.categorieId} onChange={(e) => setNieuw({ ...nieuw, categorieId: e.target.value })}>
-              <option value="">Categorie...</option>
-              {categorieen.map((c) => (
-                <option key={c.id} value={c.id}>{c.naam}</option>
-              ))}
-            </select>
-            <input type="number" step="0.01" placeholder="Bedrag" value={nieuw.bedrag} onChange={(e) => setNieuw({ ...nieuw, bedrag: e.target.value })} />
-          </div>
-          <button onClick={opslaanNieuw} style={{ background: "#2F4A3C", color: "white", padding: "8px 16px", borderRadius: 8, border: "none" }}>
-            Opslaan
-          </button>
-        </div>
-      )}
     </div>
     </Layout>
   );
