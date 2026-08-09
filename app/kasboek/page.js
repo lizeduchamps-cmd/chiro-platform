@@ -18,6 +18,7 @@ export default function Kasboek() {
   const [saldos, setSaldos] = useState(null);
   const [zoekterm, setZoekterm] = useState("");
   const [filterCat, setFilterCat] = useState("");
+  const [geselecteerd, setGeselecteerd] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [nieuw, setNieuw] = useState({
@@ -62,6 +63,12 @@ export default function Kasboek() {
       .then((r) => r.json())
       .then((data) => setSaldos(data.saldos));
   }, [werkjaarId]);
+
+  // Selectie leegmaken zodra het werkjaar of de filters wijzigen, zodat je nooit
+  // per ongeluk een verborgen (niet meer zichtbare) transactie meeverwijdert.
+  useEffect(() => {
+    setGeselecteerd(new Set());
+  }, [werkjaarId, zoekterm, filterCat]);
 
   if (status === "loading" || loading) return <p style={{ padding: 32 }}>Laden…</p>;
   if (status === "unauthenticated") redirect("/inloggen");
@@ -132,6 +139,43 @@ export default function Kasboek() {
     if (!confirm("Deze transactie verwijderen?")) return;
     await fetch(`/api/transacties?id=${id}`, { method: "DELETE" });
     setTransacties((prev) => prev.filter((t) => t.id !== id));
+    setGeselecteerd((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+    herladen();
+  };
+
+  const toggleSelectie = (id) => {
+    setGeselecteerd((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectieAlles = () => {
+    setGeselecteerd((prev) =>
+      prev.size === gefilterd.length ? new Set() : new Set(gefilterd.map((t) => t.id))
+    );
+  };
+
+  const verwijderGeselecteerd = async () => {
+    const aantal = geselecteerd.size;
+    if (!aantal) return;
+    if (!confirm(`${aantal} transactie${aantal > 1 ? "s" : ""} verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
+    const ids = [...geselecteerd];
+    const res = await fetch("/api/transacties/bulk", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setTransacties((prev) => prev.filter((t) => !geselecteerd.has(t.id)));
+    setGeselecteerd(new Set());
     herladen();
   };
 
@@ -268,10 +312,32 @@ export default function Kasboek() {
         </select>
       </div>
 
+      {magBewerken && geselecteerd.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FBEFE0", border: "1px solid #E8C98A", borderRadius: 12, padding: "10px 16px", marginBottom: 16 }}>
+          <span>{geselecteerd.size} transactie{geselecteerd.size > 1 ? "s" : ""} geselecteerd</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setGeselecteerd(new Set())}>Selectie opheffen</button>
+            <button onClick={verwijderGeselecteerd} style={{ background: "#B24C4C", color: "white", border: "none", padding: "6px 12px", borderRadius: 8 }}>
+              🗑️ Verwijder geselecteerde
+            </button>
+          </div>
+        </div>
+      )}
+
       <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, overflow: "hidden", marginBottom: 24 }}>
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#F5F3EE", textAlign: "left" }}>
+              {magBewerken && (
+                <th style={{ padding: 8, width: 28 }}>
+                  <input
+                    type="checkbox"
+                    checked={gefilterd.length > 0 && geselecteerd.size === gefilterd.length}
+                    onChange={toggleSelectieAlles}
+                    title="Alles selecteren"
+                  />
+                </th>
+              )}
               <th style={{ padding: 8 }}>Datum</th>
               <th style={{ padding: 8 }}>Rekening</th>
               <th style={{ padding: 8 }}>Tegenpartij</th>
@@ -283,12 +349,17 @@ export default function Kasboek() {
           </thead>
           <tbody>
             {gefilterd.length === 0 && (
-              <tr><td colSpan={7} style={{ padding: 24, textAlign: "center", color: "#9A9A8C" }}>Geen transacties gevonden.</td></tr>
+              <tr><td colSpan={8} style={{ padding: 24, textAlign: "center", color: "#9A9A8C" }}>Geen transacties gevonden.</td></tr>
             )}
             {gefilterd.map((t) => {
               const teken = t.soort === "uitgave" ? -1 : t.soort === "interne_transactie" ? 0 : 1;
               return (
-                <tr key={t.id} style={{ borderTop: "1px solid #F0EEE5" }}>
+                <tr key={t.id} style={{ borderTop: "1px solid #F0EEE5", background: geselecteerd.has(t.id) ? "#FBF6EC" : undefined }}>
+                  {magBewerken && (
+                    <td style={{ padding: 8 }}>
+                      <input type="checkbox" checked={geselecteerd.has(t.id)} onChange={() => toggleSelectie(t.id)} />
+                    </td>
+                  )}
                   <td style={{ padding: 8, whiteSpace: "nowrap" }}>{t.datum}</td>
                   <td style={{ padding: 8 }}>
                     {t.rekening_type === "zicht" ? "Zicht" : "Spaar"}

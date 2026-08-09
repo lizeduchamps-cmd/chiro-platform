@@ -36,3 +36,20 @@ export async function POST(req) {
 
   return NextResponse.json({ ok: true, aantal: rows.length });
 }
+
+export async function DELETE(req) {
+  const session = await getServerSession(authOptions);
+  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
+
+  const { ids } = await req.json();
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return NextResponse.json({ error: "Geen transacties geselecteerd" }, { status: 400 });
+  }
+
+  const { error } = await supabaseAdmin.from("transacties").delete().in("id", ids);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true, aantal: ids.length });
+}
