@@ -270,7 +270,7 @@ export default function Kasboek() {
       </div>
 
       {saldos && (
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+        <div className="grid-3" style={{ marginBottom: 24 }}>
           <div className="stat">
             <div className="muted" style={{ fontSize: 12 }}>Algemene zichtrekening</div>
             <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(saldos.zichtLopend)}</div>
@@ -297,7 +297,7 @@ export default function Kasboek() {
       {magBewerken && (
         <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ fontWeight: 600, marginBottom: 10 }}>Nieuwe transactie</div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
+          <div className="grid-4" style={{ marginBottom: 8 }}>
             <select value={nieuw.rekeningType} onChange={(e) => setNieuw({ ...nieuw, rekeningType: e.target.value })}>
               <option value="zicht">Algemene zichtrekening</option>
               <option value="spaar">Spaarrekening</option>
@@ -315,7 +315,7 @@ export default function Kasboek() {
             )}
             <input type="date" value={nieuw.datum} onChange={(e) => setNieuw({ ...nieuw, datum: e.target.value })} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 8 }}>
+          <div className="grid-4" style={{ marginBottom: 8 }}>
             <input placeholder="Tegenpartij / naam" value={nieuw.tegenpartij} onChange={(e) => setNieuw({ ...nieuw, tegenpartij: e.target.value })} />
             <input placeholder="Vrije mededeling" value={nieuw.vrijeMededeling} onChange={(e) => setNieuw({ ...nieuw, vrijeMededeling: e.target.value })} />
             <select value={nieuw.categorieId} onChange={(e) => setNieuw({ ...nieuw, categorieId: e.target.value })}>

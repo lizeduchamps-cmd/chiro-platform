@@ -70,7 +70,7 @@ export default function Jaaroverzicht() {
         <p className="muted">Laden…</p>
       ) : (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+          <div className="grid-3" style={{ marginBottom: 24 }}>
             <div className="stat">
               <div className="muted" style={{ fontSize: 12 }}>Totale inkomsten</div>
               <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>

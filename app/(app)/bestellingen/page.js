@@ -272,7 +272,7 @@ export default function Bestellingen() {
                       Tip: na het toevoegen blijft de persoon geselecteerd — handig om meteen het volgende product voor diezelfde persoon in te geven (bv. frietjes, vlees, saus). Enter werkt ook om toe te voegen.
                       Typ een productnaam die al ooit besteld is (ook in een vorige bestelling, bv. "Pizza salami" bij Anatolia) en de prijs wordt automatisch overgenomen.
                     </p>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                    <div className="grid-2" style={{ marginBottom: 8 }}>
                       <select value={nieuweRegel.userId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, userId: e.target.value })}>
                         <option value="">Persoon...</option>
                         {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}

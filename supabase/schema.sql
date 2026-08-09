@@ -73,6 +73,7 @@ create table if not exists categorieen (
 insert into categorieen (naam, is_standaard) values
   ('4-uurtje', true),
   ('Bier', true),
+  ('Chiromis', true),
   ('Drank leiding', true),
   ('Financieel Verslag', true),
   ('Fuif', true),
@@ -81,11 +82,14 @@ insert into categorieen (naam, is_standaard) values
   ('Kerstfeestje', true),
   ('Ledenactiviteit', true),
   ('Ledenweekend', true),
+  ('Leidingsactiviteit', true),
   ('Leidingsweekend', true),
   ('Lidgeld', true),
   ('Papierslag', true),
+  ('Pasen', true),
   ('Payconiq/SumUp', true),
   ('Sinterklaas', true),
+  ('Startdag & Receptie', true),
   ('Subsidie', true),
   ('Taartenslag', true),
   ('Trooper', true),
@@ -271,18 +275,6 @@ create table if not exists evenement_budgetten (
   unique(evenement_id, hoofdcategorie)
 );
 
--- Externe relaties (leveranciers, sponsors, overheid). Interne leiding die
--- voorschiet wordt niet hier gedupliceerd — die koppelen we rechtstreeks aan
--- de bestaande users-tabel (die heeft al naam + iban, zie fv_regels-flow).
-create table if not exists partijen (
-  id uuid primary key default gen_random_uuid(),
-  naam text not null,
-  rol text not null check (rol in ('Leverancier', 'Medewerker/Organisator', 'Sponsor', 'Overheid/Subsidie')),
-  iban text,
-  contact text,
-  created_at timestamptz default now()
-);
-
 create table if not exists evenement_transacties (
   id uuid primary key default gen_random_uuid(),
   evenement_id uuid references evenementen(id) on delete cascade,
@@ -292,13 +284,13 @@ create table if not exists evenement_transacties (
   type_geldstroom text not null check (type_geldstroom in ('inkomst', 'uitgave')),
   type_kostenpost text check (type_kostenpost in ('kost', 'investering') or type_kostenpost is null),
   hoofdcategorie text,                        -- naam uit evenement_categorieen van hetzelfde evenement
-  subcategorie text,
+  waar text,                                  -- waar gekocht/besteld, bv. 'Colruyt', 'Anatolia'
+  hoeveelheid numeric(10,2),                  -- optioneel, bv. aantal chocolade eieren
   bedrag_excl_btw numeric(10,2) not null,
   btw_tarief numeric(4,2) not null default 0 check (btw_tarief in (0, 6, 12, 21)),
   bedrag_totaal numeric(10,2) not null,
   betaalmethode text check (betaalmethode in ('Overschrijving', 'Cash', 'Bancontact/Kaart', 'Factuur op termijn') or betaalmethode is null),
   status text not null default 'Gepland' check (status in ('Gepland', 'Te vergoeden', 'Betaald', 'Afgerond')),
-  partij_id uuid references partijen(id) on delete set null,        -- externe leverancier/sponsor/overheid
   medewerker_user_id uuid references users(id) on delete set null,  -- interne leiding die voorschoot
   bewijsstuk_url text,                        -- link naar foto/scan van bonnetje of factuur
   created_at timestamptz default now()

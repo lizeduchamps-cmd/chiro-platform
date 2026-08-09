@@ -80,11 +80,12 @@ export default function Streepjes() {
   if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
 
   const updateFysiek = async (userId, waarde) => {
-    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, fysieke_streepjes: waarde } : u)));
+    const heel = Math.max(0, Math.round(Number(waarde)) || 0);
+    setUsers((prev) => prev.map((u) => (u.id === userId ? { ...u, fysieke_streepjes: heel } : u)));
     await fetch("/api/streepjes", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, fysiekeStreepjes: parseFloat(waarde) || 0 }),
+      body: JSON.stringify({ userId, fysiekeStreepjes: heel }),
     });
   };
 
@@ -234,7 +235,8 @@ export default function Streepjes() {
                     {magBewerken ? (
                       <input
                         type="number"
-                        step="0.25"
+                        step="1"
+                        min="0"
                         value={u.fysieke_streepjes || 0}
                         onChange={(e) => updateFysiek(u.id, e.target.value)}
                         style={{ width: 70 }}

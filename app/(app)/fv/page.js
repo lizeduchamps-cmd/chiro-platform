@@ -187,7 +187,7 @@ export default function FinancieelVerslag() {
           <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
             Iedereen krijgt meteen een lege plaats op dit FV. Streepjes voeg je bewust toe vanaf de Streepjes-pagina.
           </p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8, marginBottom: 10 }}>
+          <div className="grid-2" style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 12 }}>
               Maand (JJJJ-MM)
               <input value={nieuweMaand.maand} onChange={(e) => setNieuweMaand({ ...nieuweMaand, maand: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />

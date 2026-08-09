@@ -17,14 +17,28 @@ const LEGE_TRANSACTIE = {
   typeGeldstroom: "uitgave",
   typeKostenpost: "kost",
   hoofdcategorie: "",
-  subcategorie: "",
-  bedragExclBtw: "",
-  btwTarief: "0",
-  betaalmethode: "Overschrijving",
-  status: "Gepland",
-  wie: "", // "user:<id>" of "partij:<id>" of ""
-  bewijsstukUrl: "",
+  waar: "",
+  hoeveelheid: "",
+  bedrag: "",
 };
+
+// Zet een transactie-rij uit de API om naar het formaat van het bewerkformulier.
+function naarBewerkVeld(t) {
+  return {
+    datum: t.datum || "",
+    omschrijving: t.omschrijving || "",
+    typeGeldstroom: t.type_geldstroom || "uitgave",
+    typeKostenpost: t.type_kostenpost || "kost",
+    hoofdcategorie: t.hoofdcategorie || "",
+    waar: t.waar || "",
+    hoeveelheid: t.hoeveelheid ?? "",
+    bedrag: t.bedrag_totaal ?? "",
+    betaalmethode: t.betaalmethode || "",
+    status: t.status || "Gepland",
+    medewerkerUserId: t.medewerker_user_id || "",
+    bewijsstukUrl: t.bewijsstuk_url || "",
+  };
+}
 
 export default function EvenementDetail({ params }) {
   const { id } = params;
@@ -32,17 +46,17 @@ export default function EvenementDetail({ params }) {
   const [overzicht, setOverzicht] = useState(null);
   const [loading, setLoading] = useState(true);
   const [gebruikers, setGebruikers] = useState([]);
-  const [partijen, setPartijen] = useState([]);
   const [nieuweKassa, setNieuweKassa] = useState({ naam: "", type: "cash", wisselgeldStart: "" });
   const [nieuweTransactie, setNieuweTransactie] = useState(LEGE_TRANSACTIE);
   const [toonTransactieForm, setToonTransactieForm] = useState(false);
+  const [bewerkId, setBewerkId] = useState(null);
+  const [bewerkVeld, setBewerkVeld] = useState(null);
 
   const laden = () => fetch(`/api/evenementen/overzicht?evenementId=${id}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
 
   useEffect(() => {
     laden();
     fetch("/api/gebruikers/lijst").then((r) => r.json()).then((d) => setGebruikers(d.users || []));
-    fetch("/api/partijen").then((r) => r.json()).then((d) => setPartijen(d.partijen || []));
   }, [id]);
 
   if (loading || !overzicht) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
@@ -103,9 +117,7 @@ export default function EvenementDetail({ params }) {
 
   const transactieToevoegen = async () => {
     const t = nieuweTransactie;
-    if (!t.datum || !t.omschrijving || !t.bedragExclBtw) return alert("Vul minstens datum, omschrijving en bedrag in.");
-    const partijId = t.wie.startsWith("partij:") ? t.wie.slice(7) : null;
-    const medewerkerUserId = t.wie.startsWith("user:") ? t.wie.slice(5) : null;
+    if (!t.datum || !t.omschrijving || !t.bedrag) return alert("Vul minstens datum, omschrijving en bedrag in.");
     const res = await fetch("/api/evenementen/transacties", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -116,28 +128,14 @@ export default function EvenementDetail({ params }) {
         typeGeldstroom: t.typeGeldstroom,
         typeKostenpost: t.typeKostenpost,
         hoofdcategorie: t.hoofdcategorie || null,
-        subcategorie: t.subcategorie || null,
-        bedragExclBtw: t.bedragExclBtw,
-        btwTarief: t.btwTarief,
-        betaalmethode: t.betaalmethode,
-        status: t.status,
-        partijId,
-        medewerkerUserId,
-        bewijsstukUrl: t.bewijsstukUrl || null,
+        waar: t.waar || null,
+        hoeveelheid: t.hoeveelheid || null,
+        bedrag: t.bedrag,
       }),
     });
     const data = await res.json();
     if (data.error) return alert("⚠️ " + data.error);
     setNieuweTransactie(LEGE_TRANSACTIE);
-    laden();
-  };
-
-  const transactieStatusWijzigen = async (transactieId, status) => {
-    await fetch("/api/evenementen/transacties", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: transactieId, status }),
-    });
     laden();
   };
 
@@ -147,7 +145,43 @@ export default function EvenementDetail({ params }) {
     laden();
   };
 
-  const categorieToevoegen = async () => {
+  const rijOpenen = (t) => {
+    if (!magBewerken) return;
+    if (bewerkId === t.id) { setBewerkId(null); setBewerkVeld(null); return; }
+    setBewerkId(t.id);
+    setBewerkVeld(naarBewerkVeld(t));
+  };
+
+  const bewerkOpslaan = async () => {
+    const v = bewerkVeld;
+    if (!v.datum || !v.omschrijving || !v.bedrag) return alert("Vul minstens datum, omschrijving en bedrag in.");
+    const res = await fetch("/api/evenementen/transacties", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: bewerkId,
+        datum: v.datum,
+        omschrijving: v.omschrijving,
+        typeGeldstroom: v.typeGeldstroom,
+        typeKostenpost: v.typeGeldstroom === "uitgave" ? v.typeKostenpost : null,
+        hoofdcategorie: v.hoofdcategorie || null,
+        waar: v.waar || null,
+        hoeveelheid: v.hoeveelheid === "" ? null : v.hoeveelheid,
+        bedrag: v.bedrag,
+        betaalmethode: v.betaalmethode || null,
+        status: v.status,
+        medewerkerUserId: v.medewerkerUserId || null,
+        bewijsstukUrl: v.bewijsstukUrl || null,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setBewerkId(null);
+    setBewerkVeld(null);
+    laden();
+  };
+
+  const categorieToevoegen = async (zetIn) => {
     const naam = prompt("Naam van de nieuwe categorie:");
     if (!naam?.trim()) return;
     const res = await fetch("/api/evenementen/categorieen", {
@@ -157,7 +191,7 @@ export default function EvenementDetail({ params }) {
     });
     const data = await res.json();
     if (data.error) return alert("⚠️ " + data.error);
-    setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam.trim() }));
+    zetIn(naam.trim());
     laden();
   };
 
@@ -184,7 +218,7 @@ export default function EvenementDetail({ params }) {
       </div>
 
       {/* Balans */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+      <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="stat">
           <div className="muted" style={{ fontSize: 12 }}>Totale inkomsten</div>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(balans.totaalInkomsten)}</div>
@@ -284,6 +318,7 @@ export default function EvenementDetail({ params }) {
       {/* Budgetten */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Budget per hoofdcategorie</div>
+        <p className="muted" style={{ fontSize: 11, marginBottom: 10 }}>Optioneel — laat leeg voor categorieën zonder vast budget.</p>
         <div className="table-wrap">
           <table>
             <thead>
@@ -342,7 +377,7 @@ export default function EvenementDetail({ params }) {
               <tbody>
                 {nogTerugTeBetalen.map((r) => (
                   <tr key={r.id}>
-                    <td style={{ fontWeight: 600 }}>{r.wie?.naam || "-"} {r.wie?.type === "intern" && <span className="subtle">(intern)</span>}</td>
+                    <td style={{ fontWeight: 600 }}>{r.wie?.naam || "-"}</td>
                     <td className="muted">{r.omschrijving}</td>
                     <td className="subtle">{r.wie?.iban || "⚠️ onbekend"}</td>
                     <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(r.bedrag)}</td>
@@ -367,7 +402,7 @@ export default function EvenementDetail({ params }) {
 
         {toonTransactieForm && (
           <div style={{ background: "var(--primary-tint)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 8 }}>
+            <div className="grid-3" style={{ marginBottom: 8 }}>
               <input type="date" value={nieuweTransactie.datum} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, datum: e.target.value })} />
               <input placeholder="Omschrijving" value={nieuweTransactie.omschrijving} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
               <select value={nieuweTransactie.typeGeldstroom} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeGeldstroom: e.target.value })}>
@@ -380,37 +415,16 @@ export default function EvenementDetail({ params }) {
                   <option value="investering">Investering (blijft mee)</option>
                 </select>
               )}
+              <input type="number" step="0.01" placeholder="Bedrag" value={nieuweTransactie.bedrag} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedrag: e.target.value })} />
               <div style={{ display: "flex", gap: 4 }}>
                 <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
                   <option value="">Hoofdcategorie...</option>
                   {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
                 </select>
-                <button type="button" onClick={categorieToevoegen} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
+                <button type="button" onClick={() => categorieToevoegen((naam) => setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
               </div>
-              <input placeholder="Subcategorie (optioneel)" value={nieuweTransactie.subcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, subcategorie: e.target.value })} />
-              <input type="number" step="0.01" placeholder="Bedrag excl. btw" value={nieuweTransactie.bedragExclBtw} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedragExclBtw: e.target.value })} />
-              <select value={nieuweTransactie.btwTarief} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, btwTarief: e.target.value })}>
-                <option value="0">0% btw</option>
-                <option value="6">6% btw</option>
-                <option value="12">12% btw</option>
-                <option value="21">21% btw</option>
-              </select>
-              <select value={nieuweTransactie.betaalmethode} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, betaalmethode: e.target.value })}>
-                {BETAALMETHODES.map((b) => <option key={b} value={b}>{b}</option>)}
-              </select>
-              <select value={nieuweTransactie.status} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, status: e.target.value })}>
-                {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-              <select value={nieuweTransactie.wie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, wie: e.target.value })}>
-                <option value="">Wie (optioneel)...</option>
-                <optgroup label="Interne leiding (voorgeschoten)">
-                  {gebruikers.map((g) => <option key={g.id} value={`user:${g.id}`}>{g.naam}</option>)}
-                </optgroup>
-                <optgroup label="Externe partij">
-                  {partijen.map((p) => <option key={p.id} value={`partij:${p.id}`}>{p.naam} ({p.rol})</option>)}
-                </optgroup>
-              </select>
-              <input placeholder="Link naar bonnetje/factuur (optioneel)" value={nieuweTransactie.bewijsstukUrl} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bewijsstukUrl: e.target.value })} style={{ gridColumn: "span 2" }} />
+              <input placeholder="Waar gekocht/besteld (optioneel)" value={nieuweTransactie.waar} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, waar: e.target.value })} />
+              <input type="number" step="0.01" placeholder="Hoeveelheid (optioneel)" value={nieuweTransactie.hoeveelheid} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoeveelheid: e.target.value })} />
             </div>
             <button className="btn-primary" onClick={transactieToevoegen}>Toevoegen</button>
           </div>
@@ -434,30 +448,72 @@ export default function EvenementDetail({ params }) {
                 <tr><td colSpan={7} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen transacties.</td></tr>
               )}
               {transacties.map((t) => (
-                <tr key={t.id}>
-                  <td className="subtle" style={{ whiteSpace: "nowrap" }}>{t.transactie_code}</td>
-                  <td style={{ whiteSpace: "nowrap" }}>{t.datum}</td>
-                  <td>
-                    {t.omschrijving}
-                    {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer">bonnetje</a></>}
-                  </td>
-                  <td className="muted" style={{ fontSize: 12 }}>{t.hoofdcategorie || "-"}{t.subcategorie ? ` · ${t.subcategorie}` : ""}</td>
-                  <td className={t.type_geldstroom === "uitgave" ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700 }}>
-                    {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
-                  </td>
-                  <td>
-                    {magBewerken ? (
-                      <select value={t.status} onChange={(e) => transactieStatusWijzigen(t.id, e.target.value)} style={{ fontSize: 12 }}>
-                        {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                    ) : (
-                      <span className="badge badge-neutral">{t.status}</span>
+                <>
+                  <tr key={t.id} onClick={() => rijOpenen(t)} style={{ cursor: magBewerken ? "pointer" : "default", background: bewerkId === t.id ? "var(--primary-tint)" : undefined }}>
+                    <td className="subtle" style={{ whiteSpace: "nowrap" }}>{t.transactie_code}</td>
+                    <td style={{ whiteSpace: "nowrap" }}>{t.datum}</td>
+                    <td>
+                      {t.omschrijving}
+                      {t.waar && <span className="subtle"> · {t.waar}</span>}
+                      {t.hoeveelheid ? <span className="subtle"> · {t.hoeveelheid}×</span> : ""}
+                      {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>{t.hoofdcategorie || "-"}</td>
+                    <td className={t.type_geldstroom === "uitgave" ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>
+                      {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
+                    </td>
+                    <td><span className="badge badge-neutral">{t.status}</span></td>
+                    {magBewerken && (
+                      <td><button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t.id); }}>🗑️</button></td>
                     )}
-                  </td>
-                  {magBewerken && (
-                    <td><button className="btn-danger" onClick={() => transactieVerwijderen(t.id)}>🗑️</button></td>
+                  </tr>
+                  {bewerkId === t.id && bewerkVeld && (
+                    <tr>
+                      <td colSpan={magBewerken ? 7 : 6} style={{ background: "var(--primary-tint)", padding: 12 }}>
+                        <div className="grid-3" style={{ marginBottom: 8 }}>
+                          <input type="date" value={bewerkVeld.datum} onChange={(e) => setBewerkVeld({ ...bewerkVeld, datum: e.target.value })} />
+                          <input placeholder="Omschrijving" value={bewerkVeld.omschrijving} onChange={(e) => setBewerkVeld({ ...bewerkVeld, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
+                          <select value={bewerkVeld.typeGeldstroom} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeGeldstroom: e.target.value })}>
+                            <option value="uitgave">Uitgave</option>
+                            <option value="inkomst">Inkomst</option>
+                          </select>
+                          {bewerkVeld.typeGeldstroom === "uitgave" && (
+                            <select value={bewerkVeld.typeKostenpost} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeKostenpost: e.target.value })}>
+                              <option value="kost">Kost (eenmalig)</option>
+                              <option value="investering">Investering (blijft mee)</option>
+                            </select>
+                          )}
+                          <input type="number" step="0.01" placeholder="Bedrag" value={bewerkVeld.bedrag} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bedrag: e.target.value })} />
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <select value={bewerkVeld.hoofdcategorie} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
+                              <option value="">Hoofdcategorie...</option>
+                              {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                            </select>
+                            <button type="button" onClick={() => categorieToevoegen((naam) => setBewerkVeld((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
+                          </div>
+                          <input placeholder="Waar gekocht/besteld" value={bewerkVeld.waar} onChange={(e) => setBewerkVeld({ ...bewerkVeld, waar: e.target.value })} />
+                          <input type="number" step="0.01" placeholder="Hoeveelheid" value={bewerkVeld.hoeveelheid} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoeveelheid: e.target.value })} />
+                          <select value={bewerkVeld.betaalmethode} onChange={(e) => setBewerkVeld({ ...bewerkVeld, betaalmethode: e.target.value })}>
+                            <option value="">Betaalmethode...</option>
+                            {BETAALMETHODES.map((b) => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                          <select value={bewerkVeld.status} onChange={(e) => setBewerkVeld({ ...bewerkVeld, status: e.target.value })}>
+                            {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          <select value={bewerkVeld.medewerkerUserId} onChange={(e) => setBewerkVeld({ ...bewerkVeld, medewerkerUserId: e.target.value })}>
+                            <option value="">Voorgeschoten door (optioneel)...</option>
+                            {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                          </select>
+                          <input placeholder="Link naar bonnetje/factuur" value={bewerkVeld.bewijsstukUrl} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bewijsstukUrl: e.target.value })} style={{ gridColumn: "span 2" }} />
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="btn-primary" onClick={bewerkOpslaan}>Opslaan</button>
+                          <button onClick={() => { setBewerkId(null); setBewerkVeld(null); }}>Annuleren</button>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </>
               ))}
             </tbody>
           </table>

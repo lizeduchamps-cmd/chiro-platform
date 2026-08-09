@@ -199,6 +199,19 @@ export default function CsvUpload() {
     setRegels((prev) => prev.filter((r) => r.id !== id));
   };
 
+  const nieuweCategorie = async () => {
+    const naam = prompt("Naam van de nieuwe categorie:");
+    if (!naam) return;
+    const res = await fetch("/api/categorieen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ naam }),
+    });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setCategorieen((prev) => [...prev, data.categorie].sort((a, b) => a.naam.localeCompare(b.naam)));
+  };
+
   const gefilterd = filterCat ? pending.filter((t) => t.categorie === filterCat) : pending;
   const categorieNamen = Array.from(new Set([...categorieen.map((c) => c.naam), ONBEKEND]));
 
@@ -299,6 +312,7 @@ export default function CsvUpload() {
           📄 CSV-bestand kiezen
           <input type="file" accept=".csv" onChange={onFile} style={{ display: "none" }} />
         </label>
+        <button onClick={nieuweCategorie}>+ Categorie</button>
         {pending.length > 0 && (
           <>
             <button onClick={draaiPatroonherkenningOpnieuw}>🔮 Patroonherkenning opnieuw</button>

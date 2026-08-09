@@ -35,7 +35,7 @@ export async function GET(req) {
     supabaseAdmin
       .from("evenement_transacties")
       .select(
-        "id, transactie_code, datum, omschrijving, type_geldstroom, type_kostenpost, hoofdcategorie, subcategorie, bedrag_excl_btw, btw_tarief, bedrag_totaal, betaalmethode, status, bewijsstuk_url, partij_id, medewerker_user_id, partijen(id, naam, rol, iban), users(id, naam, iban)"
+        "id, transactie_code, datum, omschrijving, type_geldstroom, type_kostenpost, hoofdcategorie, waar, hoeveelheid, bedrag_totaal, betaalmethode, status, bewijsstuk_url, medewerker_user_id, users(id, naam, iban)"
       )
       .eq("evenement_id", evenementId)
       .order("datum", { ascending: false }),
@@ -94,7 +94,7 @@ export async function GET(req) {
       omschrijving: t.omschrijving,
       bedrag: t.bedrag_totaal,
       datum: t.datum,
-      wie: t.users ? { naam: t.users.naam, iban: t.users.iban, type: "intern" } : t.partijen ? { naam: t.partijen.naam, iban: t.partijen.iban, type: "extern" } : null,
+      wie: t.users ? { naam: t.users.naam, iban: t.users.iban } : null,
     }));
 
   return NextResponse.json({
