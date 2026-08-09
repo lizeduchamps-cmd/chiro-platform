@@ -2,6 +2,7 @@
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
+import Layout from "@/components/Layout";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -162,14 +163,17 @@ export default function Kasboek() {
 
   if (error) {
     return (
-      <div style={{ padding: 32 }}>
-        <p style={{ color: "#B24C4C", marginBottom: 16 }}>{error}</p>
-        <button onClick={nieuwWerkjaar}>➕ Werkjaar aanmaken</button>
-      </div>
+      <Layout session={session}>
+        <div style={{ padding: 32 }}>
+          <p style={{ color: "#B24C4C", marginBottom: 16 }}>{error}</p>
+          <button onClick={nieuwWerkjaar}>➕ Werkjaar aanmaken</button>
+        </div>
+      </Layout>
     );
   }
 
   return (
+    <Layout session={session}>
     <div style={{ padding: 32, maxWidth: 1100 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
@@ -319,5 +323,6 @@ export default function Kasboek() {
         </div>
       )}
     </div>
+    </Layout>
   );
 }
