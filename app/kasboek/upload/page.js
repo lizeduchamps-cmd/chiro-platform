@@ -8,59 +8,10 @@ function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
-// Zelfde herkenningsregels als in het prototype: tekst in mededeling/omschrijving/
-// tegenpartij wordt vergeleken met deze lijst om automatisch een categorie te kiezen.
-const AUTO_RULES = [
-  { key: "stripe", cat: "Trooper" },
-  { key: "trooper", cat: "Trooper" },
-  { key: "anatolia", cat: "Financieel Verslag" },
-  { key: "proxy hoepertingen", cat: "4-uurtje" },
-  { key: "proxy", cat: "4-uurtje" },
-  { key: "financieelverslag", cat: "Financieel Verslag" },
-  { key: "financieel verslag", cat: "Financieel Verslag" },
-  { key: "financieel", cat: "Financieel Verslag" },
-  { key: "fin verslag", cat: "Financieel Verslag" },
-  { key: "fin", cat: "Financieel Verslag" },
-  { key: "fv", cat: "Financieel Verslag" },
-  { key: "leidingsweekend", cat: "Leidingsweekend" },
-  { key: "leidingweekend", cat: "Leidingsweekend" },
-  { key: "vlaams weekend", cat: "Vlaams Weekend" },
-  { key: "vlaamsweekend", cat: "Vlaams Weekend" },
-  { key: "ledenweekend", cat: "Ledenweekend" },
-  { key: "lazarus", cat: "Fuif" },
-  { key: "fuif", cat: "Fuif" },
-  { key: "kerstfeestje", cat: "Kerstfeestje" },
-  { key: "kerst", cat: "Kerstfeestje" },
-  { key: "sinterklaas", cat: "Sinterklaas" },
-  { key: "sint", cat: "Sinterklaas" },
-  { key: "4-uurtje", cat: "4-uurtje" },
-  { key: "viertje", cat: "4-uurtje" },
-  { key: "sumup", cat: "Payconiq/SumUp" },
-  { key: "payconiq", cat: "Payconiq/SumUp" },
-  { key: "papierslag", cat: "Papierslag" },
-  { key: "papier", cat: "Papierslag" },
-  { key: "ons heem", cat: "Huur" },
-  { key: "huur", cat: "Huur" },
-  { key: "taart", cat: "Taartenslag" },
-  { key: "lidgeld", cat: "Lidgeld" },
-  { key: "colruyt", cat: "Winkellijst" },
-  { key: "delhaize", cat: "Winkellijst" },
-  { key: "lidl", cat: "Winkellijst" },
-  { key: "bier", cat: "Bier" },
-];
 const ONBEKEND = "Onduidelijk/Nog in te vullen";
 
-function categoriseer(rawMemo, rawDesc, tegenpartij, bedrag) {
-  const tekst = `${rawMemo} ${rawDesc} ${tegenpartij}`.toLowerCase();
-  if (bedrag > 0 && bedrag % 60 === 0 && (rawMemo.trim() || rawDesc.trim())) return "Lidgeld";
-  for (const rule of AUTO_RULES) {
-    if (tekst.includes(rule.key)) return rule.cat;
-  }
-  return ONBEKEND;
-}
-
-// Herkent transacties met hetzelfde bedrag binnen dezelfde maand: als één daarvan
-// al een categorie heeft, krijgen de andere ("Onduidelijk") automatisch dezelfde.
+// Patroonherkenning: transacties met hetzelfde bedrag binnen dezelfde maand
+// krijgen automatisch dezelfde categorie als er al één bekend is in die groep.
 function slimmePatroonherkenning(lijst) {
   const groepen = {};
   lijst.forEach((t) => {
@@ -83,21 +34,27 @@ function slimmePatroonherkenning(lijst) {
   return aantal;
 }
 
-function parseKbcCsv(text) {
+function parseKbcCsv(text, regels) {
   const lines = text.split(/\r\n|\r|\n/).filter((l) => l.trim());
   if (lines.length < 2) return [];
 
   const headerCols = lines[0].split(";").map((c) => c.replace(/"/g, "").trim());
-  const idx = (naam, fallback) => {
-    const i = headerCols.indexOf(naam);
-    return i !== -1 ? i : fallback;
-  };
+  const idx = (naam, fallback) => { const i = headerCols.indexOf(naam); return i !== -1 ? i : fallback; };
   const dateIdx = idx("Datum", 5);
   const descIdx = idx("Omschrijving", 6);
   const amountIdx = idx("Bedrag", 8);
   const ibanIdx = idx("rekeningnummer tegenpartij", 12);
   const nameIdx = idx("Naam tegenpartij", 14);
   const memoIdx = idx("Vrije mededeling", 17);
+
+  const categoriseer = (rawMemo, rawDesc, tegenpartij, bedrag) => {
+    const tekst = `${rawMemo} ${rawDesc} ${tegenpartij}`.toLowerCase();
+    if (bedrag > 0 && bedrag % 60 === 0 && (rawMemo.trim() || rawDesc.trim())) return "Lidgeld";
+    for (const regel of regels) {
+      if (tekst.includes(regel.bevat_tekst)) return regel.categorieen?.naam || ONBEKEND;
+    }
+    return ONBEKEND;
+  };
 
   const resultaat = [];
   for (let i = 1; i < lines.length; i++) {
@@ -120,10 +77,7 @@ function parseKbcCsv(text) {
 
     resultaat.push({
       id: `${Date.now()}_${Math.random()}`,
-      datum,
-      tegenpartij,
-      vrijeMededeling,
-      omschrijving,
+      datum, tegenpartij, vrijeMededeling, omschrijving,
       iban: cols[ibanIdx] || "",
       bedrag,
       categorie: categoriseer(vrijeMededeling, omschrijving, tegenpartij, bedrag),
@@ -137,11 +91,17 @@ export default function CsvUpload() {
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [categorieen, setCategorieen] = useState([]);
+  const [regels, setRegels] = useState([]);
   const [pending, setPending] = useState([]);
   const [geselecteerd, setGeselecteerd] = useState([]);
   const [bulkCat, setBulkCat] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [bezigMetOpslaan, setBezigMetOpslaan] = useState(false);
+  const [toonRegels, setToonRegels] = useState(false);
+  const [nieuweRegelTekst, setNieuweRegelTekst] = useState("");
+  const [nieuweRegelCat, setNieuweRegelCat] = useState("");
+
+  const ladenRegels = () => fetch("/api/categorisatie-regels").then((r) => r.json()).then((d) => setRegels(d.regels || []));
 
   useEffect(() => {
     if (status !== "authenticated") return;
@@ -149,6 +109,7 @@ export default function CsvUpload() {
       if (d.werkjaren?.length) { setWerkjaren(d.werkjaren); setWerkjaarId(d.werkjaren[0].id); }
     });
     fetch("/api/categorieen").then((r) => r.json()).then((d) => setCategorieen(d.categorieen || []));
+    ladenRegels();
   }, [status]);
 
   if (status === "loading") return <p style={{ padding: 32 }}>Laden…</p>;
@@ -164,7 +125,7 @@ export default function CsvUpload() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = (evt) => {
-      const nieuw = parseKbcCsv(evt.target.result);
+      const nieuw = parseKbcCsv(evt.target.result, regels);
       if (nieuw.length === 0) return alert("⚠️ Er konden geen transacties worden uitgelezen.");
       const aantalSlim = slimmePatroonherkenning(nieuw);
       setPending(nieuw);
@@ -211,18 +172,79 @@ export default function CsvUpload() {
     setGeselecteerd([]);
   };
 
+  const nieuweRegelOpslaan = async () => {
+    if (!nieuweRegelTekst || !nieuweRegelCat) return alert("Vul zowel een tekst als een categorie in.");
+    const res = await fetch("/api/categorisatie-regels", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bevatTekst: nieuweRegelTekst, categorieId: nieuweRegelCat }),
+    });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setRegels((prev) => [...prev, data.regel]);
+    setNieuweRegelTekst("");
+    setNieuweRegelCat("");
+  };
+
+  const regelVerwijderen = async (id) => {
+    await fetch(`/api/categorisatie-regels?id=${id}`, { method: "DELETE" });
+    setRegels((prev) => prev.filter((r) => r.id !== id));
+  };
+
   const gefilterd = filterCat ? pending.filter((t) => t.categorie === filterCat) : pending;
-  const categorieNamen = Array.from(new Set([...categorieen.map((c) => c.naam), ...AUTO_RULES.map((r) => r.cat), ONBEKEND]));
+  const categorieNamen = Array.from(new Set([...categorieen.map((c) => c.naam), ONBEKEND]));
+
+  const BevestigKnop = () => (
+    <button
+      onClick={bevestigen}
+      disabled={bezigMetOpslaan}
+      style={{ background: "#2F4A3C", color: "white", padding: "10px 20px", borderRadius: 8, border: "none", fontWeight: 600 }}
+    >
+      {bezigMetOpslaan ? "Bezig met opslaan…" : `✅ ${pending.length} transacties definitief toevoegen aan kasboek`}
+    </button>
+  );
 
   return (
     <Layout session={session}>
       <div style={{ padding: 32, maxWidth: 1100 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22", marginBottom: 4 }}>KBC CSV Upload</h1>
-        <p style={{ color: "#6B6B5F", fontSize: 14, marginBottom: 20 }}>
-          Upload je KBC Touch-export (.csv). Transacties worden automatisch gecategoriseerd; controleer en pas aan waar nodig, en bevestig dan om ze definitief aan het kasboek toe te voegen.
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22", marginBottom: 4 }}>KBC CSV Upload</h1>
+            <p style={{ color: "#6B6B5F", fontSize: 14 }}>
+              Upload je KBC Touch-export (.csv). Transacties worden automatisch gecategoriseerd; controleer en pas aan waar nodig.
+            </p>
+          </div>
+          <button onClick={() => setToonRegels(!toonRegels)} style={{ padding: "8px 12px", fontSize: 12 }}>
+            ⚙️ Categorisatieregels {toonRegels ? "verbergen" : "beheren"}
+          </button>
+        </div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
+        {toonRegels && (
+          <div style={{ background: "white", border: "1px solid #E4E0D4", borderRadius: 12, padding: 16, marginTop: 12, marginBottom: 20 }}>
+            <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Categorisatieregels</div>
+            <p style={{ fontSize: 12, color: "#6B6B5F", marginBottom: 12 }}>
+              Als de mededeling, omschrijving of naam van de tegenpartij deze tekst bevat, wordt automatisch deze categorie toegewezen.
+            </p>
+            <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
+              {regels.map((r) => (
+                <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "4px 0", borderBottom: "1px solid #F0EEE5" }}>
+                  <span><strong>"{r.bevat_tekst}"</strong> → {r.categorieen?.naam}</span>
+                  <button onClick={() => regelVerwijderen(r.id)} style={{ color: "#B24C4C", background: "none", border: "none", cursor: "pointer" }}>🗑️</button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input placeholder='Tekst, bv. "fin"' value={nieuweRegelTekst} onChange={(e) => setNieuweRegelTekst(e.target.value)} style={{ flex: 1, padding: 6 }} />
+              <select value={nieuweRegelCat} onChange={(e) => setNieuweRegelCat(e.target.value)} style={{ padding: 6 }}>
+                <option value="">Categorie...</option>
+                {categorieen.map((c) => <option key={c.id} value={c.id}>{c.naam}</option>)}
+              </select>
+              <button onClick={nieuweRegelOpslaan} style={{ padding: "6px 12px" }}>+ Toevoegen</button>
+            </div>
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 12, alignItems: "center", margin: "20px 0", flexWrap: "wrap" }}>
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ padding: 8 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
@@ -231,7 +253,11 @@ export default function CsvUpload() {
             <input type="file" accept=".csv" onChange={onFile} style={{ display: "none" }} />
           </label>
           {pending.length > 0 && (
-            <button onClick={draaiPatroonherkenningOpnieuw} style={{ padding: "8px 12px" }}>🔮 Patroonherkenning opnieuw</button>
+            <>
+              <button onClick={draaiPatroonherkenningOpnieuw} style={{ padding: "8px 12px" }}>🔮 Patroonherkenning opnieuw</button>
+              <div style={{ flex: 1 }} />
+              <BevestigKnop />
+            </>
           )}
         </div>
 
@@ -301,13 +327,7 @@ export default function CsvUpload() {
               </table>
             </div>
 
-            <button
-              onClick={bevestigen}
-              disabled={bezigMetOpslaan}
-              style={{ background: "#2F4A3C", color: "white", padding: "10px 20px", borderRadius: 8, border: "none", fontWeight: 600 }}
-            >
-              {bezigMetOpslaan ? "Bezig met opslaan…" : `✅ ${pending.length} transacties definitief toevoegen aan kasboek`}
-            </button>
+            <BevestigKnop />
           </>
         )}
       </div>
