@@ -20,6 +20,7 @@ const AUTO_RULES = [
   { key: "financieel verslag", cat: "Financieel Verslag" },
   { key: "financieel", cat: "Financieel Verslag" },
   { key: "fin verslag", cat: "Financieel Verslag" },
+  { key: "fin", cat: "Financieel Verslag" },
   { key: "fv", cat: "Financieel Verslag" },
   { key: "leidingsweekend", cat: "Leidingsweekend" },
   { key: "leidingweekend", cat: "Leidingsweekend" },
