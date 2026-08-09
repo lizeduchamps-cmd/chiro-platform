@@ -98,8 +98,15 @@ export default function CsvUpload() {
   const [toonRegels, setToonRegels] = useState(false);
   const [nieuweRegelTekst, setNieuweRegelTekst] = useState("");
   const [nieuweRegelCat, setNieuweRegelCat] = useState("");
+  const [bestandsnaam, setBestandsnaam] = useState("");
+  const [toonHistoriek, setToonHistoriek] = useState(false);
+  const [historiek, setHistoriek] = useState([]);
 
   const ladenRegels = () => fetch("/api/categorisatie-regels").then((r) => r.json()).then((d) => setRegels(d.regels || []));
+  const ladenHistoriek = () => {
+    if (!werkjaarId) return;
+    fetch(`/api/csv-imports?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setHistoriek(d.imports || []));
+  };
 
   useEffect(() => {
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
@@ -108,6 +115,8 @@ export default function CsvUpload() {
     fetch("/api/categorieen").then((r) => r.json()).then((d) => setCategorieen(d.categorieen || []));
     ladenRegels();
   }, []);
+
+  useEffect(() => { ladenHistoriek(); }, [werkjaarId]);
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
   if (!magBewerken) {
@@ -124,6 +133,7 @@ export default function CsvUpload() {
       const aantalSlim = slimmePatroonherkenning(nieuw);
       setPending(nieuw);
       setGeselecteerd([]);
+      setBestandsnaam(file.name);
       let msg = `✅ ${nieuw.length} transacties uit '${file.name}' geladen!`;
       if (aantalSlim > 0) msg += `\n🔮 Waarvan ${aantalSlim} automatisch toegewezen via herkenning van herhaalde bedragen.`;
       alert(msg);
@@ -156,14 +166,18 @@ export default function CsvUpload() {
     const res = await fetch("/api/transacties/bulk", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ werkjaarId, transacties: pending }),
+      body: JSON.stringify({ werkjaarId, transacties: pending, bestandsnaam }),
     });
     const data = await res.json();
     setBezigMetOpslaan(false);
     if (data.error) return alert("⚠️ " + data.error);
-    alert(`✅ ${data.aantal} transacties toegevoegd aan het kasboek!`);
+    let msg = `✅ ${data.aantal} transacties toegevoegd aan het kasboek!`;
+    if (data.aantalDuplicaten > 0) msg += `\n⏭️ ${data.aantalDuplicaten} overgeslagen als duplicaat (stonden al in het kasboek).`;
+    alert(msg);
     setPending([]);
     setGeselecteerd([]);
+    setBestandsnaam("");
+    ladenHistoriek();
   };
 
   const nieuweRegelOpslaan = async () => {
@@ -208,10 +222,49 @@ export default function CsvUpload() {
             Upload je KBC Touch-export (.csv). Transacties worden automatisch gecategoriseerd; controleer en pas aan waar nodig.
           </p>
         </div>
-        <button onClick={() => setToonRegels(!toonRegels)} style={{ fontSize: 12 }}>
-          ⚙️ Categorisatieregels {toonRegels ? "verbergen" : "beheren"}
-        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setToonHistoriek(!toonHistoriek)} style={{ fontSize: 12 }}>
+            🕓 Importhistoriek {toonHistoriek ? "verbergen" : "tonen"}
+          </button>
+          <button onClick={() => setToonRegels(!toonRegels)} style={{ fontSize: 12 }}>
+            ⚙️ Categorisatieregels {toonRegels ? "verbergen" : "beheren"}
+          </button>
+        </div>
       </div>
+
+      {toonHistoriek && (
+        <div className="card" style={{ marginTop: 12, marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Importhistoriek (dit werkjaar)</div>
+          {historiek.length === 0 ? (
+            <p className="muted" style={{ fontSize: 12, fontStyle: "italic" }}>Nog geen CSV geïmporteerd voor dit werkjaar.</p>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Wanneer</th>
+                  <th>Door</th>
+                  <th>Bestand</th>
+                  <th style={{ textAlign: "right" }}>In bestand</th>
+                  <th style={{ textAlign: "right" }}>Nieuw</th>
+                  <th style={{ textAlign: "right" }}>Duplicaten</th>
+                </tr>
+              </thead>
+              <tbody>
+                {historiek.map((h) => (
+                  <tr key={h.id}>
+                    <td style={{ whiteSpace: "nowrap" }}>{new Date(h.created_at).toLocaleString("nl-BE")}</td>
+                    <td className="muted">{h.users?.naam || "-"}</td>
+                    <td className="muted">{h.bestandsnaam || "-"}</td>
+                    <td style={{ textAlign: "right" }}>{h.aantal_in_bestand}</td>
+                    <td style={{ textAlign: "right" }}>{h.aantal_nieuw}</td>
+                    <td style={{ textAlign: "right" }} className={h.aantal_duplicaten > 0 ? "amount-neg" : ""}>{h.aantal_duplicaten}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {toonRegels && (
         <div className="card" style={{ marginTop: 12, marginBottom: 20 }}>

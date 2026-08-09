@@ -99,7 +99,9 @@ export default function Jaaroverzicht() {
           {evenementenWinst.length > 0 && (
             <div className="card" style={{ marginBottom: 24 }}>
               <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Afgeronde evenementen</div>
-              <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>Winst/verlies uit Evenementen (kassabeheer + kosten/inkomsten).</p>
+              <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
+                Kassa-omzet en kosten/inkomsten die nog niet als kasboektransactie geboekt staan. Zodra dat wel zo is (bv. de bank-uitbetaling geïmporteerd en aan het evenement gekoppeld), zit dat al vervat in de totalen hierboven — dit kaartje telt dan niet nog eens mee.
+              </p>
               <table>
                 <tbody>
                   {evenementenWinst.map((e) => (

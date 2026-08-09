@@ -12,6 +12,7 @@ export default function Kasboek() {
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [categorieen, setCategorieen] = useState([]);
+  const [evenementen, setEvenementen] = useState([]);
   const [transacties, setTransacties] = useState([]);
   const [saldos, setSaldos] = useState(null);
   const [zoekterm, setZoekterm] = useState("");
@@ -29,6 +30,7 @@ export default function Kasboek() {
     bedrag: "",
     categorieId: "",
     interneBestemmingRekening: "spaar",
+    evenementId: "",
   });
 
   const magBewerken = session?.user?.platformRecht === "admin" || session?.user?.platformRecht === "financieel_verantwoordelijke";
@@ -59,6 +61,9 @@ export default function Kasboek() {
     fetch(`/api/saldos?werkjaarId=${werkjaarId}`)
       .then((r) => r.json())
       .then((data) => setSaldos(data.saldos));
+    fetch(`/api/evenementen?werkjaarId=${werkjaarId}`)
+      .then((r) => r.json())
+      .then((data) => setEvenementen(data.evenementen || []));
   }, [werkjaarId]);
 
   // Selectie leegmaken zodra het werkjaar of de filters wijzigen, zodat je nooit
@@ -147,6 +152,18 @@ export default function Kasboek() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, categorieId: categorieId || null }),
+    });
+  };
+
+  // Koppelt (of ontkoppelt) een kasboektransactie aan een evenement — zo telt
+  // die euro mee in de balans van dat evenement zonder ze nog eens apart in
+  // te geven, en blijft het kasboek de enige echte bron voor het bedrag zelf.
+  const updateEvenement = async (id, evenementId) => {
+    setTransacties((prev) => prev.map((t) => (t.id === id ? { ...t, evenement_id: evenementId } : t)));
+    await fetch("/api/transacties", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, evenementId: evenementId || null }),
     });
   };
 
@@ -305,6 +322,14 @@ export default function Kasboek() {
               ))}
             </select>
             <input type="number" step="0.01" placeholder="Bedrag" value={nieuw.bedrag} onChange={(e) => setNieuw({ ...nieuw, bedrag: e.target.value })} />
+            {evenementen.length > 0 && (
+              <select value={nieuw.evenementId} onChange={(e) => setNieuw({ ...nieuw, evenementId: e.target.value })}>
+                <option value="">Evenement (optioneel)...</option>
+                {evenementen.map((e) => (
+                  <option key={e.id} value={e.id}>{e.naam}</option>
+                ))}
+              </select>
+            )}
           </div>
           <button className="btn-primary" onClick={opslaanNieuw}>
             Opslaan
@@ -358,13 +383,14 @@ export default function Kasboek() {
               <th>Tegenpartij</th>
               <th>Mededeling</th>
               <th>Categorie</th>
+              <th>Evenement</th>
               <th style={{ textAlign: "right" }}>Bedrag</th>
               {magBewerken && <th></th>}
             </tr>
           </thead>
           <tbody>
             {gefilterd.length === 0 && (
-              <tr><td colSpan={8} className="muted" style={{ padding: 24, textAlign: "center", border: "none" }}>Geen transacties gevonden.</td></tr>
+              <tr><td colSpan={9} className="muted" style={{ padding: 24, textAlign: "center", border: "none" }}>Geen transacties gevonden.</td></tr>
             )}
             {gefilterd.map((t) => {
               const teken = t.soort === "uitgave" ? -1 : t.soort === "interne_transactie" ? 0 : 1;
@@ -392,6 +418,18 @@ export default function Kasboek() {
                       </select>
                     ) : (
                       t.categorieen?.naam || "-"
+                    )}
+                  </td>
+                  <td>
+                    {magBewerken ? (
+                      <select value={t.evenement_id || ""} onChange={(e) => updateEvenement(t.id, e.target.value)} style={{ fontSize: 12 }}>
+                        <option value="">-</option>
+                        {evenementen.map((e) => (
+                          <option key={e.id} value={e.id}>{e.naam}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      t.evenementen?.naam || "-"
                     )}
                   </td>
                   <td className={teken < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700 }}>

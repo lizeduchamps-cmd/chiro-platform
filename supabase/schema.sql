@@ -50,6 +50,17 @@ create table if not exists rekeningen (
   unique(werkjaar_id, type)
 );
 
+-- Evenementen wordt hier al aangemaakt (i.p.v. verderop bij de rest van Fase 3)
+-- omdat transacties.evenement_id er verderop naar verwijst.
+create table if not exists evenementen (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete set null,
+  naam text not null,                        -- bv. 'Fuif 2026'
+  datum date,
+  status text not null default 'gepland' check (status in ('gepland', 'lopend', 'afgerond')),
+  created_at timestamptz default now()
+);
+
 -- ============ CATEGORIEËN ============
 
 create table if not exists categorieen (
@@ -140,10 +151,33 @@ create table if not exists transacties (
   categorie_handmatig_aangepast boolean default false,  -- override: nooit terug automatisch overschrijven
   interne_bestemming_rekening text check (interne_bestemming_rekening in ('zicht', 'spaar') or interne_bestemming_rekening is null),
   bron text default 'handmatig' check (bron in ('handmatig', 'kbc_csv')),
+  -- Koppeling met Evenementen: als deze bank-transactie hoort bij een
+  -- evenement (bv. de SumUp-uitbetaling van de fuif), tag je 'm hier — in
+  -- plaats van het bedrag nog eens apart in te geven bij het evenement.
+  -- Zo blijft elke euro maar op één plek de "waarheid".
+  evenement_id uuid references evenementen(id) on delete set null,
+  -- Vingerafdruk voor duplicaatdetectie bij CSV-import (rekening+datum+bedrag+
+  -- tegenpartij+mededeling) — voorkomt dat dezelfde CSV twee keer opladen
+  -- dezelfde transacties dubbel aanmaakt.
+  import_fingerprint text,
   created_at timestamptz default now()
 );
 
 create index if not exists idx_transacties_werkjaar on transacties(werkjaar_id, datum);
+create index if not exists idx_transacties_evenement on transacties(evenement_id);
+create index if not exists idx_transacties_fingerprint on transacties(werkjaar_id, import_fingerprint);
+
+-- Importhistoriek: één rij per keer dat iemand een KBC CSV bevestigt.
+create table if not exists csv_imports (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  bestandsnaam text,
+  geimporteerd_door uuid references users(id) on delete set null,
+  aantal_in_bestand int not null default 0,
+  aantal_nieuw int not null default 0,
+  aantal_duplicaten int not null default 0,
+  created_at timestamptz default now()
+);
 
 -- ============ FINANCIEEL VERSLAG (FV) PER PERSOON ============
 
@@ -204,15 +238,7 @@ create table if not exists bestelling_regels (
 -- ============ EVENEMENTEN (Fase 3: Kassasysteem per Evenement) ============
 -- Kassabeheer + kosten/inkomsten-logboek per evenement (fuif, taartenslag, ...),
 -- met budget per hoofdcategorie en een automatisch berekende winst/verliesbalans.
-
-create table if not exists evenementen (
-  id uuid primary key default gen_random_uuid(),
-  werkjaar_id uuid references werkjaren(id) on delete set null,
-  naam text not null,                        -- bv. 'Fuif 2026'
-  datum date,
-  status text not null default 'gepland' check (status in ('gepland', 'lopend', 'afgerond')),
-  created_at timestamptz default now()
-);
+-- (De evenementen-tabel zelf staat hierboven, bij WERKJAREN & REKENINGEN.)
 
 create table if not exists evenement_kassas (
   id uuid primary key default gen_random_uuid(),

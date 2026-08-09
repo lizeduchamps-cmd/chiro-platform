@@ -27,6 +27,7 @@ export async function GET(req) {
     { data: budgetten, error: budgettenError },
     { data: categorieen, error: categorieenError },
     { data: transacties, error: transactiesError },
+    { data: gekoppeldeTransacties, error: gekoppeldeError },
   ] = await Promise.all([
     supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_budgetten").select("id, hoofdcategorie, budget_toegewezen").eq("evenement_id", evenementId),
@@ -38,11 +39,20 @@ export async function GET(req) {
       )
       .eq("evenement_id", evenementId)
       .order("datum", { ascending: false }),
+    // Kasboektransacties die aan dit evenement getagd zijn (bv. de SumUp-
+    // uitbetaling na de fuif) — dezelfde euro als in het kasboek, hier enkel
+    // ter info/optelling, niet nog eens apart geregistreerd.
+    supabaseAdmin
+      .from("transacties")
+      .select("id, datum, soort, tegenpartij, vrije_mededeling, omschrijving, bedrag, categorieen(naam)")
+      .eq("evenement_id", evenementId)
+      .order("datum", { ascending: false }),
   ]);
   if (kassasError) return NextResponse.json({ error: kassasError.message }, { status: 500 });
   if (budgettenError) return NextResponse.json({ error: budgettenError.message }, { status: 500 });
   if (categorieenError) return NextResponse.json({ error: categorieenError.message }, { status: 500 });
   if (transactiesError) return NextResponse.json({ error: transactiesError.message }, { status: 500 });
+  if (gekoppeldeError) return NextResponse.json({ error: gekoppeldeError.message }, { status: 500 });
 
   // Kassa-omzet: cash = geteld eindbedrag - klaargezet wisselgeld; digitaal = volledig eindbedrag.
   const kassasMetOmzet = (kassas || []).map((k) => {
@@ -55,8 +65,11 @@ export async function GET(req) {
   const inkomstenTransacties = (transacties || []).filter((t) => t.type_geldstroom === "inkomst");
   const uitgaveTransacties = (transacties || []).filter((t) => t.type_geldstroom === "uitgave");
 
-  const totaalInkomsten = kassaOmzetTotaal + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
-  const totaalUitgaven = uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+  const gekoppeldInkomsten = (gekoppeldeTransacties || []).filter((t) => t.soort === "inkomst").reduce((s, t) => s + Number(t.bedrag), 0);
+  const gekoppeldUitgaven = (gekoppeldeTransacties || []).filter((t) => t.soort === "uitgave").reduce((s, t) => s + Number(t.bedrag), 0);
+
+  const totaalInkomsten = kassaOmzetTotaal + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0) + gekoppeldInkomsten;
+  const totaalUitgaven = uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0) + gekoppeldUitgaven;
 
   const kostenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost !== "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
   const investeringenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost === "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
@@ -90,6 +103,7 @@ export async function GET(req) {
     kassaOmzetTotaal: Math.round(kassaOmzetTotaal * 100) / 100,
     categorieen,
     transacties,
+    gekoppeldeTransacties: gekoppeldeTransacties || [],
     budgetBurnRate,
     nogTerugTeBetalen,
     balans: {

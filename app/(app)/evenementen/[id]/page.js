@@ -167,7 +167,7 @@ export default function EvenementDetail({ params }) {
     laden();
   };
 
-  const { evenement, kassas, kassaOmzetTotaal, categorieen, transacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
+  const { evenement, kassas, kassaOmzetTotaal, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
 
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
@@ -200,6 +200,29 @@ export default function EvenementDetail({ params }) {
           <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(Math.abs(balans.nettoWinst))}</div>
         </div>
       </div>
+
+      {/* Gekoppelde kasboektransacties */}
+      {gekoppeldeTransacties.length > 0 && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Gekoppelde kasboektransacties</div>
+          <p className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
+            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd — ze tellen mee in de balans hierboven, maar staan niet nog eens apart geregistreerd.
+          </p>
+          <table>
+            <tbody>
+              {gekoppeldeTransacties.map((t) => (
+                <tr key={t.id}>
+                  <td className="subtle" style={{ border: "none", padding: "3px 0", whiteSpace: "nowrap" }}>{t.datum}</td>
+                  <td className="muted" style={{ border: "none", padding: "3px 0" }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</td>
+                  <td className={t.soort === "uitgave" ? "amount-neg" : ""} style={{ border: "none", padding: "3px 0", textAlign: "right", fontWeight: 600, width: 100 }}>
+                    {t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Kassabeheer */}
       <div className="card" style={{ marginBottom: 24 }}>

@@ -13,7 +13,7 @@ export async function GET(req) {
   const { data, error } = await supabaseAdmin
     .from("transacties")
     .select(
-      "id, datum, soort, tegenpartij, iban_tegenpartij, vrije_mededeling, omschrijving, bedrag, rekening_type, interne_bestemming_rekening, categorie_id, categorieen(naam)"
+      "id, datum, soort, tegenpartij, iban_tegenpartij, vrije_mededeling, omschrijving, bedrag, rekening_type, interne_bestemming_rekening, categorie_id, categorieen(naam), evenement_id, evenementen(naam)"
     )
     .eq("werkjaar_id", werkjaarId)
     .order("datum", { ascending: false });
@@ -40,6 +40,7 @@ export async function POST(req) {
     bedrag,
     categorieId,
     interneBestemmingRekening,
+    evenementId,
   } = body;
 
   if (!werkjaarId || !rekeningType || !datum || !soort || bedrag === undefined) {
@@ -62,6 +63,7 @@ export async function POST(req) {
       bedrag: Math.abs(Number(bedrag)),
       categorie_id: categorieId || null,
       interne_bestemming_rekening: soort === "interne_transactie" ? interneBestemmingRekening : null,
+      evenement_id: evenementId || null,
       bron: "handmatig",
     })
     .select()
@@ -77,13 +79,17 @@ export async function PATCH(req) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  const { id, categorieId } = await req.json();
+  const { id, categorieId, evenementId } = await req.json();
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
 
-  const { error } = await supabaseAdmin
-    .from("transacties")
-    .update({ categorie_id: categorieId || null, categorie_handmatig_aangepast: true })
-    .eq("id", id);
+  const updateFields = {};
+  if (categorieId !== undefined) {
+    updateFields.categorie_id = categorieId || null;
+    updateFields.categorie_handmatig_aangepast = true;
+  }
+  if (evenementId !== undefined) updateFields.evenement_id = evenementId || null;
+
+  const { error } = await supabaseAdmin.from("transacties").update(updateFields).eq("id", id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
