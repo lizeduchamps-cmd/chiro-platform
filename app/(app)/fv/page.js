@@ -2,6 +2,8 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { parseNaamRegels, vindGebruiker, haalKmEruit } from "@/lib/smartPaste";
+import { useToast } from "@/components/NotifyProvider";
+import { SkeletonCard } from "@/components/Skeleton";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -31,6 +33,7 @@ function fvGroep(user) {
 
 export default function FinancieelVerslag() {
   const { data: session } = useSession();
+  const toast = useToast();
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [fvMaanden, setFvMaanden] = useState([]);
@@ -74,7 +77,13 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   }, [fvMaandId]);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1100 }}>
+        <SkeletonCard lines={2} />
+      </div>
+    );
+  }
 
   const ladenOverzicht = (id) => {
     fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => setOverzicht(d));
@@ -89,7 +98,7 @@ export default function FinancieelVerslag() {
   };
 
   const nieuweMaandAanmaken = async () => {
-    if (!/^\d{4}-\d{2}$/.test(nieuweMaand.maand)) return alert("Vul de maand in als JJJJ-MM, bv. 2026-05.");
+    if (!/^\d{4}-\d{2}$/.test(nieuweMaand.maand)) return toast.error("Vul de maand in als JJJJ-MM, bv. 2026-05.");
     const kmTarief = berekendKmTarief();
     const res = await fetch("/api/fv/maanden", {
       method: "POST",
@@ -104,23 +113,24 @@ export default function FinancieelVerslag() {
       }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     const bijgewerkt = [data.fvMaand, ...fvMaanden].sort((a, b) => b.maand.localeCompare(a.maand));
     setFvMaanden(bijgewerkt);
     setFvMaandId(data.fvMaand.id);
     setNieuweMaandOpen(false);
+    toast.success(`FV-maand ${maandLabel(data.fvMaand.maand)} aangemaakt`);
   };
 
   const regelToevoegen = async (userId) => {
     const regel = nieuweRegel[userId];
-    if (!regel?.omschrijving || !regel?.bedrag) return alert("Vul zowel een omschrijving als een bedrag in.");
+    if (!regel?.omschrijving || !regel?.bedrag) return toast.error("Vul zowel een omschrijving als een bedrag in.");
     const res = await fetch("/api/fv/regels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fvMaandId, userId, omschrijving: regel.omschrijving, bedrag: regel.bedrag }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setNieuweRegel((prev) => ({ ...prev, [userId]: { omschrijving: "", bedrag: "" } }));
     ladenOverzicht(fvMaandId);
   };
@@ -128,9 +138,9 @@ export default function FinancieelVerslag() {
   const kmToevoegen = async (userId) => {
     const veld = nieuweKm[userId] || {};
     const km = parseFloat(veld.km);
-    if (!km) return alert("Vul een aantal kilometer in.");
+    if (!km) return toast.error("Vul een aantal kilometer in.");
     const tarief = overzicht.fvMaand.km_tarief_leiding;
-    if (!tarief) return alert("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
+    if (!tarief) return toast.error("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
     const bedrag = -(Math.round(km * tarief * 100) / 100);
     const omschrijving = veld.reden ? `Kilometervergoeding ${veld.reden} (${km} km)` : `Kilometervergoeding (${km} km)`;
     const res = await fetch("/api/fv/regels", {
@@ -139,7 +149,7 @@ export default function FinancieelVerslag() {
       body: JSON.stringify({ fvMaandId, userId, omschrijving, bedrag }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setNieuweKm((prev) => ({ ...prev, [userId]: { km: "", reden: "" } }));
     ladenOverzicht(fvMaandId);
   };
@@ -149,7 +159,7 @@ export default function FinancieelVerslag() {
   const plakVerwerken = () => {
     const gebruikersLijst = overzicht?.personen.map((p) => p.user) || [];
     const regels = parseNaamRegels(plakTekst);
-    if (regels.length === 0) return alert("Geen regels herkend. Verwacht formaat: 'Naam: 250km' (één per regel).");
+    if (regels.length === 0) return toast.error("Geen regels herkend. Verwacht formaat: 'Naam: 250km' (één per regel).");
     const rijen = regels.map(({ naam, rest }) => {
       const gebruiker = vindGebruiker(gebruikersLijst, naam);
       const km = haalKmEruit(rest);
@@ -168,9 +178,9 @@ export default function FinancieelVerslag() {
 
   const plakBevestigen = async () => {
     const tarief = overzicht.fvMaand.km_tarief_leiding;
-    if (!tarief) return alert("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
+    if (!tarief) return toast.error("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
     const onvolledig = plakPreview.filter((r) => !r.userId || !r.km);
-    if (onvolledig.length > 0) return alert("Vul voor elke regel een persoon en aantal kilometer in (of verwijder de regel).");
+    if (onvolledig.length > 0) return toast.error("Vul voor elke regel een persoon en aantal kilometer in (of verwijder de regel).");
     setPlakBezig(true);
     await Promise.all(
       plakPreview.map((r) => {
@@ -190,12 +200,27 @@ export default function FinancieelVerslag() {
     setPlakPreview(null);
     setPlakOpen(false);
     ladenOverzicht(fvMaandId);
+    toast.success("Kilometers toegevoegd");
   };
 
-  const regelVerwijderen = async (id) => {
-    if (!confirm("Deze regel verwijderen?")) return;
-    await fetch(`/api/fv/regels?id=${id}`, { method: "DELETE" });
-    ladenOverzicht(fvMaandId);
+  // Optimistisch: de regel verdwijnt meteen uit het overzicht (en het totaal
+  // wordt meteen herberekend), de echte DELETE gebeurt pas na de undo-periode.
+  const regelVerwijderen = (userId, regel) => {
+    setOverzicht((prev) => ({
+      ...prev,
+      personen: prev.personen.map((p) =>
+        p.user.id === userId
+          ? { ...p, regels: p.regels.filter((x) => x.id !== regel.id), totaal: Math.round((p.totaal - Number(regel.bedrag)) * 100) / 100 }
+          : p
+      ),
+    }));
+    toast.undoable({
+      message: "Regel verwijderd",
+      onUndo: () => ladenOverzicht(fvMaandId),
+      onCommit: async () => {
+        await fetch(`/api/fv/regels?id=${regel.id}`, { method: "DELETE" });
+      },
+    });
   };
 
   const statusToggle = async (userId, huidigeStatus) => {
@@ -270,9 +295,14 @@ export default function FinancieelVerslag() {
       )}
 
       {!overzicht ? (
-        <p className="muted" style={{ fontStyle: "italic" }}>
-          {fvMaanden.length === 0 ? "Nog geen FV-maand aangemaakt voor dit werkjaar." : "Laden…"}
-        </p>
+        fvMaanden.length === 0 ? (
+          <p className="muted" style={{ fontStyle: "italic" }}>Nog geen FV-maand aangemaakt voor dit werkjaar.</p>
+        ) : (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <SkeletonCard lines={3} />
+            <SkeletonCard lines={3} />
+          </div>
+        )
       ) : (
         <>
           <h2 style={{ fontSize: 16, fontWeight: 600, margin: "8px 0 16px" }}>
@@ -415,7 +445,7 @@ export default function FinancieelVerslag() {
                         </td>
                         {magBewerken && (
                           <td className="no-print" style={{ padding: "6px 0", border: "none", width: 24, textAlign: "right" }}>
-                            <button className="btn-danger" onClick={() => regelVerwijderen(r.id)} title="Verwijderen" style={{ fontSize: 12 }}>🗑️</button>
+                            <button className="btn-danger" onClick={() => regelVerwijderen(p.user.id, r)} title="Verwijderen" style={{ fontSize: 12 }}>🗑️</button>
                           </td>
                         )}
                       </tr>

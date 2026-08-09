@@ -2,6 +2,8 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { parseNaamRegels, vindGebruiker, splitProducten } from "@/lib/smartPaste";
+import { useToast, useConfirm } from "@/components/NotifyProvider";
+import { SkeletonCard } from "@/components/Skeleton";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -9,6 +11,8 @@ function euro(n) {
 
 export default function Bestellingen() {
   const { data: session } = useSession();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [bestellingen, setBestellingen] = useState([]);
   const [bestellingId, setBestellingId] = useState(null);
   const [overzicht, setOverzicht] = useState(null);
@@ -70,32 +74,40 @@ export default function Bestellingen() {
     ladenOverzicht(bestellingId);
   }, [bestellingId]);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1000 }}>
+        <SkeletonCard lines={3} />
+      </div>
+    );
+  }
 
   const nieuweBestellingAanmaken = async () => {
-    if (!nieuweTitel.trim()) return alert("Vul een titel in, bv. 'Frituur 16/05'.");
+    if (!nieuweTitel.trim()) return toast.error("Vul een titel in, bv. 'Frituur 16/05'.");
     const res = await fetch("/api/bestellingen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ titel: nieuweTitel.trim(), datum: nieuweDatum }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setBestellingen([data.bestelling, ...bestellingen]);
     setBestellingId(data.bestelling.id);
     setNieuweTitel("");
   };
 
   const bestellingVerwijderen = async (id) => {
-    if (!confirm("Deze bestelling en al haar regels verwijderen?")) return;
+    const ok = await confirm({ title: "Bestelling verwijderen", message: "Deze bestelling en al haar regels verwijderen?", danger: true, bevestigLabel: "Verwijderen" });
+    if (!ok) return;
     await fetch(`/api/bestellingen?id=${id}`, { method: "DELETE" });
     setBestellingen((prev) => prev.filter((b) => b.id !== id));
     if (bestellingId === id) setBestellingId(null);
+    toast.success("Bestelling verwijderd");
   };
 
   const regelToevoegen = async () => {
     if (!nieuweRegel.userId || !nieuweRegel.product || !nieuweRegel.aantal || !nieuweRegel.prijsPerStuk) {
-      return alert("Vul persoon, product, aantal en prijs per stuk in.");
+      return toast.error("Vul persoon, product, aantal en prijs per stuk in.");
     }
     const res = await fetch("/api/bestellingen/regels", {
       method: "POST",
@@ -103,7 +115,7 @@ export default function Bestellingen() {
       body: JSON.stringify({ bestellingId, ...nieuweRegel }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     // Persoon blijft geselecteerd: handig om meteen het volgende product
     // voor dezelfde persoon toe te voegen (bv. frietjes, vlees, saus).
     setNieuweRegel((prev) => ({ userId: prev.userId, product: "", aantal: "1", prijsPerStuk: "" }));
@@ -111,14 +123,32 @@ export default function Bestellingen() {
     ladenGlobaleProducten();
   };
 
-  const regelVerwijderen = async (id) => {
-    await fetch(`/api/bestellingen/regels?id=${id}`, { method: "DELETE" });
-    ladenOverzicht(bestellingId);
+  // Optimistisch: de regel (en desnoods de hele persoon, als het hun laatste
+  // regel was) verdwijnt meteen uit het overzicht.
+  const regelVerwijderen = (persoonId, regel) => {
+    setOverzicht((prev) => ({
+      ...prev,
+      personen: prev.personen
+        .map((p) =>
+          p.user.id === persoonId
+            ? { ...p, regels: p.regels.filter((x) => x.id !== regel.id), totaal: Math.round((p.totaal - regel.bedrag) * 100) / 100 }
+            : p
+        )
+        .filter((p) => p.regels.length > 0),
+    }));
+    toast.undoable({
+      message: "Regel verwijderd",
+      onUndo: () => ladenOverzicht(bestellingId),
+      onCommit: async () => {
+        await fetch(`/api/bestellingen/regels?id=${regel.id}`, { method: "DELETE" });
+      },
+    });
   };
 
   const verdelenOverFv = async () => {
-    if (!fvMaandId) return alert("Kies eerst een FV-maand.");
-    if (!confirm("Alle subtotalen van deze bestelling toevoegen aan de gekozen FV-maand?")) return;
+    if (!fvMaandId) return toast.error("Kies eerst een FV-maand.");
+    const ok = await confirm({ title: "Verdelen over FV", message: "Alle subtotalen van deze bestelling toevoegen aan de gekozen FV-maand?", bevestigLabel: "Verdelen" });
+    if (!ok) return;
     setBezig(true);
     const res = await fetch("/api/bestellingen/verdelen", {
       method: "POST",
@@ -127,15 +157,20 @@ export default function Bestellingen() {
     });
     const data = await res.json();
     setBezig(false);
-    if (data.error) return alert("⚠️ " + data.error);
-    alert(`✅ ${data.aantal} FV-regels toegevoegd.`);
+    if (data.error) return toast.error(data.error);
+    toast.success(`${data.aantal} FV-regels toegevoegd`);
     ladenBestellingen();
     ladenOverzicht(bestellingId);
   };
 
   const verdelenAllesAction = async () => {
-    if (!fvMaandId) return alert("Kies eerst een FV-maand.");
-    if (!confirm(`Alle openstaande bestellingen (${openstaandeBestellingen.length}) in één keer verdelen over de gekozen FV-maand?`)) return;
+    if (!fvMaandId) return toast.error("Kies eerst een FV-maand.");
+    const ok = await confirm({
+      title: "Alles verdelen",
+      message: `Alle openstaande bestellingen (${openstaandeBestellingen.length}) in één keer verdelen over de gekozen FV-maand?`,
+      bevestigLabel: "Verdelen",
+    });
+    if (!ok) return;
     setBezig(true);
     const res = await fetch("/api/bestellingen/verdelen-alles", {
       method: "POST",
@@ -144,8 +179,8 @@ export default function Bestellingen() {
     });
     const data = await res.json();
     setBezig(false);
-    if (data.error) return alert("⚠️ " + data.error);
-    alert(`✅ ${data.aantalBestellingen} bestelling(en) verdeeld, ${data.aantalRegels} FV-regels toegevoegd.`);
+    if (data.error) return toast.error(data.error);
+    toast.success(`${data.aantalBestellingen} bestelling(en) verdeeld, ${data.aantalRegels} FV-regels toegevoegd`);
     ladenBestellingen();
     if (bestellingId) ladenOverzicht(bestellingId);
   };
@@ -172,7 +207,7 @@ export default function Bestellingen() {
   // gekende prijs (indien bekend) zodat je enkel nog nieuwe prijzen moet invullen.
   const plakVerwerken = () => {
     const regels = parseNaamRegels(plakTekst);
-    if (regels.length === 0) return alert("Geen regels herkend. Verwacht formaat: 'Naam: product1 met product2 en product3'.");
+    if (regels.length === 0) return toast.error("Geen regels herkend. Verwacht formaat: 'Naam: product1 met product2 en product3'.");
     const rijen = regels.flatMap(({ naam, rest }) => {
       const gebruiker = vindGebruiker(gebruikers, naam);
       return splitProducten(rest).map((product) => ({
@@ -204,7 +239,7 @@ export default function Bestellingen() {
 
   const plakBevestigen = async () => {
     const onvolledig = plakPreview.filter((r) => !r.userId || !r.product || !r.prijsPerStuk);
-    if (onvolledig.length > 0) return alert("Vul voor elke regel een persoon, product en prijs in (of verwijder de regel).");
+    if (onvolledig.length > 0) return toast.error("Vul voor elke regel een persoon, product en prijs in (of verwijder de regel).");
     setBezig(true);
     await Promise.all(
       plakPreview.map((r) =>
@@ -221,6 +256,7 @@ export default function Bestellingen() {
     setPlakOpen(false);
     ladenOverzicht(bestellingId);
     ladenGlobaleProducten();
+    toast.success(`${plakPreview.length} regels toegevoegd`);
   };
 
   return (
@@ -309,7 +345,7 @@ export default function Bestellingen() {
                             <td style={{ border: "none", padding: "2px 0", textAlign: "right", width: 90 }}>{euro(r.bedrag)}</td>
                             {magBewerken && !overzicht.bestelling.verdeeld_naar_fv_maand_id && (
                               <td style={{ border: "none", padding: "2px 0", width: 20 }}>
-                                <button className="btn-danger" onClick={() => regelVerwijderen(r.id)} style={{ fontSize: 11 }}>🗑️</button>
+                                <button className="btn-danger" onClick={() => regelVerwijderen(p.user.id, r)} style={{ fontSize: 11 }}>🗑️</button>
                               </td>
                             )}
                           </tr>

@@ -1,6 +1,8 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useToast, useConfirm } from "@/components/NotifyProvider";
+import { SkeletonStatRow, SkeletonTable } from "@/components/Skeleton";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -8,6 +10,8 @@ function euro(n) {
 
 export default function Kasboek() {
   const { data: session } = useSession();
+  const toast = useToast();
+  const confirm = useConfirm();
 
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
@@ -72,7 +76,14 @@ export default function Kasboek() {
     setGeselecteerd(new Set());
   }, [werkjaarId, zoekterm, filterCat]);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1100 }}>
+        <SkeletonStatRow count={3} />
+        <SkeletonTable rows={6} cols={7} />
+      </div>
+    );
+  }
 
   const herladen = () => {
     fetch(`/api/transacties?werkjaarId=${werkjaarId}`)
@@ -91,16 +102,17 @@ export default function Kasboek() {
     })();
     const naam = prompt("Nieuw werkjaar (formaat JJJJ-JJJJ):", suggestie);
     if (!naam) return;
-    const overnemen = werkjaarId && confirm("Eindsaldo van het huidige werkjaar overnemen als startsaldo?");
+    const overnemen = werkjaarId && (await confirm({ message: "Eindsaldo van het huidige werkjaar overnemen als startsaldo?", bevestigLabel: "Overnemen" }));
     const res = await fetch("/api/werkjaren", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ naam, overnemenVanWerkjaarId: overnemen ? werkjaarId : null }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setWerkjaren([data.werkjaar, ...werkjaren]);
     setWerkjaarId(data.werkjaar.id);
+    toast.success(`Werkjaar "${naam}" aangemaakt`);
   };
 
   const werkjaarVerwijderen = async () => {
@@ -110,16 +122,17 @@ export default function Kasboek() {
       `Dit verwijdert werkjaar "${huidig.naam}" volledig, inclusief alle transacties en financiële verslagen van dat jaar. Dit kan niet ongedaan gemaakt worden.\n\nTyp "${huidig.naam}" om te bevestigen:`
     );
     if (bevestiging !== huidig.naam) {
-      if (bevestiging !== null) alert("Naam kwam niet overeen, er is niets verwijderd.");
+      if (bevestiging !== null) toast.error("Naam kwam niet overeen, er is niets verwijderd.");
       return;
     }
     const res = await fetch(`/api/werkjaren?id=${werkjaarId}`, { method: "DELETE" });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     const overgebleven = werkjaren.filter((w) => w.id !== werkjaarId);
     setWerkjaren(overgebleven);
     setWerkjaarId(overgebleven[0]?.id || null);
     if (overgebleven.length === 0) setError("Er is nog geen werkjaar aangemaakt. Maak eerst een werkjaar aan.");
+    toast.success(`Werkjaar "${huidig.naam}" verwijderd`);
   };
 
   const nieuweCategorie = async () => {
@@ -131,8 +144,9 @@ export default function Kasboek() {
       body: JSON.stringify({ naam }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setCategorieen([...categorieen, data.categorie].sort((a, b) => a.naam.localeCompare(b.naam)));
+    toast.success(`Categorie "${naam}" toegevoegd`);
   };
 
   const wijzigStartsaldo = async (type, huidig) => {
@@ -170,16 +184,21 @@ export default function Kasboek() {
     });
   };
 
-  const verwijderTx = async (id) => {
-    if (!confirm("Deze transactie verwijderen?")) return;
-    await fetch(`/api/transacties?id=${id}`, { method: "DELETE" });
-    setTransacties((prev) => prev.filter((t) => t.id !== id));
+  const verwijderTx = (t) => {
+    setTransacties((prev) => prev.filter((x) => x.id !== t.id));
     setGeselecteerd((prev) => {
       const next = new Set(prev);
-      next.delete(id);
+      next.delete(t.id);
       return next;
     });
-    herladen();
+    toast.undoable({
+      message: "Transactie verwijderd",
+      onUndo: herladen,
+      onCommit: async () => {
+        await fetch(`/api/transacties?id=${t.id}`, { method: "DELETE" });
+        herladen();
+      },
+    });
   };
 
   const toggleSelectie = (id) => {
@@ -197,34 +216,40 @@ export default function Kasboek() {
     );
   };
 
-  const verwijderGeselecteerd = async () => {
+  const verwijderGeselecteerd = () => {
     const aantal = geselecteerd.size;
     if (!aantal) return;
-    if (!confirm(`${aantal} transactie${aantal > 1 ? "s" : ""} verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
     const ids = [...geselecteerd];
-    const res = await fetch("/api/transacties/bulk", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids }),
-    });
-    const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
     setTransacties((prev) => prev.filter((t) => !geselecteerd.has(t.id)));
     setGeselecteerd(new Set());
-    herladen();
+    toast.undoable({
+      message: `${aantal} transactie${aantal > 1 ? "s" : ""} verwijderd`,
+      onUndo: herladen,
+      onCommit: async () => {
+        const res = await fetch("/api/transacties/bulk", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ids }),
+        });
+        const data = await res.json();
+        if (data.error) toast.error(data.error);
+        herladen();
+      },
+    });
   };
 
   const opslaanNieuw = async () => {
-    if (!nieuw.bedrag) return alert("Vul een bedrag in.");
+    if (!nieuw.bedrag) return toast.error("Vul een bedrag in.");
     const res = await fetch("/api/transacties", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ werkjaarId, ...nieuw, categorieId: nieuw.categorieId || null }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setNieuw({ ...nieuw, tegenpartij: "", vrijeMededeling: "", omschrijving: "", bedrag: "" });
     herladen();
+    toast.success("Transactie toegevoegd");
   };
 
   const gefilterd = transacties.filter((t) => {
@@ -440,7 +465,7 @@ export default function Kasboek() {
                   </td>
                   {magBewerken && (
                     <td>
-                      <button className="btn-danger" onClick={() => verwijderTx(t.id)} title="Verwijderen">🗑️</button>
+                      <button className="btn-danger" onClick={() => verwijderTx(t)} title="Verwijderen">🗑️</button>
                     </td>
                   )}
                 </tr>

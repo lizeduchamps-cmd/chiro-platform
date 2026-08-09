@@ -1,6 +1,16 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
+
+function maandLabel(maand) {
+  const namen = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
+  const [j, m] = maand.split("-");
+  return `${namen[parseInt(m, 10) - 1]} ${j}`;
+}
+
+const ONBEKENDE_CATEGORIE = "Onduidelijk/Nog in te vullen";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -34,6 +44,9 @@ export default function Jaaroverzicht() {
   const [data, setData] = useState(null);
   const [evenementenWinst, setEvenementenWinst] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [aandacht, setAandacht] = useState(null);
+
+  const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
   useEffect(() => {
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
@@ -48,7 +61,51 @@ export default function Jaaroverzicht() {
     fetch(`/api/evenementen/afgerond?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setEvenementenWinst(d.evenementen || []));
   }, [werkjaarId]);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  // Aandachtspunten: een korte samenvatting van wat nog actie vraagt, zodat
+  // je niet elke pagina apart moet afgaan om te zien wat er nog moet gebeuren.
+  // Enkel voor wie mag bewerken — dit is geen info die een gewoon lid nodig heeft.
+  useEffect(() => {
+    if (!werkjaarId || !magBewerken) { setAandacht(null); return; }
+    let actief = true;
+    (async () => {
+      const [fvMaandenData, evenementenData, transactiesData] = await Promise.all([
+        fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+        fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+        fetch(`/api/transacties?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+      ]);
+
+      let fvOpenstaand = 0;
+      let fvMaandLabel = "";
+      const laatsteMaand = fvMaandenData.fvMaanden?.[0];
+      if (laatsteMaand) {
+        const fvOverzicht = await fetch(`/api/fv/overzicht?fvMaandId=${laatsteMaand.id}`).then((r) => r.json());
+        fvOpenstaand = (fvOverzicht.personen || []).filter((p) => p.status !== "betaald" && p.totaal > 0).length;
+        fvMaandLabel = maandLabel(laatsteMaand.maand);
+      }
+
+      const lopendeEvenementen = (evenementenData.evenementen || []).filter((e) => e.status !== "afgerond");
+      const evenementOverzichten = await Promise.all(
+        lopendeEvenementen.map((e) => fetch(`/api/evenementen/overzicht?evenementId=${e.id}`).then((r) => r.json()))
+      );
+      const evenementenTeVergoeden = evenementOverzichten.reduce((s, o) => s + (o.nogTerugTeBetalen?.length || 0), 0);
+
+      const kasboekOngecategoriseerd = (transactiesData.transacties || []).filter(
+        (t) => !t.categorie_id || t.categorieen?.naam === ONBEKENDE_CATEGORIE
+      ).length;
+
+      if (actief) setAandacht({ fvOpenstaand, fvMaandLabel, evenementenTeVergoeden, kasboekOngecategoriseerd });
+    })();
+    return () => { actief = false; };
+  }, [werkjaarId, magBewerken]);
+
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1100 }}>
+        <SkeletonStatRow count={3} />
+        <SkeletonCard lines={4} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
@@ -67,9 +124,35 @@ export default function Jaaroverzicht() {
       {werkjaren.length === 0 ? (
         <p>Er is nog geen werkjaar aangemaakt — ga naar Kasboek om er één te starten.</p>
       ) : !data ? (
-        <p className="muted">Laden…</p>
+        <SkeletonStatRow count={3} />
       ) : (
         <>
+          {aandacht && (aandacht.fvOpenstaand > 0 || aandacht.evenementenTeVergoeden > 0 || aandacht.kasboekOngecategoriseerd > 0) && (
+            <div className="card" style={{ marginBottom: 24, borderColor: "var(--primary)" }}>
+              <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Aandachtspunten</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {aandacht.fvOpenstaand > 0 && (
+                  <Link href="/fv" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
+                    <span>⏳ {aandacht.fvOpenstaand} persoon/personen nog niet betaald op FV {aandacht.fvMaandLabel}</span>
+                    <span className="muted">Bekijken →</span>
+                  </Link>
+                )}
+                {aandacht.evenementenTeVergoeden > 0 && (
+                  <Link href="/evenementen" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
+                    <span>💸 {aandacht.evenementenTeVergoeden} evenement-transactie(s) nog terug te betalen</span>
+                    <span className="muted">Bekijken →</span>
+                  </Link>
+                )}
+                {aandacht.kasboekOngecategoriseerd > 0 && (
+                  <Link href="/kasboek" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
+                    <span>🏷️ {aandacht.kasboekOngecategoriseerd} kasboektransactie(s) zonder (duidelijke) categorie</span>
+                    <span className="muted">Bekijken →</span>
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
+
           <div className="grid-3" style={{ marginBottom: 24 }}>
             <div className="stat">
               <div className="muted" style={{ fontSize: 12 }}>Totale inkomsten</div>

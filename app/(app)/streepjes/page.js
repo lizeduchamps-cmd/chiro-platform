@@ -1,6 +1,8 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useToast } from "@/components/NotifyProvider";
+import { SkeletonTable } from "@/components/Skeleton";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -36,6 +38,7 @@ function parseCSVLine(line, delimiter) {
 
 export default function Streepjes() {
   const { data: session } = useSession();
+  const toast = useToast();
   const [users, setUsers] = useState([]);
   const [prijsPerStreepje, setPrijsPerStreepje] = useState(0.25);
   const [loading, setLoading] = useState(true);
@@ -62,7 +65,7 @@ export default function Streepjes() {
   useEffect(() => {
     if (!magBewerken) return;
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
-      if (d.error) return alert("⚠️ Kon werkjaren niet ophalen: " + d.error);
+      if (d.error) return toast.error("Kon werkjaren niet ophalen: " + d.error);
       setWerkjaren(d.werkjaren || []);
       if (d.werkjaren?.length) setWerkjaarId(d.werkjaren[0].id);
     });
@@ -71,13 +74,19 @@ export default function Streepjes() {
   useEffect(() => {
     if (!werkjaarId) return;
     fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((m) => {
-      if (m.error) return alert("⚠️ Kon FV-maanden niet ophalen: " + m.error);
+      if (m.error) return toast.error("Kon FV-maanden niet ophalen: " + m.error);
       setFvMaanden(m.fvMaanden || []);
       setFvMaandId(m.fvMaanden?.[0]?.id || null);
     });
   }, [werkjaarId]);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1000 }}>
+        <SkeletonTable rows={6} cols={5} />
+      </div>
+    );
+  }
 
   const updateFysiek = async (userId, waarde) => {
     const heel = Math.max(0, Math.round(Number(waarde)) || 0);
@@ -99,7 +108,7 @@ export default function Streepjes() {
   };
 
   const toevoegenAanFv = async (userIds) => {
-    if (!fvMaandId) return alert("Kies eerst een FV-maand.");
+    if (!fvMaandId) return toast.error("Kies eerst een FV-maand.");
     setBezig(true);
     const res = await fetch("/api/fv/streepjes-toevoegen", {
       method: "POST",
@@ -108,8 +117,8 @@ export default function Streepjes() {
     });
     const data = await res.json();
     setBezig(false);
-    if (data.error) return alert("⚠️ " + data.error);
-    alert(`✅ ${data.aantal} streepjes-regel(s) toegevoegd aan het FV. Tellers zijn terug op 0 gezet.`);
+    if (data.error) return toast.error(data.error);
+    toast.success(`${data.aantal} streepjes-regel(s) toegevoegd aan het FV, tellers staan terug op 0`);
     laden();
   };
 
@@ -120,7 +129,7 @@ export default function Streepjes() {
     reader.onload = async (evt) => {
       const text = evt.target.result.replace(/^\uFEFF/, "");
       const lines = text.split(/\r\n|\r|\n/).filter((l) => l.trim());
-      if (lines.length < 2) return alert("⚠️ Leeg bestand.");
+      if (lines.length < 2) return toast.error("Leeg bestand.");
 
       const headerLine = lines[0];
       const delimiter = headerLine.split(";").length > headerLine.split(",").length ? ";" : ",";
@@ -146,11 +155,11 @@ export default function Streepjes() {
         body: JSON.stringify({ aggregaten }),
       });
       const data = await res.json();
-      if (data.error) return alert("⚠️ " + data.error);
+      if (data.error) return toast.error(data.error);
 
-      let msg = `✅ Online logboek verwerkt! ${data.matchCount} gebruikers gematcht.`;
-      if (data.nietGematcht?.length) msg += `\n\n⚠️ Geen match voor: ${data.nietGematcht.join(", ")}`;
-      alert(msg);
+      let msg = `Online logboek verwerkt! ${data.matchCount} gebruikers gematcht.`;
+      if (data.nietGematcht?.length) msg += ` Geen match voor: ${data.nietGematcht.join(", ")}.`;
+      toast.success(msg);
       laden();
     };
     reader.readAsText(file);

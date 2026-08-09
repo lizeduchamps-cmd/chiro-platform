@@ -71,6 +71,17 @@ button:disabled {
   background: var(--danger-tint);
 }
 
+.btn-danger-solid {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: white;
+  font-weight: 500;
+}
+.btn-danger-solid:hover {
+  background: #8f1e18;
+  border-color: #8f1e18;
+}
+
 .btn-plain {
   background: none;
   border: none;
@@ -259,4 +270,135 @@ td {
   main {
     -webkit-text-size-adjust: 100%;
   }
+
+  .toast-stack {
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+  }
+  .toast {
+    width: auto;
+  }
+}
+
+/* ============ TOASTS (vervangt alert()) ============ */
+
+.toast-stack {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.toast {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--text);
+  color: white;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 13px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  animation: toast-in 0.15s ease;
+}
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.toast span {
+  flex: 1;
+}
+
+.toast-error {
+  background: var(--danger);
+}
+.toast-success {
+  background: #1b5c2e;
+}
+.toast-undo {
+  background: var(--text);
+}
+
+.toast-action {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: white;
+  font-size: 12px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+.toast-action:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  padding: 2px 4px;
+  font-size: 11px;
+}
+.toast-close:hover {
+  background: none;
+  color: white;
+}
+
+.toast-bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 3px;
+  background: rgba(255, 255, 255, 0.5);
+  animation: toast-shrink linear forwards;
+}
+@keyframes toast-shrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* ============ CONFIRM MODAL (vervangt confirm()) ============ */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(24, 24, 27, 0.45);
+  z-index: 110;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.confirm-modal {
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  animation: toast-in 0.12s ease;
+}
+
+/* ============ SKELETON LOADERS (vervangt "Laden…") ============ */
+
+.skeleton {
+  background: linear-gradient(90deg, #ececef 25%, #f5f5f6 37%, #ececef 63%);
+  background-size: 400% 100%;
+  animation: skeleton-shimmer 1.4s ease infinite;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+@keyframes skeleton-shimmer {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }

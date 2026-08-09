@@ -2,6 +2,8 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { evenementMatchTag } from "@/lib/evenementMatch";
+import { useToast, useConfirm } from "@/components/NotifyProvider";
+import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -43,6 +45,8 @@ function naarBewerkVeld(t) {
 export default function EvenementDetail({ params }) {
   const { id } = params;
   const { data: session } = useSession();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [overzicht, setOverzicht] = useState(null);
   const [loading, setLoading] = useState(true);
   const [gebruikers, setGebruikers] = useState([]);
@@ -59,7 +63,14 @@ export default function EvenementDetail({ params }) {
     fetch("/api/gebruikers/lijst").then((r) => r.json()).then((d) => setGebruikers(d.users || []));
   }, [id]);
 
-  if (loading || !overzicht) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading || !overzicht) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1100 }}>
+        <SkeletonStatRow count={3} />
+        <SkeletonCard lines={3} />
+      </div>
+    );
+  }
   if (overzicht.error) return <p className="amount-neg" style={{ padding: 32 }}>{overzicht.error}</p>;
 
   // Admin/financieel_verantwoordelijke mogen altijd; daarnaast wie een
@@ -79,16 +90,17 @@ export default function EvenementDetail({ params }) {
   };
 
   const kassaToevoegen = async () => {
-    if (!nieuweKassa.naam.trim()) return alert("Vul een naam in voor de kassa.");
+    if (!nieuweKassa.naam.trim()) return toast.error("Vul een naam in voor de kassa.");
     const res = await fetch("/api/evenementen/kassas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ evenementId: id, ...nieuweKassa }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setNieuweKassa({ naam: "", type: "cash", wisselgeldStart: "" });
     laden();
+    toast.success("Kassa toegevoegd");
   };
 
   const kassaBijwerken = async (kassaId, veld, waarde) => {
@@ -101,9 +113,11 @@ export default function EvenementDetail({ params }) {
   };
 
   const kassaVerwijderen = async (kassaId) => {
-    if (!confirm("Deze kassa verwijderen?")) return;
+    const ok = await confirm({ title: "Kassa verwijderen", message: "Deze kassa verwijderen?", danger: true, bevestigLabel: "Verwijderen" });
+    if (!ok) return;
     await fetch(`/api/evenementen/kassas?id=${kassaId}`, { method: "DELETE" });
     laden();
+    toast.success("Kassa verwijderd");
   };
 
   const budgetBijwerken = async (hoofdcategorie, budgetToegewezen) => {
@@ -117,7 +131,7 @@ export default function EvenementDetail({ params }) {
 
   const transactieToevoegen = async () => {
     const t = nieuweTransactie;
-    if (!t.datum || !t.omschrijving || !t.bedrag) return alert("Vul minstens datum, omschrijving en bedrag in.");
+    if (!t.datum || !t.omschrijving || !t.bedrag) return toast.error("Vul minstens datum, omschrijving en bedrag in.");
     const res = await fetch("/api/evenementen/transacties", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -134,15 +148,26 @@ export default function EvenementDetail({ params }) {
       }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setNieuweTransactie(LEGE_TRANSACTIE);
     laden();
+    toast.success("Transactie toegevoegd");
   };
 
-  const transactieVerwijderen = async (transactieId) => {
-    if (!confirm("Deze transactie verwijderen?")) return;
-    await fetch(`/api/evenementen/transacties?id=${transactieId}`, { method: "DELETE" });
-    laden();
+  // Optimistisch: de rij verdwijnt meteen; de balans/budgetten herberekenen
+  // pas na de undo-periode (via laden()), dat is de enige stap die écht een
+  // volledige serverherberekening nodig heeft.
+  const transactieVerwijderen = (t) => {
+    if (bewerkId === t.id) { setBewerkId(null); setBewerkVeld(null); }
+    setOverzicht((prev) => ({ ...prev, transacties: prev.transacties.filter((x) => x.id !== t.id) }));
+    toast.undoable({
+      message: "Transactie verwijderd",
+      onUndo: laden,
+      onCommit: async () => {
+        await fetch(`/api/evenementen/transacties?id=${t.id}`, { method: "DELETE" });
+        laden();
+      },
+    });
   };
 
   const rijOpenen = (t) => {
@@ -154,7 +179,7 @@ export default function EvenementDetail({ params }) {
 
   const bewerkOpslaan = async () => {
     const v = bewerkVeld;
-    if (!v.datum || !v.omschrijving || !v.bedrag) return alert("Vul minstens datum, omschrijving en bedrag in.");
+    if (!v.datum || !v.omschrijving || !v.bedrag) return toast.error("Vul minstens datum, omschrijving en bedrag in.");
     const res = await fetch("/api/evenementen/transacties", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -175,10 +200,11 @@ export default function EvenementDetail({ params }) {
       }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setBewerkId(null);
     setBewerkVeld(null);
     laden();
+    toast.success("Transactie bijgewerkt");
   };
 
   const categorieToevoegen = async (zetIn) => {
@@ -190,15 +216,23 @@ export default function EvenementDetail({ params }) {
       body: JSON.stringify({ evenementId: id, naam: naam.trim() }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     zetIn(naam.trim());
     laden();
+    toast.success(`Categorie "${naam.trim()}" toegevoegd`);
   };
 
   const categorieVerwijderen = async (categorieId) => {
-    if (!confirm("Deze categorie verwijderen? Transacties die er al aan hangen behouden hun naam als tekst, maar tellen niet meer mee in het budgetoverzicht.")) return;
+    const ok = await confirm({
+      title: "Categorie verwijderen",
+      message: "Deze categorie verwijderen? Transacties die er al aan hangen behouden hun naam als tekst, maar tellen niet meer mee in het budgetoverzicht.",
+      danger: true,
+      bevestigLabel: "Verwijderen",
+    });
+    if (!ok) return;
     await fetch(`/api/evenementen/categorieen?id=${categorieId}`, { method: "DELETE" });
     laden();
+    toast.success("Categorie verwijderd");
   };
 
   const { evenement, kassas, kassaOmzetTotaal, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
@@ -464,7 +498,7 @@ export default function EvenementDetail({ params }) {
                     </td>
                     <td><span className="badge badge-neutral">{t.status}</span></td>
                     {magBewerken && (
-                      <td><button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t.id); }}>🗑️</button></td>
+                      <td><button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button></td>
                     )}
                   </tr>
                   {bewerkId === t.id && bewerkVeld && (

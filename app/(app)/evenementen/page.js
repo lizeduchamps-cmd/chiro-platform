@@ -2,11 +2,15 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useToast, useConfirm } from "@/components/NotifyProvider";
+import { SkeletonTable } from "@/components/Skeleton";
 
 const STATUS_LABEL = { gepland: "Gepland", lopend: "Lopend", afgerond: "Afgerond" };
 
 export default function Evenementen() {
   const { data: session } = useSession();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [evenementen, setEvenementen] = useState([]);
@@ -28,26 +32,40 @@ export default function Evenementen() {
     fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => { setEvenementen(d.evenementen || []); setLoading(false); });
   }, [werkjaarId]);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 900 }}>
+        <SkeletonTable rows={4} cols={4} />
+      </div>
+    );
+  }
 
   const aanmaken = async () => {
-    if (!nieuweNaam.trim()) return alert("Vul een naam in, bv. 'Fuif 2026'.");
+    if (!nieuweNaam.trim()) return toast.error("Vul een naam in, bv. 'Fuif 2026'.");
     const res = await fetch("/api/evenementen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ naam: nieuweNaam.trim(), datum: nieuweDatum || null, werkjaarId }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setEvenementen([data.evenement, ...evenementen]);
     setNieuweNaam("");
     setNieuweDatum("");
+    toast.success(`Evenement "${data.evenement.naam}" aangemaakt`);
   };
 
   const verwijderen = async (id, naam) => {
-    if (!confirm(`Evenement "${naam}" en alle kassa's/transacties ervan verwijderen?`)) return;
+    const ok = await confirm({
+      title: "Evenement verwijderen",
+      message: `Evenement "${naam}" en alle kassa's/transacties ervan verwijderen? Dit kan niet ongedaan gemaakt worden.`,
+      danger: true,
+      bevestigLabel: "Verwijderen",
+    });
+    if (!ok) return;
     await fetch(`/api/evenementen?id=${id}`, { method: "DELETE" });
     setEvenementen((prev) => prev.filter((e) => e.id !== id));
+    toast.success(`Evenement "${naam}" verwijderd`);
   };
 
   return (

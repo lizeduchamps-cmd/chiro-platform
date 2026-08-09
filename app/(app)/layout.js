@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Layout from "@/components/Layout";
+import { NotifyProvider } from "@/components/NotifyProvider";
 
 // Eén vaste laag rond alle ingelogde pagina's: de sessiecheck en de zijbalk
 // zitten hier centraal, zodat ze niet bij elke paginawissel opnieuw worden
@@ -24,5 +25,9 @@ export default function AppLayout({ children }) {
   }
   if (status === "unauthenticated") return null;
 
-  return <Layout session={session}>{children}</Layout>;
+  return (
+    <NotifyProvider>
+      <Layout session={session}>{children}</Layout>
+    </NotifyProvider>
+  );
 }

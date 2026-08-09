@@ -1,6 +1,7 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useToast } from "@/components/NotifyProvider";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -86,6 +87,7 @@ function parseKbcCsv(text, regels) {
 
 export default function CsvUpload() {
   const { data: session } = useSession();
+  const toast = useToast();
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [categorieen, setCategorieen] = useState([]);
@@ -129,14 +131,14 @@ export default function CsvUpload() {
     const reader = new FileReader();
     reader.onload = (evt) => {
       const nieuw = parseKbcCsv(evt.target.result, regels);
-      if (nieuw.length === 0) return alert("⚠️ Er konden geen transacties worden uitgelezen.");
+      if (nieuw.length === 0) return toast.error("Er konden geen transacties worden uitgelezen.");
       const aantalSlim = slimmePatroonherkenning(nieuw);
       setPending(nieuw);
       setGeselecteerd([]);
       setBestandsnaam(file.name);
-      let msg = `✅ ${nieuw.length} transacties uit '${file.name}' geladen!`;
-      if (aantalSlim > 0) msg += `\n🔮 Waarvan ${aantalSlim} automatisch toegewezen via herkenning van herhaalde bedragen.`;
-      alert(msg);
+      let msg = `${nieuw.length} transacties uit '${file.name}' geladen!`;
+      if (aantalSlim > 0) msg += ` Waarvan ${aantalSlim} automatisch toegewezen via herkenning van herhaalde bedragen.`;
+      toast.success(msg);
     };
     reader.readAsText(file, "ISO-8859-1");
     e.target.value = "";
@@ -146,11 +148,16 @@ export default function CsvUpload() {
     const kopie = [...pending];
     const aantal = slimmePatroonherkenning(kopie);
     setPending(kopie);
-    alert(aantal > 0 ? `🔮 ${aantal} extra transacties toegewezen!` : "ℹ️ Geen nieuwe patronen gevonden.");
+    if (aantal > 0) toast.success(`${aantal} extra transacties toegewezen!`);
+    else toast.info("Geen nieuwe patronen gevonden.");
   };
 
   const updateCat = (id, cat) => setPending((prev) => prev.map((t) => (t.id === id ? { ...t, categorie: cat } : t)));
-  const verwijder = (id) => { setPending((prev) => prev.filter((t) => t.id !== id)); setGeselecteerd((prev) => prev.filter((x) => x !== id)); };
+  const verwijder = (t) => {
+    setPending((prev) => prev.filter((x) => x.id !== t.id));
+    setGeselecteerd((prev) => prev.filter((x) => x !== t.id));
+    toast.undoable({ message: "Rij verwijderd uit de lijst", onUndo: () => setPending((prev) => [...prev, t]) });
+  };
   const toggleSelect = (id) => setGeselecteerd((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   const toggleSelectAll = (ids, checked) =>
     setGeselecteerd((prev) => (checked ? Array.from(new Set([...prev, ...ids])) : prev.filter((x) => !ids.includes(x))));
@@ -170,10 +177,10 @@ export default function CsvUpload() {
     });
     const data = await res.json();
     setBezigMetOpslaan(false);
-    if (data.error) return alert("⚠️ " + data.error);
-    let msg = `✅ ${data.aantal} transacties toegevoegd aan het kasboek!`;
-    if (data.aantalDuplicaten > 0) msg += `\n⏭️ ${data.aantalDuplicaten} overgeslagen als duplicaat (stonden al in het kasboek).`;
-    alert(msg);
+    if (data.error) return toast.error(data.error);
+    let msg = `${data.aantal} transacties toegevoegd aan het kasboek!`;
+    if (data.aantalDuplicaten > 0) msg += ` ${data.aantalDuplicaten} overgeslagen als duplicaat.`;
+    toast.success(msg);
     setPending([]);
     setGeselecteerd([]);
     setBestandsnaam("");
@@ -181,22 +188,27 @@ export default function CsvUpload() {
   };
 
   const nieuweRegelOpslaan = async () => {
-    if (!nieuweRegelTekst || !nieuweRegelCat) return alert("Vul zowel een tekst als een categorie in.");
+    if (!nieuweRegelTekst || !nieuweRegelCat) return toast.error("Vul zowel een tekst als een categorie in.");
     const res = await fetch("/api/categorisatie-regels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bevatTekst: nieuweRegelTekst, categorieId: nieuweRegelCat }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setRegels((prev) => [...prev, data.regel]);
     setNieuweRegelTekst("");
     setNieuweRegelCat("");
+    toast.success("Regel toegevoegd");
   };
 
-  const regelVerwijderen = async (id) => {
-    await fetch(`/api/categorisatie-regels?id=${id}`, { method: "DELETE" });
-    setRegels((prev) => prev.filter((r) => r.id !== id));
+  const regelVerwijderen = (r) => {
+    setRegels((prev) => prev.filter((x) => x.id !== r.id));
+    toast.undoable({
+      message: "Categorisatieregel verwijderd",
+      onUndo: () => setRegels((prev) => [...prev, r]),
+      onCommit: () => fetch(`/api/categorisatie-regels?id=${r.id}`, { method: "DELETE" }),
+    });
   };
 
   const nieuweCategorie = async () => {
@@ -208,8 +220,9 @@ export default function CsvUpload() {
       body: JSON.stringify({ naam }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setCategorieen((prev) => [...prev, data.categorie].sort((a, b) => a.naam.localeCompare(b.naam)));
+    toast.success(`Categorie "${naam}" toegevoegd`);
   };
 
   const gefilterd = filterCat ? pending.filter((t) => t.categorie === filterCat) : pending;
@@ -289,7 +302,7 @@ export default function CsvUpload() {
             {regels.map((r) => (
               <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
                 <span><strong>"{r.bevat_tekst}"</strong> → {r.categorieen?.naam}</span>
-                <button className="btn-danger" onClick={() => regelVerwijderen(r.id)}>🗑️</button>
+                <button className="btn-danger" onClick={() => regelVerwijderen(r)}>🗑️</button>
               </div>
             ))}
           </div>
@@ -381,7 +394,7 @@ export default function CsvUpload() {
                     </td>
                     <td className={t.bedrag < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700 }}>{euro(t.bedrag)}</td>
                     <td>
-                      <button className="btn-danger" onClick={() => verwijder(t.id)}>🗑️</button>
+                      <button className="btn-danger" onClick={() => verwijder(t)}>🗑️</button>
                     </td>
                   </tr>
                 ))}

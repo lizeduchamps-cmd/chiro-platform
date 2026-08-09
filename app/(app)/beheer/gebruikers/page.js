@@ -1,6 +1,8 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useToast, useConfirm } from "@/components/NotifyProvider";
+import { SkeletonTable } from "@/components/Skeleton";
 
 const GROEPEN = ["Sloebers", "Speelclub", "Rakwi", "Tito", "Keti", "Aspi"];
 const TYPES = ["Hoofdleiding", "Leiding", "Logistiek", "Aspi"];
@@ -20,6 +22,8 @@ const VERANTWOORDELIJKHEDEN = [
 
 export default function GebruikersBeheer() {
   const { data: session } = useSession();
+  const toast = useToast();
+  const confirm = useConfirm();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -34,7 +38,13 @@ export default function GebruikersBeheer() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (loading) {
+    return (
+      <div style={{ padding: 32 }}>
+        <SkeletonTable rows={6} cols={6} />
+      </div>
+    );
+  }
   if (session?.user?.platformRecht !== "admin") {
     return <p style={{ padding: 32 }}>Je hebt geen toegang tot deze pagina.</p>;
   }
@@ -67,16 +77,24 @@ export default function GebruikersBeheer() {
       body: JSON.stringify({ discordUsername, naam }),
     });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setUsers((prev) => [...prev, data.user].sort((a, b) => a.naam.localeCompare(b.naam)));
+    toast.success(`${data.user.naam} toegevoegd`);
   };
 
   const verwijderGebruiker = async (u) => {
-    if (!confirm(`Weet je zeker dat je ${u.naam} wil verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
+    const ok = await confirm({
+      title: "Gebruiker verwijderen",
+      message: `Weet je zeker dat je ${u.naam} wil verwijderen? Dit kan niet ongedaan gemaakt worden.`,
+      danger: true,
+      bevestigLabel: "Verwijderen",
+    });
+    if (!ok) return;
     const res = await fetch(`/api/gebruikers?id=${u.id}`, { method: "DELETE" });
     const data = await res.json();
-    if (data.error) return alert("⚠️ " + data.error);
+    if (data.error) return toast.error(data.error);
     setUsers((prev) => prev.filter((x) => x.id !== u.id));
+    toast.success(`${u.naam} verwijderd`);
   };
 
   return (
