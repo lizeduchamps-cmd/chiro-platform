@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { evenementMatchTag } from "@/lib/evenementMatch";
 
 // Vingerafdruk voor duplicaatdetectie: rekening + datum + bedrag + tegenpartij
 // + mededeling, genormaliseerd. Dezelfde CSV twee keer opladen maakt zo geen
@@ -25,6 +26,15 @@ export async function POST(req) {
   const { data: categorieen } = await supabaseAdmin.from("categorieen").select("id, naam");
   const naarId = (naam) => categorieen?.find((c) => c.naam === naam)?.id || null;
 
+  // Categorienaam komt overeen met een evenement dit werkjaar (bv. "Fuif" ->
+  // "Fuif 2026")? Dan meteen koppelen, zonder dat iemand dat handmatig per
+  // rij moet aanduiden.
+  const { data: evenementenDitWerkjaar } = await supabaseAdmin.from("evenementen").select("id, naam").eq("werkjaar_id", werkjaarId);
+  const evenementVoorCategorie = (categorieNaam) => {
+    const matches = (evenementenDitWerkjaar || []).filter((e) => evenementMatchTag([categorieNaam], e.naam));
+    return matches.length === 1 ? matches[0].id : null;
+  };
+
   const kandidaten = transacties.map((t) => {
     const rekeningType = "zicht";
     return {
@@ -39,6 +49,7 @@ export async function POST(req) {
         omschrijving: t.omschrijving || null,
         bedrag: Math.abs(Number(t.bedrag)),
         categorie_id: naarId(t.categorie),
+        evenement_id: evenementVoorCategorie(t.categorie),
         bron: "kbc_csv",
       },
       fingerprint: berekenFingerprint({ rekeningType, datum: t.datum, bedrag: t.bedrag, tegenpartij: t.tegenpartij, vrijeMededeling: t.vrijeMededeling }),

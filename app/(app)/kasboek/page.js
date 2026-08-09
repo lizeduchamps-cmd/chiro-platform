@@ -153,6 +153,9 @@ export default function Kasboek() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, categorieId: categorieId || null }),
     });
+    // De categoriewijziging kan een automatische evenement-koppeling triggeren
+    // (zie backend) — herladen zodat die meteen zichtbaar is.
+    herladen();
   };
 
   // Koppelt (of ontkoppelt) een kasboektransactie aan een evenement — zo telt

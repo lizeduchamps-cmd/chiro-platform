@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { vindEvenementVoorCategorie } from "@/lib/evenementAutoLink";
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
@@ -50,6 +51,15 @@ export async function POST(req) {
     return NextResponse.json({ error: "Bestemmingsrekening ontbreekt voor interne transactie" }, { status: 400 });
   }
 
+  // Geen evenement expliciet gekozen? Kijk of de categorienaam overeenkomt
+  // met een evenement dit werkjaar (bv. categorie "Fuif" -> evenement
+  // "Fuif 2026") en koppel dan automatisch.
+  let uiteindelijkEvenementId = evenementId || null;
+  if (!uiteindelijkEvenementId && categorieId) {
+    const { data: categorie } = await supabaseAdmin.from("categorieen").select("naam").eq("id", categorieId).maybeSingle();
+    if (categorie?.naam) uiteindelijkEvenementId = await vindEvenementVoorCategorie(werkjaarId, categorie.naam);
+  }
+
   const { data, error } = await supabaseAdmin
     .from("transacties")
     .insert({
@@ -63,7 +73,7 @@ export async function POST(req) {
       bedrag: Math.abs(Number(bedrag)),
       categorie_id: categorieId || null,
       interne_bestemming_rekening: soort === "interne_transactie" ? interneBestemmingRekening : null,
-      evenement_id: evenementId || null,
+      evenement_id: uiteindelijkEvenementId,
       bron: "handmatig",
     })
     .select()
@@ -87,7 +97,21 @@ export async function PATCH(req) {
     updateFields.categorie_id = categorieId || null;
     updateFields.categorie_handmatig_aangepast = true;
   }
-  if (evenementId !== undefined) updateFields.evenement_id = evenementId || null;
+  if (evenementId !== undefined) {
+    updateFields.evenement_id = evenementId || null;
+  } else if (categorieId) {
+    // Categorie wijzigt maar evenement niet expliciet meegegeven: enkel
+    // automatisch koppelen als er nog geen evenement aan hangt (nooit een
+    // bewuste, eerder gezette koppeling overschrijven).
+    const { data: huidig } = await supabaseAdmin.from("transacties").select("werkjaar_id, evenement_id").eq("id", id).maybeSingle();
+    if (huidig && !huidig.evenement_id) {
+      const { data: categorie } = await supabaseAdmin.from("categorieen").select("naam").eq("id", categorieId).maybeSingle();
+      if (categorie?.naam) {
+        const gevonden = await vindEvenementVoorCategorie(huidig.werkjaar_id, categorie.naam);
+        if (gevonden) updateFields.evenement_id = gevonden;
+      }
+    }
+  }
 
   const { error } = await supabaseAdmin.from("transacties").update(updateFields).eq("id", id);
 
