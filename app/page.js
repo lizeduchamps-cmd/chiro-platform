@@ -17,13 +17,5 @@ export default function Dashboard() {
         Discord ID: {session.user.discordId} · Platformrecht:{" "}
         <strong>{session.user.platformRecht}</strong>
       </p>
-      <p style={{ color: "#9A9A8C", fontSize: 12, marginTop: 24 }}>
-        Dit is de eerste werkende versie: login + rechten-koppeling staan. De
-        schermen voor kasboek, fv en rollenbeheer bouwen we hierop verder.
-      </p>
-      <button onClick={() => signOut()} style={{ marginTop: 16 }}>
-        Uitloggen
-      </button>
-    </div>
-  );
-}
+      {session.user.platformRecht === "admin" && (
+        <p style={{ marginTop: 16 }}>
