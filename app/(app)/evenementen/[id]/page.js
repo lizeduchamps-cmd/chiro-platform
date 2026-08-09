@@ -161,6 +161,12 @@ export default function EvenementDetail({ params }) {
     laden();
   };
 
+  const categorieVerwijderen = async (categorieId) => {
+    if (!confirm("Deze categorie verwijderen? Transacties die er al aan hangen behouden hun naam als tekst, maar tellen niet meer mee in het budgetoverzicht.")) return;
+    await fetch(`/api/evenementen/categorieen?id=${categorieId}`, { method: "DELETE" });
+    laden();
+  };
+
   const { evenement, kassas, kassaOmzetTotaal, categorieen, transacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
 
   return (
@@ -263,11 +269,12 @@ export default function EvenementDetail({ params }) {
                 <th style={{ textAlign: "right" }}>Budget</th>
                 <th style={{ textAlign: "right" }}>Uitgegeven</th>
                 <th style={{ textAlign: "right" }}>Resterend</th>
+                {magBewerken && <th></th>}
               </tr>
             </thead>
             <tbody>
               {categorieen.length === 0 && (
-                <tr><td colSpan={4} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen categorieën.</td></tr>
+                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</td></tr>
               )}
               {categorieen.map((c) => {
                 const cat = c.naam;
@@ -284,6 +291,9 @@ export default function EvenementDetail({ params }) {
                     <td className={rij?.resterend < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 600 }}>
                       {rij?.resterend !== null && rij?.resterend !== undefined ? euro(rij.resterend) : "-"}
                     </td>
+                    {magBewerken && (
+                      <td><button className="btn-danger" onClick={() => categorieVerwijderen(c.id)}>🗑️</button></td>
+                    )}
                   </tr>
                 );
               })}

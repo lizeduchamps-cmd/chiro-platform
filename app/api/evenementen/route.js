@@ -4,15 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { magEvenementBewerken } from "@/lib/evenementPermissies";
 
-const STANDAARD_CATEGORIEEN = [
-  "Infrastructuur & Materiaal",
-  "Drank & Food",
-  "Programmatie & Entertainment",
-  "Marketing & Promo",
-  "Veiligheid & Logistiek",
-  "Organisatie & Medewerkers",
-];
-
 export async function GET(req) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Niet ingelogd" }, { status: 401 });
@@ -29,7 +20,8 @@ export async function GET(req) {
 
 // Aanmaken blijft voorbehouden aan admin/financieel_verantwoordelijke — eens
 // aangemaakt kan een verantwoordelijkheid-match (bv. "Taartenslag") de rest
-// van het evenement wel zelf beheren, zie magEvenementBewerken.
+// van het evenement wel zelf beheren, zie magEvenementBewerken. Een nieuw
+// evenement start zonder categorieën — die maak je zelf aan waar nodig.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
@@ -46,11 +38,6 @@ export async function POST(req) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  await supabaseAdmin.from("evenement_categorieen").insert(
-    STANDAARD_CATEGORIEEN.map((naamCat) => ({ evenement_id: data.id, naam: naamCat }))
-  );
-
   return NextResponse.json({ evenement: data });
 }
 
