@@ -11,6 +11,7 @@ export default function Layout({ session, children }) {
     { href: "/kasboek", label: "Kasboek" },
     { href: "/kasboek/upload", label: "↳ CSV Upload", indent: true },
     { href: "/streepjes", label: "Streepjes" },
+    { href: "/fv", label: "Financieel Verslag" },
   ];
   if (recht === "admin") {
     links.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen" });
@@ -18,7 +19,8 @@ export default function Layout({ session, children }) {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <div style={{ width: 220, flexShrink: 0, background: "#1E2A22", color: "#F5F3EE", padding: 16, display: "flex", flexDirection: "column" }}>
+      <style>{"@media print { .no-print { display: none !important; } }"}</style>
+      <div className="no-print" style={{ width: 220, flexShrink: 0, background: "#1E2A22", color: "#F5F3EE", padding: 16, display: "flex", flexDirection: "column" }}>
         <div style={{ marginBottom: 24, padding: "0 8px" }}>
           <div style={{ fontSize: 13, fontWeight: 600, color: "#D9A62E" }}>Chiro Hoepertingen</div>
           <div style={{ fontSize: 11, color: "#9AA69C" }}>Financiënplatform</div>
