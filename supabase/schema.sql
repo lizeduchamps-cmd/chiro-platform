@@ -9,6 +9,7 @@ create table if not exists users (
   discord_username text,                   -- huidige Discord-gebruikersnaam (kan wijzigen, enkel voor weergave)
   naam text not null,
   email text,
+  iban text,                               -- eigen rekeningnummer, voor terugbetalingen (bv. kilometers)
   type text not null default 'Leiding' check (type in ('Hoofdleiding', 'Leiding', 'Logistiek')),
   groep text check (groep in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi') or groep is null),
   verantwoordelijkheden text[] default '{}',
@@ -176,6 +177,28 @@ create table if not exists fv_status (
   status text default 'openstaand' check (status in ('openstaand', 'betaald')),
   betaald_op timestamptz,
   unique(fv_maand_id, user_id)
+);
+
+-- ============ BESTELLINGEN (bv. frituur, pizza na de Chiro) ============
+-- Eén rekening/bestelling wordt per product/persoon opgesplitst, en kan
+-- daarna in één keer verdeeld worden over ieders Financieel Verslag.
+
+create table if not exists bestellingen (
+  id uuid primary key default gen_random_uuid(),
+  titel text not null,                      -- bv. 'Frituur 16/05'
+  datum date default current_date,
+  verdeeld_naar_fv_maand_id uuid references fv_maanden(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+create table if not exists bestelling_regels (
+  id uuid primary key default gen_random_uuid(),
+  bestelling_id uuid references bestellingen(id) on delete cascade,
+  user_id uuid references users(id) on delete cascade,
+  product text not null,
+  aantal numeric(10,2) not null default 1,
+  prijs_per_stuk numeric(10,2) not null,
+  created_at timestamptz default now()
 );
 
 -- ============ ROW LEVEL SECURITY ============

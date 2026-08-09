@@ -21,7 +21,7 @@ export async function GET(req) {
 
   const { data: statusRows, error: statusError } = await supabaseAdmin
     .from("fv_status")
-    .select("user_id, status, users(id, naam, discord_username, type, groep)")
+    .select("user_id, status, users(id, naam, discord_username, type, groep, iban)")
     .eq("fv_maand_id", fvMaandId);
   if (statusError) return NextResponse.json({ error: statusError.message }, { status: 500 });
 

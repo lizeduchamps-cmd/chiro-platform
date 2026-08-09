@@ -12,7 +12,7 @@ export async function GET() {
 
   const { data, error } = await supabaseAdmin
     .from("users")
-    .select("id, naam, discord_username, type, groep, verantwoordelijkheden, platform_recht")
+    .select("id, naam, discord_username, type, groep, verantwoordelijkheden, platform_recht, iban")
     .order("naam");
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -43,7 +43,7 @@ export async function POST(req) {
       discord_username: discordUsername,
       naam: naam || discordUsername,
     })
-    .select("id, naam, discord_username, type, groep, verantwoordelijkheden, platform_recht")
+    .select("id, naam, discord_username, type, groep, verantwoordelijkheden, platform_recht, iban")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -57,7 +57,7 @@ export async function PATCH(req) {
   }
 
   const body = await req.json();
-  const { id, type, groep, verantwoordelijkheden, platform_recht } = body;
+  const { id, type, groep, verantwoordelijkheden, platform_recht, iban } = body;
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
 
   const updateFields = { updated_at: new Date().toISOString() };
@@ -65,6 +65,7 @@ export async function PATCH(req) {
   if (groep !== undefined) updateFields.groep = groep || null;
   if (verantwoordelijkheden !== undefined) updateFields.verantwoordelijkheden = verantwoordelijkheden;
   if (platform_recht !== undefined) updateFields.platform_recht = platform_recht;
+  if (iban !== undefined) updateFields.iban = iban || null;
 
   const { error } = await supabaseAdmin.from("users").update(updateFields).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

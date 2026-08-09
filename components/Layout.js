@@ -19,7 +19,10 @@ export default function Layout({ session, children }) {
     {
       href: "/fv",
       label: "Financieel Verslag",
-      children: [{ href: "/streepjes", label: "Streepjes" }],
+      children: [
+        { href: "/streepjes", label: "Streepjes" },
+        { href: "/bestellingen", label: "Bestellingen" },
+      ],
     },
   ];
   if (recht === "admin") {

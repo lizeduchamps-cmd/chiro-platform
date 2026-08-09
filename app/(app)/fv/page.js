@@ -17,6 +17,14 @@ function huidigeMaandString() {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
+// FV-groepering: Aspi (groep) telt apart, de rest valt onder Leiding of Logistiek (type).
+const GROEP_VOLGORDE = ["Leiding", "Logistiek", "Aspi"];
+function fvGroep(user) {
+  if (user.groep === "Aspi") return "Aspi";
+  if (user.type === "Logistiek") return "Logistiek";
+  return "Leiding";
+}
+
 export default function FinancieelVerslag() {
   const { data: session } = useSession();
   const [werkjaren, setWerkjaren] = useState([]);
@@ -228,13 +236,29 @@ export default function FinancieelVerslag() {
             <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
           )}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {overzicht.personen.map((p) => (
-              <div key={p.user.id} className="card" style={{ pageBreakInside: "avoid" }}>
+          {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((groep) => {
+            const personenInGroep = overzicht.personen.filter((p) => fvGroep(p.user) === groep);
+            const subtotaal = personenInGroep.reduce((s, p) => s + p.totaal, 0);
+            return (
+              <div key={groep} style={{ marginBottom: 24, pageBreakBefore: "auto" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", borderBottom: "2px solid var(--border)", paddingBottom: 6, marginBottom: 12 }}>
+                  <h3 style={{ fontSize: 14, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 }}>{groep}</h3>
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    Subtotaal: {subtotaal < 0 ? "terug " : ""}{euro(Math.abs(subtotaal))}
+                  </span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  {personenInGroep.map((p) => (
+            <div key={p.user.id} className="card" style={{ pageBreakInside: "avoid" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }}>
                   <div>
                     <div style={{ fontWeight: 700 }}>{p.user.naam}</div>
                     <div className="subtle" style={{ fontSize: 11 }}>{p.user.type}{p.user.groep ? ` · ${p.user.groep}` : ""}</div>
+                    {p.totaal < 0 && (
+                      <div className="subtle" style={{ fontSize: 11 }}>
+                        {p.user.iban ? `Terug te storten naar: ${p.user.iban}` : "⚠️ Geen IBAN bekend voor terugbetaling"}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                     <div className={p.totaal >= 0 ? "amount-neg" : ""} style={{ fontSize: 18, fontWeight: 700 }}>
@@ -303,9 +327,12 @@ export default function FinancieelVerslag() {
                     <button onClick={() => kmToevoegen(p.user.id)} style={{ fontSize: 12 }}>+ Km-vergoeding</button>
                   </div>
                 )}
+            </div>
+                  ))}
+                </div>
               </div>
-            ))}
-          </div>
+            );
+          })}
         </>
       )}
     </div>

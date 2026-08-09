@@ -100,6 +100,7 @@ export default function GebruikersBeheer() {
               <th>Groep</th>
               <th>Verantwoordelijkheden</th>
               <th>Platformrecht</th>
+              <th>IBAN</th>
               <th></th>
             </tr>
           </thead>
@@ -143,6 +144,14 @@ export default function GebruikersBeheer() {
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
+                </td>
+                <td>
+                  <input
+                    defaultValue={u.iban || ""}
+                    placeholder="BE.."
+                    onBlur={(e) => { if (e.target.value !== (u.iban || "")) updateUser(u.id, { iban: e.target.value.trim() }); }}
+                    style={{ width: 160, fontSize: 12 }}
+                  />
                 </td>
                 <td>
                   <button className="btn-danger" onClick={() => verwijderGebruiker(u)} title="Verwijderen">
