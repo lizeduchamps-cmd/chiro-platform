@@ -38,12 +38,13 @@ export default function Layout({ session, children }) {
     },
     {
       href: "/kampbudgetten",
-      label: "Kampbudgetten",
+      label: "Kamp",
       children: [
-        { href: "/wisselgeld", label: "Wisselgeld" },
-        { href: "/kalender", label: "Kalender" },
+        { href: "/kampkosten", label: "Kampkosten" },
       ],
     },
+    { href: "/wisselgeld", label: "Wisselgeld", children: [] },
+    { href: "/kalender", label: "Kalender", children: [] },
   ];
   if (recht === "admin") {
     groups.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen", children: [] });

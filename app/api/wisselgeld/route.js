@@ -25,9 +25,8 @@ export async function GET(req) {
   return NextResponse.json({ wisselgeldAanvragen: data });
 }
 
-// Aanmaken creëert meteen ook een kalender-item op de gevraagde datum, zodat
-// de financieel verantwoordelijke het als "aandachtspunt" ziet zonder dat er
-// een e-mail/Discord-bericht verstuurd moet worden — het platform is zelf de melding.
+// Verschijnt automatisch (live, niet als aparte kopie) op de Kalender via
+// /api/kalender zodra datum_nodig gezet is — geen aparte kalender-rij nodig.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   const { werkjaarId, afdeling, datumNodig, bedragGevraagd, samenstellingCash, doelActiviteit } = await req.json();
@@ -57,16 +56,6 @@ export async function POST(req) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  await supabaseAdmin.from("kalender_items").insert({
-    werkjaar_id: werkjaarId,
-    titel: `Wisselgeld klaarleggen voor ${afdeling} (${aanvraagCode})`,
-    type: "Wisselgeld Deadline",
-    datum_deadline: datumNodig,
-    toegewezen_aan: "Financieel verantwoordelijke",
-    gerelateerd_type: "wisselgeld_aanvraag",
-    gerelateerd_id: aanvraag.id,
-  });
-
   return NextResponse.json({ aanvraag });
 }
 
@@ -88,13 +77,6 @@ export async function PATCH(req) {
 
   const { error } = await supabaseAdmin.from("wisselgeld_aanvragen").update({ status }).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  // Zodra het wisselgeld effectief klaarligt, is het bijhorende kalender-item
-  // afgerond — geen aparte handeling nodig op de Kalender-pagina.
-  if (status === "Klaargezet") {
-    await supabaseAdmin.from("kalender_items").update({ is_voltooid: true }).eq("gerelateerd_type", "wisselgeld_aanvraag").eq("gerelateerd_id", id);
-  }
-
   return NextResponse.json({ ok: true });
 }
 
@@ -108,7 +90,6 @@ export async function DELETE(req) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  await supabaseAdmin.from("kalender_items").delete().eq("gerelateerd_type", "wisselgeld_aanvraag").eq("gerelateerd_id", id);
   const { error } = await supabaseAdmin.from("wisselgeld_aanvragen").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

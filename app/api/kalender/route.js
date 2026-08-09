@@ -3,6 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
+// De kalender toont drie soorten items door elkaar: handmatige kalender_items
+// (opgeslagen), FV-betaaldeadlines en wisselgeld-aanvragen. De twee laatste
+// staan nergens dubbel opgeslagen — ze worden hier live berekend vanuit hun
+// eigen tabel, zodat de kalender nooit uit sync kan raken (bv. als een
+// wisselgeld-status wijzigt) en ook de volledige geschiedenis toont (niet
+// enkel de eerstvolgende deadline).
 export async function GET(req) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Niet ingelogd" }, { status: 401 });
@@ -10,18 +16,55 @@ export async function GET(req) {
   const werkjaarId = new URL(req.url).searchParams.get("werkjaarId");
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin
-    .from("kalender_items")
-    .select("id, titel, type, datum_deadline, toegewezen_aan, gerelateerd_type, gerelateerd_id, is_voltooid")
-    .eq("werkjaar_id", werkjaarId)
-    .order("datum_deadline");
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ kalenderItems: data });
+  const [{ data: handmatig, error: handmatigError }, { data: fvMaanden, error: fvError }, { data: wisselgeld, error: wisselgeldError }] = await Promise.all([
+    supabaseAdmin
+      .from("kalender_items")
+      .select("id, titel, type, datum_deadline, toegewezen_aan, is_voltooid")
+      .eq("werkjaar_id", werkjaarId),
+    supabaseAdmin
+      .from("fv_maanden")
+      .select("id, maand, betaaldeadline, fv_status(status)")
+      .eq("werkjaar_id", werkjaarId)
+      .not("betaaldeadline", "is", null),
+    supabaseAdmin
+      .from("wisselgeld_aanvragen")
+      .select("id, aanvraag_code, afdeling, datum_nodig, bedrag_gevraagd, status")
+      .eq("werkjaar_id", werkjaarId),
+  ]);
+  if (handmatigError) return NextResponse.json({ error: handmatigError.message }, { status: 500 });
+  if (fvError) return NextResponse.json({ error: fvError.message }, { status: 500 });
+  if (wisselgeldError) return NextResponse.json({ error: wisselgeldError.message }, { status: 500 });
+
+  const fvItems = (fvMaanden || []).map((m) => ({
+    id: `fv-${m.id}`,
+    virtueel: true,
+    titel: `FV-betaaldeadline (${m.maand})`,
+    type: "FV Betaaldeadline",
+    datum_deadline: m.betaaldeadline,
+    toegewezen_aan: null,
+    is_voltooid: (m.fv_status || []).every((s) => s.status === "betaald"),
+    link: "/fv",
+  }));
+
+  const wisselgeldItems = (wisselgeld || []).map((w) => ({
+    id: `wg-${w.id}`,
+    virtueel: true,
+    titel: `Wisselgeld ${w.afdeling} · ${w.aanvraag_code} (${w.status})`,
+    type: "Wisselgeld Deadline",
+    datum_deadline: w.datum_nodig,
+    toegewezen_aan: "Financieel verantwoordelijke",
+    is_voltooid: w.status === "Klaargezet" || w.status === "Opgehaald",
+    link: "/wisselgeld",
+  }));
+
+  const kalenderItems = [...(handmatig || []), ...fvItems, ...wisselgeldItems].sort((a, b) => a.datum_deadline.localeCompare(b.datum_deadline));
+
+  return NextResponse.json({ kalenderItems });
 }
 
 // Handmatige items (bv. "Waarborg kampplaats storten") blijven voorbehouden
-// aan admin/financieel_verantwoordelijke — auto-gegenereerde wisselgeld-items
-// ontstaan via /api/wisselgeld en hoeven hier niet apart aangemaakt te worden.
+// aan admin/financieel_verantwoordelijke — wisselgeld/FV-deadlines hoeven
+// hier nooit aangemaakt te worden, die berekent GET hierboven live.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
@@ -36,7 +79,7 @@ export async function POST(req) {
   const { data, error } = await supabaseAdmin
     .from("kalender_items")
     .insert({ werkjaar_id: werkjaarId, titel, type, datum_deadline: datumDeadline, toegewezen_aan: toegewezenAan || null })
-    .select("id, titel, type, datum_deadline, toegewezen_aan, gerelateerd_type, gerelateerd_id, is_voltooid")
+    .select("id, titel, type, datum_deadline, toegewezen_aan, is_voltooid")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ item: data });

@@ -1,13 +1,23 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
 
 const MAAND_NAMEN = ["januari", "februari", "maart", "april", "mei", "juni", "juli", "augustus", "september", "oktober", "november", "december"];
 const DAG_NAMEN = ["Ma", "Di", "Wo", "Do", "Vr", "Za", "Zo"];
-const TYPES = ["Jaarlijks Actiepunt", "Voorschot Deadline", "Factuur Vervaldatum", "Wisselgeld Deadline"];
+const TYPES = ["Jaarlijks Actiepunt", "Voorschot Deadline", "Factuur Vervaldatum"];
+
+// Wisselgeld-aanvragen en FV-betaaldeadlines zijn "virtueel": ze staan niet
+// zelf in kalender_items maar worden live opgehaald uit hun eigen tabel (zie
+// /api/kalender) — dus geen toggle/verwijder-knop, klik linkt gewoon door.
+function itemKleur(type) {
+  if (type === "Wisselgeld Deadline") return { bg: "var(--primary-tint)", fg: "var(--primary)" };
+  if (type === "FV Betaaldeadline") return { bg: "#fdf3e0", fg: "#92600a" };
+  if (type === "Jaarlijks Actiepunt") return { bg: "#f4f4f5", fg: "var(--text-muted)" };
+  return { bg: "var(--danger-tint)", fg: "var(--danger)" }; // Voorschot Deadline / Factuur Vervaldatum
+}
 
 function toDatumString(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -33,6 +43,7 @@ const LEEG_ITEM = { titel: "", type: "Jaarlijks Actiepunt", datumDeadline: "", t
 
 export default function Kalender() {
   const { data: session } = useSession();
+  const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
   const [werkjaren, setWerkjaren] = useState([]);
@@ -89,9 +100,11 @@ export default function Kalender() {
     toast.success("Item toegevoegd aan de kalender");
   };
 
-  const toggleVoltooid = async (item) => {
+  const itemKlikken = (item) => {
+    if (item.virtueel) { router.push(item.link); return; }
+    if (!magBewerken) return;
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, is_voltooid: !it.is_voltooid } : it)));
-    await fetch("/api/kalender", {
+    fetch("/api/kalender", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: item.id, isVoltooid: !item.is_voltooid }),
@@ -125,7 +138,7 @@ export default function Kalender() {
         </div>
       </div>
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Deadlines en actiepunten — wisselgeld-aanvragen verschijnen hier automatisch op hun gevraagde datum.
+        Deadlines en actiepunten — FV-betaaldeadlines en alle wisselgeld-aanvragen (ook afgelopen) verschijnen hier automatisch, zodat je altijd ziet wat eraan komt en wat er al geweest is.
       </p>
 
       {toonForm && (
@@ -168,25 +181,28 @@ export default function Kalender() {
               >
                 <div className={buitenMaand ? "subtle" : "muted"} style={{ fontSize: 11, fontWeight: key === vandaag ? 700 : 400, marginBottom: 4 }}>{dag.getDate()}</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {dagItems.map((it) => (
-                    <div
-                      key={it.id}
-                      onClick={() => magBewerken && toggleVoltooid(it)}
-                      title={it.toegewezen_aan ? `Toegewezen aan: ${it.toegewezen_aan}` : it.type}
-                      style={{
-                        fontSize: 10, padding: "2px 5px", borderRadius: 5, cursor: magBewerken ? "pointer" : "default",
-                        background: it.is_voltooid ? "#f4f4f5" : it.type === "Wisselgeld Deadline" ? "var(--primary-tint)" : "var(--danger-tint)",
-                        color: it.is_voltooid ? "var(--text-subtle)" : it.type === "Wisselgeld Deadline" ? "var(--primary)" : "var(--danger)",
-                        textDecoration: it.is_voltooid ? "line-through" : "none",
-                        display: "flex", justifyContent: "space-between", gap: 4,
-                      }}
-                    >
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titel}</span>
-                      {magBewerken && !it.gerelateerd_id && (
-                        <span onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} style={{ flexShrink: 0 }}>✕</span>
-                      )}
-                    </div>
-                  ))}
+                  {dagItems.map((it) => {
+                    const kleur = itemKleur(it.type);
+                    return (
+                      <div
+                        key={it.id}
+                        onClick={() => itemKlikken(it)}
+                        title={it.virtueel ? "Klik om te bekijken" : it.toegewezen_aan ? `Toegewezen aan: ${it.toegewezen_aan}` : it.type}
+                        style={{
+                          fontSize: 10, padding: "2px 5px", borderRadius: 5, cursor: it.virtueel || magBewerken ? "pointer" : "default",
+                          background: it.is_voltooid ? "#f4f4f5" : kleur.bg,
+                          color: it.is_voltooid ? "var(--text-subtle)" : kleur.fg,
+                          textDecoration: it.is_voltooid ? "line-through" : "none",
+                          display: "flex", justifyContent: "space-between", gap: 4,
+                        }}
+                      >
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titel}</span>
+                        {magBewerken && !it.virtueel && (
+                          <span onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} style={{ flexShrink: 0 }}>✕</span>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             );

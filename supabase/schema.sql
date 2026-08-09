@@ -348,24 +348,56 @@ create table if not exists wisselgeld_aanvragen (
 
 create index if not exists idx_wisselgeld_werkjaar on wisselgeld_aanvragen(werkjaar_id);
 
--- Notificaties zijn bewust in-app (geen e-mail/Discord-bot-infrastructuur nu):
--- een wisselgeld-aanvraag maakt automatisch een kalender-item aan, en zowel
--- dat item als een overschreden groepsbudget verschijnen als "aandachtspunt"
--- op het Jaaroverzicht voor admin/financieel verantwoordelijke.
+-- Enkel voor handmatige/jaarlijkse actiepunten (bv. "Waarborg kampplaats
+-- storten"). FV-betaaldeadlines en wisselgeld-aanvragen komen NIET hier in
+-- te staan als aparte rij — die worden live samengevoegd door /api/kalender
+-- vanuit fv_maanden.betaaldeadline en wisselgeld_aanvragen zelf, zodat de
+-- kalender altijd de volledige (ook afgelopen) geschiedenis toont en nooit
+-- uit sync kan raken met een gewijzigde datum of status elders.
 create table if not exists kalender_items (
   id uuid primary key default gen_random_uuid(),
   werkjaar_id uuid references werkjaren(id) on delete cascade,
   titel text not null,
-  type text not null check (type in ('Wisselgeld Deadline', 'Jaarlijks Actiepunt', 'Voorschot Deadline', 'Factuur Vervaldatum')),
+  type text not null check (type in ('Jaarlijks Actiepunt', 'Voorschot Deadline', 'Factuur Vervaldatum')),
   datum_deadline date not null,
   toegewezen_aan text,                          -- rol of naam, bv. 'Financieel verantwoordelijke'
-  gerelateerd_type text check (gerelateerd_type in ('wisselgeld_aanvraag') or gerelateerd_type is null),
-  gerelateerd_id uuid,                          -- geen FK: kan in de toekomst naar meerdere tabellen wijzen
   is_voltooid boolean not null default false,
   created_at timestamptz default now()
 );
 
 create index if not exists idx_kalender_werkjaar on kalender_items(werkjaar_id, datum_deadline);
+
+-- ============ KAMPKOSTEN ============
+-- Eén doorlopend kosten-/inkomstenlogboek voor het kamp per werkjaar (geen
+-- aparte "kamp"-entiteit nodig zoals bij evenementen — er is er maar één per
+-- jaar). Structuur bewust gelijkaardig aan evenement_transacties, maar
+-- losstaand van Kampbudgetten: dat blijft budget-vs-uitgegeven per afdeling
+-- voor winkelen/dropping/weekend, dit is de vrije kostenpost-lijst voor al
+-- de rest (tenten, kampplaats, kampgeld-inkomsten, busvervoer, ...).
+create table if not exists kamp_categorieen (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  naam text not null,
+  created_at timestamptz default now(),
+  unique(werkjaar_id, naam)
+);
+
+create table if not exists kamp_transacties (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  transactie_code text,                         -- bv. 'KAMP-1001', automatisch gegenereerd
+  datum date not null,
+  omschrijving text not null,
+  type_geldstroom text not null check (type_geldstroom in ('inkomst', 'uitgave')),
+  hoofdcategorie text,                          -- naam uit kamp_categorieen van hetzelfde werkjaar
+  bedrag numeric(10,2) not null,
+  status text not null default 'Gepland' check (status in ('Gepland', 'Te vergoeden', 'Betaald', 'Afgerond')),
+  medewerker_user_id uuid references users(id) on delete set null,  -- interne leiding die voorschoot
+  bewijsstuk_url text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_kamp_transacties_werkjaar on kamp_transacties(werkjaar_id);
 
 -- ============ ROW LEVEL SECURITY ============
 -- Ingeschakeld zodat enkel de backend (via service_role key) mag schrijven;
