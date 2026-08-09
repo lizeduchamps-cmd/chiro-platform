@@ -1,8 +1,6 @@
 "use client";
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
-import Layout from "@/components/Layout";
 
 const GROEPEN = ["Sloebers", "Speelclub", "Rakwi", "Tito", "Keti", "Aspi"];
 const TYPES = ["Hoofdleiding", "Leiding", "Logistiek"];
@@ -21,14 +19,12 @@ const VERANTWOORDELIJKHEDEN = [
 ];
 
 export default function GebruikersBeheer() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (status === "loading") return;
-    if (status !== "authenticated") { setLoading(false); return; }
     fetch("/api/gebruikers")
       .then((r) => r.json())
       .then((data) => {
@@ -36,18 +32,13 @@ export default function GebruikersBeheer() {
         else setUsers(data.users);
       })
       .finally(() => setLoading(false));
-  }, [status]);
+  }, []);
 
-  if (status === "loading" || loading) return <p style={{ padding: 32 }}>Laden…</p>;
-  if (status === "unauthenticated") redirect("/inloggen");
-  if (session.user.platformRecht !== "admin") {
-    return (
-      <Layout session={session}>
-        <p style={{ padding: 32 }}>Je hebt geen toegang tot deze pagina.</p>
-      </Layout>
-    );
+  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
+  if (session?.user?.platformRecht !== "admin") {
+    return <p style={{ padding: 32 }}>Je hebt geen toegang tot deze pagina.</p>;
   }
-  if (error) return <Layout session={session}><p className="amount-neg" style={{ padding: 32 }}>{error}</p></Layout>;
+  if (error) return <p className="amount-neg" style={{ padding: 32 }}>{error}</p>;
 
   const updateUser = (id, fields) => {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...fields } : u)));
@@ -89,7 +80,6 @@ export default function GebruikersBeheer() {
   };
 
   return (
-    <Layout session={session}>
     <div style={{ padding: 32 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <h1 style={{ fontSize: 20, fontWeight: 600 }}>Gebruikers &amp; rollen</h1>
@@ -165,6 +155,5 @@ export default function GebruikersBeheer() {
         </table>
       </div>
     </div>
-    </Layout>
   );
 }

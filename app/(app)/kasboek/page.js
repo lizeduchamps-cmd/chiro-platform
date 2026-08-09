@@ -1,15 +1,13 @@
 "use client";
 import { useSession } from "next-auth/react";
-import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
-import Layout from "@/components/Layout";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
 export default function Kasboek() {
-  const { data: session, status } = useSession();
+  const { data: session } = useSession();
 
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
@@ -37,8 +35,6 @@ export default function Kasboek() {
 
   // Basisdata laden: werkjaren + categorieën
   useEffect(() => {
-    if (status === "loading") return;
-    if (status !== "authenticated") { setLoading(false); return; }
     Promise.all([
       fetch("/api/werkjaren").then((r) => r.json()),
       fetch("/api/categorieen").then((r) => r.json()),
@@ -52,7 +48,7 @@ export default function Kasboek() {
       if (cat.categorieen) setCategorieen(cat.categorieen);
       setLoading(false);
     });
-  }, [status]);
+  }, []);
 
   // Transacties + saldos laden zodra het werkjaar bekend is (of wijzigt)
   useEffect(() => {
@@ -71,8 +67,7 @@ export default function Kasboek() {
     setGeselecteerd(new Set());
   }, [werkjaarId, zoekterm, filterCat]);
 
-  if (status === "loading" || loading) return <p style={{ padding: 32 }}>Laden…</p>;
-  if (status === "unauthenticated") redirect("/inloggen");
+  if (loading) return <p className="muted" style={{ padding: 32 }}>Laden…</p>;
 
   const herladen = () => {
     fetch(`/api/transacties?werkjaarId=${werkjaarId}`)
@@ -227,17 +222,14 @@ export default function Kasboek() {
 
   if (error) {
     return (
-      <Layout session={session}>
-        <div style={{ padding: 32 }}>
-          <p className="amount-neg" style={{ marginBottom: 16 }}>{error}</p>
-          <button onClick={nieuwWerkjaar}>➕ Werkjaar aanmaken</button>
-        </div>
-      </Layout>
+      <div style={{ padding: 32 }}>
+        <p className="amount-neg" style={{ marginBottom: 16 }}>{error}</p>
+        <button onClick={nieuwWerkjaar}>➕ Werkjaar aanmaken</button>
+      </div>
     );
   }
 
   return (
-    <Layout session={session}>
     <div style={{ padding: 32, maxWidth: 1100 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
         <div>
@@ -417,6 +409,5 @@ export default function Kasboek() {
         </table>
       </div>
     </div>
-    </Layout>
   );
 }
