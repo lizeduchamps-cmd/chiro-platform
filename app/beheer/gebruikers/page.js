@@ -65,10 +65,29 @@ export default function GebruikersBeheer() {
     updateUser(u.id, { verantwoordelijkheden: nieuw });
   };
 
+  const nieuweGebruiker = async () => {
+    const discordUsername = prompt("Discord-gebruikersnaam (exact, zoals in Discord):");
+    if (!discordUsername) return;
+    const naam = prompt("Naam om te tonen (optioneel):", discordUsername);
+    const res = await fetch("/api/gebruikers", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discordUsername, naam }),
+    });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setUsers((prev) => [...prev, data.user].sort((a, b) => a.naam.localeCompare(b.naam)));
+  };
+
   return (
     <Layout session={session}>
     <div style={{ padding: 32 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22" }}>Gebruikers &amp; rollen</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22" }}>Gebruikers &amp; rollen</h1>
+        <button onClick={nieuweGebruiker} style={{ background: "#2F4A3C", color: "white", padding: "8px 14px", borderRadius: 8, border: "none" }}>
+          + Gebruiker toevoegen
+        </button>
+      </div>
       <p style={{ color: "#6B6B5F", fontSize: 14, marginBottom: 24 }}>
         Wijs hier per persoon het type, de groep, verantwoordelijkheden en platformrecht toe.
         Wijzigingen worden meteen opgeslagen.
