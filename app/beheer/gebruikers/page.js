@@ -2,6 +2,7 @@
 import { useSession } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { useEffect, useState } from "react";
+import Layout from "@/components/Layout";
 
 const GROEPEN = ["Sloebers", "Speelclub", "Rakwi", "Tito", "Keti", "Aspi"];
 const TYPES = ["Hoofdleiding", "Leiding", "Logistiek"];
@@ -39,9 +40,13 @@ export default function GebruikersBeheer() {
   if (status === "loading" || loading) return <p style={{ padding: 32 }}>Laden…</p>;
   if (status === "unauthenticated") redirect("/inloggen");
   if (session.user.platformRecht !== "admin") {
-    return <p style={{ padding: 32 }}>Je hebt geen toegang tot deze pagina.</p>;
+    return (
+      <Layout session={session}>
+        <p style={{ padding: 32 }}>Je hebt geen toegang tot deze pagina.</p>
+      </Layout>
+    );
   }
-  if (error) return <p style={{ padding: 32, color: "#B24C4C" }}>{error}</p>;
+  if (error) return <Layout session={session}><p style={{ padding: 32, color: "#B24C4C" }}>{error}</p></Layout>;
 
   const updateUser = (id, fields) => {
     setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, ...fields } : u)));
@@ -61,6 +66,7 @@ export default function GebruikersBeheer() {
   };
 
   return (
+    <Layout session={session}>
     <div style={{ padding: 32 }}>
       <h1 style={{ fontSize: 20, fontWeight: 600, color: "#1E2A22" }}>Gebruikers &amp; rollen</h1>
       <p style={{ color: "#6B6B5F", fontSize: 14, marginBottom: 24 }}>
@@ -125,5 +131,6 @@ export default function GebruikersBeheer() {
         </table>
       </div>
     </div>
+    </Layout>
   );
 }
