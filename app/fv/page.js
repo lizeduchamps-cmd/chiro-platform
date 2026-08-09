@@ -31,8 +31,7 @@ export default function FinancieelVerslag() {
   const [nieuweMaand, setNieuweMaand] = useState({
     maand: huidigeMaandString(),
     dieselprijs: "",
-    kmTariefLeiding: "",
-    kmTariefLogistiek: "",
+    verbruik: "7",
     betaaldeadline: "",
   });
   const [nieuweRegel, setNieuweRegel] = useState({});
@@ -68,8 +67,17 @@ export default function FinancieelVerslag() {
     fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => setOverzicht(d));
   };
 
+  // Eén gedeeld km-tarief voor iedereen: dieselprijs (€/L) x verbruik (L/100km) / 100.
+  const berekendKmTarief = () => {
+    const diesel = parseFloat(nieuweMaand.dieselprijs);
+    const verbruik = parseFloat(nieuweMaand.verbruik);
+    if (!diesel || !verbruik) return null;
+    return Math.round(((diesel * verbruik) / 100) * 1000) / 1000;
+  };
+
   const nieuweMaandAanmaken = async () => {
     if (!/^\d{4}-\d{2}$/.test(nieuweMaand.maand)) return alert("Vul de maand in als JJJJ-MM, bv. 2026-05.");
+    const kmTarief = berekendKmTarief();
     const res = await fetch("/api/fv/maanden", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -77,8 +85,8 @@ export default function FinancieelVerslag() {
         werkjaarId,
         maand: nieuweMaand.maand,
         dieselprijs: nieuweMaand.dieselprijs ? parseFloat(nieuweMaand.dieselprijs) : null,
-        kmTariefLeiding: nieuweMaand.kmTariefLeiding ? parseFloat(nieuweMaand.kmTariefLeiding) : null,
-        kmTariefLogistiek: nieuweMaand.kmTariefLogistiek ? parseFloat(nieuweMaand.kmTariefLogistiek) : null,
+        kmTariefLeiding: kmTarief,
+        kmTariefLogistiek: kmTarief,
         betaaldeadline: nieuweMaand.betaaldeadline || null,
       }),
     });
@@ -104,10 +112,10 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   };
 
-  const kmToevoegen = async (userId, userType) => {
+  const kmToevoegen = async (userId) => {
     const km = parseFloat(nieuweKm[userId]);
     if (!km) return alert("Vul een aantal kilometer in.");
-    const tarief = userType === "Logistiek" ? overzicht.fvMaand.km_tarief_logistiek : overzicht.fvMaand.km_tarief_leiding;
+    const tarief = overzicht.fvMaand.km_tarief_leiding;
     if (!tarief) return alert("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
     const bedrag = -(Math.round(km * tarief * 100) / 100);
     const res = await fetch("/api/fv/regels", {
@@ -185,14 +193,14 @@ export default function FinancieelVerslag() {
                 <input type="number" step="0.01" value={nieuweMaand.dieselprijs} onChange={(e) => setNieuweMaand({ ...nieuweMaand, dieselprijs: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
               </label>
               <label style={{ fontSize: 12 }}>
-                Km-tarief leiding (€/km)
-                <input type="number" step="0.01" value={nieuweMaand.kmTariefLeiding} onChange={(e) => setNieuweMaand({ ...nieuweMaand, kmTariefLeiding: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
-              </label>
-              <label style={{ fontSize: 12 }}>
-                Km-tarief logistiek (€/km)
-                <input type="number" step="0.01" value={nieuweMaand.kmTariefLogistiek} onChange={(e) => setNieuweMaand({ ...nieuweMaand, kmTariefLogistiek: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
+                Gem. verbruik (L/100km)
+                <input type="number" step="0.1" value={nieuweMaand.verbruik} onChange={(e) => setNieuweMaand({ ...nieuweMaand, verbruik: e.target.value })} style={{ display: "block", width: "100%", padding: 6, marginTop: 2 }} />
               </label>
             </div>
+            <p style={{ fontSize: 12, color: "#6B6B5F", marginBottom: 10 }}>
+              Km-vergoeding voor iedereen: {berekendKmTarief() ? `€${berekendKmTarief()}/km` : "vul dieselprijs en verbruik in"}
+              {" "}(dieselprijs × verbruik ÷ 100)
+            </p>
             <button onClick={nieuweMaandAanmaken} style={{ background: "#2F4A3C", color: "white", padding: "8px 16px", borderRadius: 8, border: "none" }}>
               Aanmaken
             </button>
@@ -210,6 +218,11 @@ export default function FinancieelVerslag() {
               {overzicht.fvMaand.betaaldeadline && (
                 <span style={{ fontSize: 12, color: "#9A9A8C", fontWeight: 400, marginLeft: 10 }}>
                   Betaaldeadline: {overzicht.fvMaand.betaaldeadline}
+                </span>
+              )}
+              {overzicht.fvMaand.km_tarief_leiding && (
+                <span style={{ fontSize: 12, color: "#9A9A8C", fontWeight: 400, marginLeft: 10 }}>
+                  Km-vergoeding: €{overzicht.fvMaand.km_tarief_leiding}/km
                 </span>
               )}
             </h2>
@@ -289,7 +302,7 @@ export default function FinancieelVerslag() {
                         onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: e.target.value }))}
                         style={{ padding: 6, fontSize: 12, width: 90 }}
                       />
-                      <button onClick={() => kmToevoegen(p.user.id, p.user.type)} style={{ padding: "6px 10px", fontSize: 12 }}>+ Km-vergoeding</button>
+                      <button onClick={() => kmToevoegen(p.user.id)} style={{ padding: "6px 10px", fontSize: 12 }}>+ Km-vergoeding</button>
                     </div>
                   )}
                 </div>
