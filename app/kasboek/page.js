@@ -103,6 +103,25 @@ export default function Kasboek() {
     setWerkjaarId(data.werkjaar.id);
   };
 
+  const werkjaarVerwijderen = async () => {
+    const huidig = werkjaren.find((w) => w.id === werkjaarId);
+    if (!huidig) return;
+    const bevestiging = prompt(
+      `Dit verwijdert werkjaar "${huidig.naam}" volledig, inclusief alle transacties en financiële verslagen van dat jaar. Dit kan niet ongedaan gemaakt worden.\n\nTyp "${huidig.naam}" om te bevestigen:`
+    );
+    if (bevestiging !== huidig.naam) {
+      if (bevestiging !== null) alert("Naam kwam niet overeen, er is niets verwijderd.");
+      return;
+    }
+    const res = await fetch(`/api/werkjaren?id=${werkjaarId}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    const overgebleven = werkjaren.filter((w) => w.id !== werkjaarId);
+    setWerkjaren(overgebleven);
+    setWerkjaarId(overgebleven[0]?.id || null);
+    if (overgebleven.length === 0) setError("Er is nog geen werkjaar aangemaakt. Maak eerst een werkjaar aan.");
+  };
+
   const nieuweCategorie = async () => {
     const naam = prompt("Naam van de nieuwe categorie:");
     if (!naam) return;
@@ -230,6 +249,9 @@ export default function Kasboek() {
           </select>
           {magBewerken && (
             <button onClick={nieuwWerkjaar} style={{ marginLeft: 8 }}>➕ Nieuw werkjaar</button>
+          )}
+          {magBewerken && werkjaarId && (
+            <button className="btn-danger" onClick={werkjaarVerwijderen} style={{ marginLeft: 4 }} title="Werkjaar verwijderen">🗑️</button>
           )}
         </div>
         {magBewerken && <button onClick={nieuweCategorie}>+ Categorie</button>}

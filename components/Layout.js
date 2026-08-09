@@ -6,16 +6,35 @@ export default function Layout({ session, children }) {
   const pathname = usePathname();
   const recht = session?.user?.platformRecht;
 
-  const links = [
-    { href: "/", label: "Jaaroverzicht" },
-    { href: "/kasboek", label: "Kasboek" },
-    { href: "/kasboek/upload", label: "↳ CSV Upload", indent: true },
-    { href: "/streepjes", label: "Streepjes" },
-    { href: "/fv", label: "Financieel Verslag" },
+  const groups = [
+    {
+      href: "/",
+      label: "Jaaroverzicht",
+      children: [
+        { href: "/kasboek", label: "Kasboek" },
+        { href: "/kasboek/upload", label: "CSV Upload" },
+      ],
+    },
+    {
+      href: "/fv",
+      label: "Financieel Verslag",
+      children: [{ href: "/streepjes", label: "Streepjes" }],
+    },
   ];
   if (recht === "admin") {
-    links.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen" });
+    groups.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen", children: [] });
   }
+
+  const linkStyle = (actief) => ({
+    display: "block",
+    padding: "8px 10px",
+    borderRadius: 8,
+    fontSize: 13,
+    textDecoration: "none",
+    color: actief ? "#1b315c" : "#D6DEEA",
+    background: actief ? "#F9F9FA" : "transparent",
+    fontWeight: actief ? 600 : 400,
+  });
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -25,24 +44,28 @@ export default function Layout({ session, children }) {
           <div style={{ fontSize: 11, color: "#A9B7CE" }}>Financiënplatform</div>
         </div>
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
-          {links.map((l) => {
-            const actief = pathname === l.href;
+          {groups.map((g) => {
+            const kindActief = g.children.some((c) => pathname === c.href);
+            const actief = pathname === g.href;
+            const uitgeklapt = actief || kindActief;
             return (
-              <a
-                key={l.href}
-                href={l.href}
-                style={{
-                  padding: "8px 10px",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  textDecoration: "none",
-                  color: actief ? "#1b315c" : "#D6DEEA",
-                  background: actief ? "#F9F9FA" : "transparent",
-                  fontWeight: actief ? 600 : 400,
-                }}
-              >
-                {l.label}
-              </a>
+              <div key={g.href}>
+                <a href={g.href} style={{ ...linkStyle(actief), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {g.label}
+                  {g.children.length > 0 && (
+                    <span style={{ fontSize: 10, opacity: 0.7, transform: uitgeklapt ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>▸</span>
+                  )}
+                </a>
+                {uitgeklapt && g.children.length > 0 && (
+                  <div style={{ marginLeft: 12, borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: 8, marginTop: 2, display: "flex", flexDirection: "column", gap: 2 }}>
+                    {g.children.map((c) => (
+                      <a key={c.href} href={c.href} style={linkStyle(pathname === c.href)}>
+                        {c.label}
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>

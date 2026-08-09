@@ -51,3 +51,20 @@ export async function POST(req) {
 
   return NextResponse.json({ werkjaar });
 }
+
+// Verwijdert een werkjaar. Rekeningen, transacties, FV-maanden (en hun regels
+// en status) van dat werkjaar worden via de database-cascade automatisch mee
+// verwijderd — vandaar de zware bevestiging aan de UI-kant.
+export async function DELETE(req) {
+  const session = await getServerSession(authOptions);
+  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
+
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const { error } = await supabaseAdmin.from("werkjaren").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
