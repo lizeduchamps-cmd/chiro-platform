@@ -1,6 +1,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import Link from "next/link";
 
 export default function Layout({ session, children }) {
   const pathname = usePathname();
@@ -50,18 +51,18 @@ export default function Layout({ session, children }) {
             const uitgeklapt = actief || kindActief;
             return (
               <div key={g.href}>
-                <a href={g.href} style={{ ...linkStyle(actief), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Link href={g.href} style={{ ...linkStyle(actief), display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   {g.label}
                   {g.children.length > 0 && (
                     <span style={{ fontSize: 10, opacity: 0.7, transform: uitgeklapt ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>▸</span>
                   )}
-                </a>
+                </Link>
                 {uitgeklapt && g.children.length > 0 && (
                   <div style={{ marginLeft: 12, borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: 8, marginTop: 2, display: "flex", flexDirection: "column", gap: 2 }}>
                     {g.children.map((c) => (
-                      <a key={c.href} href={c.href} style={linkStyle(pathname === c.href)}>
+                      <Link key={c.href} href={c.href} style={linkStyle(pathname === c.href)}>
                         {c.label}
-                      </a>
+                      </Link>
                     ))}
                   </div>
                 )}
