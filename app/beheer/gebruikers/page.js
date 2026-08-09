@@ -79,6 +79,14 @@ export default function GebruikersBeheer() {
     setUsers((prev) => [...prev, data.user].sort((a, b) => a.naam.localeCompare(b.naam)));
   };
 
+  const verwijderGebruiker = async (u) => {
+    if (!confirm(`Weet je zeker dat je ${u.naam} wil verwijderen? Dit kan niet ongedaan gemaakt worden.`)) return;
+    const res = await fetch(`/api/gebruikers?id=${u.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.error) return alert("⚠️ " + data.error);
+    setUsers((prev) => prev.filter((x) => x.id !== u.id));
+  };
+
   return (
     <Layout session={session}>
     <div style={{ padding: 32 }}>
@@ -101,6 +109,7 @@ export default function GebruikersBeheer() {
               <th style={{ padding: 10 }}>Groep</th>
               <th style={{ padding: 10 }}>Verantwoordelijkheden</th>
               <th style={{ padding: 10 }}>Platformrecht</th>
+              <th style={{ padding: 10 }}></th>
             </tr>
           </thead>
           <tbody>
@@ -143,6 +152,11 @@ export default function GebruikersBeheer() {
                       <option key={r.value} value={r.value}>{r.label}</option>
                     ))}
                   </select>
+                </td>
+                <td style={{ padding: 10 }}>
+                  <button onClick={() => verwijderGebruiker(u)} title="Verwijderen" style={{ color: "#B24C4C", background: "none", border: "none", cursor: "pointer" }}>
+                    🗑️
+                  </button>
                 </td>
               </tr>
             ))}
