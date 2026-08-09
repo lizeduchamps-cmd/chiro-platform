@@ -201,6 +201,80 @@ create table if not exists bestelling_regels (
   created_at timestamptz default now()
 );
 
+-- ============ EVENEMENTEN (Fase 3: Kassasysteem per Evenement) ============
+-- Kassabeheer + kosten/inkomsten-logboek per evenement (fuif, taartenslag, ...),
+-- met budget per hoofdcategorie en een automatisch berekende winst/verliesbalans.
+
+create table if not exists evenementen (
+  id uuid primary key default gen_random_uuid(),
+  naam text not null,                        -- bv. 'Fuif 2026'
+  datum date,
+  status text not null default 'gepland' check (status in ('gepland', 'lopend', 'afgerond')),
+  created_at timestamptz default now()
+);
+
+create table if not exists evenement_kassas (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  naam text not null,                        -- bv. 'Kassa inkom', 'Toog', 'SumUp'
+  type text not null default 'cash' check (type in ('cash', 'digitaal')),
+  wisselgeld_start numeric(10,2) default 0,  -- enkel relevant bij type 'cash'
+  inhoud_einde numeric(10,2),                -- cash: geteld bedrag na afloop; digitaal: totaalbedrag
+  created_at timestamptz default now()
+);
+
+-- De 6 universele hoofdcategorieën uit het budgetteringsmodel; hergebruikt
+-- als check-constraint op zowel budgetten als transacties.
+create table if not exists evenement_budgetten (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  hoofdcategorie text not null check (hoofdcategorie in (
+    'Infrastructuur & Materiaal', 'Drank & Food', 'Programmatie & Entertainment',
+    'Marketing & Promo', 'Veiligheid & Logistiek', 'Organisatie & Medewerkers'
+  )),
+  budget_toegewezen numeric(10,2),
+  created_at timestamptz default now(),
+  unique(evenement_id, hoofdcategorie)
+);
+
+-- Externe relaties (leveranciers, sponsors, overheid). Interne leiding die
+-- voorschiet wordt niet hier gedupliceerd — die koppelen we rechtstreeks aan
+-- de bestaande users-tabel (die heeft al naam + iban, zie fv_regels-flow).
+create table if not exists partijen (
+  id uuid primary key default gen_random_uuid(),
+  naam text not null,
+  rol text not null check (rol in ('Leverancier', 'Medewerker/Organisator', 'Sponsor', 'Overheid/Subsidie')),
+  iban text,
+  contact text,
+  created_at timestamptz default now()
+);
+
+create table if not exists evenement_transacties (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  transactie_code text,                       -- bv. 'TRX-1001', automatisch gegenereerd
+  datum date not null,
+  omschrijving text not null,
+  type_geldstroom text not null check (type_geldstroom in ('inkomst', 'uitgave')),
+  type_kostenpost text check (type_kostenpost in ('kost', 'investering') or type_kostenpost is null),
+  hoofdcategorie text check (hoofdcategorie in (
+    'Infrastructuur & Materiaal', 'Drank & Food', 'Programmatie & Entertainment',
+    'Marketing & Promo', 'Veiligheid & Logistiek', 'Organisatie & Medewerkers'
+  ) or hoofdcategorie is null),
+  subcategorie text,
+  bedrag_excl_btw numeric(10,2) not null,
+  btw_tarief numeric(4,2) not null default 0 check (btw_tarief in (0, 6, 12, 21)),
+  bedrag_totaal numeric(10,2) not null,
+  betaalmethode text check (betaalmethode in ('Overschrijving', 'Cash', 'Bancontact/Kaart', 'Factuur op termijn') or betaalmethode is null),
+  status text not null default 'Gepland' check (status in ('Gepland', 'Te vergoeden', 'Betaald', 'Afgerond')),
+  partij_id uuid references partijen(id) on delete set null,        -- externe leverancier/sponsor/overheid
+  medewerker_user_id uuid references users(id) on delete set null,  -- interne leiding die voorschoot
+  bewijsstuk_url text,                        -- link naar foto/scan van bonnetje of factuur
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_evenement_transacties_evenement on evenement_transacties(evenement_id);
+
 -- ============ ROW LEVEL SECURITY ============
 -- Ingeschakeld zodat enkel de backend (via service_role key) mag schrijven;
 -- gedetailleerde policies per rol voegen we toe zodra de rolmapping compleet is.

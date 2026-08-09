@@ -24,6 +24,11 @@ export default function Layout({ session, children }) {
         { href: "/bestellingen", label: "Bestellingen" },
       ],
     },
+    {
+      href: "/evenementen",
+      label: "Evenementen",
+      children: [{ href: "/partijen", label: "Partijen" }],
+    },
   ];
   if (recht === "admin") {
     groups.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen", children: [] });
@@ -50,7 +55,9 @@ export default function Layout({ session, children }) {
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2 }}>
           {groups.map((g) => {
             const kindActief = g.children.some((c) => pathname === c.href);
-            const actief = pathname === g.href;
+            // startsWith zodat dynamische subpagina's (bv. /evenementen/<id>, niet
+            // apart in het menu opgelijst) hun groep toch actief/uitgeklapt tonen.
+            const actief = pathname === g.href || pathname.startsWith(g.href + "/");
             const uitgeklapt = actief || kindActief;
             return (
               <div key={g.href}>
