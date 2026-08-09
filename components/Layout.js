@@ -7,9 +7,10 @@ export default function Layout({ session, children }) {
   const recht = session?.user?.platformRecht;
 
   const links = [
-    { href: "/", label: "Dashboard" },
+    { href: "/", label: "Jaaroverzicht" },
     { href: "/kasboek", label: "Kasboek" },
-    { href: "/kasboek/upload", label: "CSV Upload" },
+    { href: "/kasboek/upload", label: "↳ CSV Upload", indent: true },
+    { href: "/streepjes", label: "Streepjes" },
   ];
   if (recht === "admin") {
     links.push({ href: "/beheer/gebruikers", label: "Gebruikers & rollen" });
