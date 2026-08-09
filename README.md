@@ -5,8 +5,10 @@ Fase 1: gebruikers/rollen (via Discord OAuth2) + kasboek, met een echte database
 ## Wat staat er al
 
 - Echte Discord-login (OAuth2) via NextAuth — geen nep-login meer
-- Discord-rollen worden opgehaald en vertaald naar een platformrecht (`admin` /
-  `financieel_verantwoordelijke` / `lid`) via de `discord_role_mapping`-tabel
+- Elke gebruiker krijgt een platformrecht (`admin` / `financieel_verantwoordelijke` /
+  `lid`), standaard `lid`. Een admin kent dit handmatig toe via het beheerscherm
+  (`/beheer/gebruikers`) — dit staat los van iemands Discord-rol, zodat een
+  wijziging in Discord nooit per ongeluk iemands platformrechten verandert
 - Databaseschema (`supabase/schema.sql`) met users, werkjaren, rekeningen,
   categorieën, transacties (incl. interne transacties), fv per persoon
 - Elke inlogger wordt automatisch aangemaakt/bijgewerkt in de `users`-tabel,
@@ -14,8 +16,9 @@ Fase 1: gebruikers/rollen (via Discord OAuth2) + kasboek, met een echte database
 
 ## Wat nog moet gebeuren voor dit 100% "af" is
 
-- Rol-ID's invullen in `discord_role_mapping` zodra je die van de servereigenaar hebt
-- Kasboek-, fv- en rollenbeheer-schermen (UI) bovenop dit fundament bouwen
+- Eerste admin handmatig aanduiden in Supabase (zie hieronder) — daarna kan die
+  persoon verder iedereen via het beheerscherm rechten geven
+- Kasboek-, fv- en rollenbeheer-schermen (UI) verder afwerken
 - Saldo-per-transactie-berekening en dynamische jaarvergelijking
 - KBC CSV-import aankoppelen op de nieuwe database (nu nog los)
 
@@ -38,14 +41,10 @@ Fase 1: gebruikers/rollen (via Discord OAuth2) + kasboek, met een echte database
    `https://jouw-project.vercel.app/api/auth/callback/discord` toe als Redirect
 5. Deploy
 
-## Rol-ID's koppelen
+## Eerste admin instellen
 
-Zodra je de rol-ID's van de servereigenaar hebt, voeg je ze toe via de
-Supabase Table Editor in `discord_role_mapping`, bijvoorbeeld:
-
-| discord_role_id | discord_role_naam | platform_recht |
-|---|---|---|
-| 111111111111111111 | Hoofdleiding | admin |
-| 222222222222222222 | Financiën | financieel_verantwoordelijke |
-
-Iedereen zonder gekoppelde rol krijgt automatisch `lid` (kan enkel eigen fv zien).
+Iedereen die inlogt krijgt standaard `lid` als platformrecht. Om de eerste
+admin aan te duiden (waarna die persoon verder alle rechten via het
+beheerscherm kan toekennen), log je eenmalig in met Discord en werk je
+daarna in de Supabase Table Editor je eigen rij in `users` bij:
+zet `platform_recht` op `admin`.

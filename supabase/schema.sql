@@ -12,18 +12,11 @@ create table if not exists users (
   type text not null default 'Leiding' check (type in ('Hoofdleiding', 'Leiding', 'Logistiek')),
   groep text check (groep in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi') or groep is null),
   verantwoordelijkheden text[] default '{}',
+  -- Platformrecht wordt handmatig toegekend door een admin via het beheerscherm
+  -- (niet automatisch uit Discord-rollen gehaald — zie README).
+  platform_recht text not null default 'lid' check (platform_recht in ('admin', 'financieel_verantwoordelijke', 'lid')),
   created_at timestamptz default now(),
   updated_at timestamptz default now()
-);
-
--- Koppeltabel: welke Discord-rol-ID geeft welk platformrecht.
--- Rol-ID's worden hier ingevuld zodra ze gekend zijn — de rest van de app hangt hier niet van af.
-create table if not exists discord_role_mapping (
-  id uuid primary key default gen_random_uuid(),
-  discord_role_id text unique not null,
-  discord_role_naam text,                  -- puur informatief, voor leesbaarheid in de UI
-  platform_recht text not null check (platform_recht in ('admin', 'financieel_verantwoordelijke', 'lid')),
-  created_at timestamptz default now()
 );
 
 -- ============ WERKJAREN & REKENINGEN ============
@@ -126,4 +119,3 @@ alter table users enable row level security;
 alter table transacties enable row level security;
 alter table fv_regels enable row level security;
 alter table fv_status enable row level security;
-alter table discord_role_mapping enable row level security;
