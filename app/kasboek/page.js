@@ -37,7 +37,8 @@ export default function Kasboek() {
 
   // Basisdata laden: werkjaren + categorieën
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status === "loading") return;
+    if (status !== "authenticated") { setLoading(false); return; }
     Promise.all([
       fetch("/api/werkjaren").then((r) => r.json()),
       fetch("/api/categorieen").then((r) => r.json()),

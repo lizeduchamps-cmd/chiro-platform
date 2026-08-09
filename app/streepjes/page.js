@@ -56,7 +56,9 @@ export default function Streepjes() {
   };
 
   useEffect(() => {
+    if (status === "loading") return;
     if (status === "authenticated") laden();
+    else setLoading(false);
   }, [status]);
 
   useEffect(() => {

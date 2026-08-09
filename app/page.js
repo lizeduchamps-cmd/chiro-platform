@@ -37,7 +37,8 @@ export default function Jaaroverzicht() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status === "loading") return;
+    if (status !== "authenticated") { setLoading(false); return; }
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
       if (d.werkjaren?.length) { setWerkjaren(d.werkjaren); setWerkjaarId(d.werkjaren[0].id); }
       setLoading(false);

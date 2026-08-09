@@ -27,7 +27,8 @@ export default function GebruikersBeheer() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (status !== "authenticated") return;
+    if (status === "loading") return;
+    if (status !== "authenticated") { setLoading(false); return; }
     fetch("/api/gebruikers")
       .then((r) => r.json())
       .then((data) => {
