@@ -71,3 +71,21 @@ export async function PATCH(req) {
 
   return NextResponse.json({ ok: true });
 }
+
+export async function DELETE(req) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.user.platformRecht !== "admin") {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
+
+  const id = new URL(req.url).searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  if (id === session.user.userId) {
+    return NextResponse.json({ error: "Je kan jezelf niet verwijderen" }, { status: 400 });
+  }
+
+  const { error } = await supabaseAdmin.from("users").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
