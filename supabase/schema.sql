@@ -424,6 +424,44 @@ create table if not exists kamp_transacties (
 
 create index if not exists idx_kamp_transacties_werkjaar on kamp_transacties(werkjaar_id);
 
+-- ============ DOCUMENTEN (bonnetjes/facturen) ============
+-- Bestand zelf staat in de Supabase Storage-bucket 'documenten' (bestand_pad
+-- is het pad daarin) — hier enkel de metadata. Een document splits je op in
+-- bon_regels; zodra de som van de regels het totaalbedrag dekt kan je
+-- "verwerken" klikken, wat elke regel automatisch als transactie aanmaakt op
+-- zijn bestemming (kamp_transacties, evenement_transacties of fv_regels).
+create table if not exists documenten (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  titel text not null,
+  bestand_pad text not null,
+  bestand_type text,
+  totaalbedrag numeric(10,2) not null,
+  gekoppeld_aan text check (gekoppeld_aan in ('kamp', 'evenement') or gekoppeld_aan is null),
+  evenement_id uuid references evenementen(id) on delete set null,
+  status text not null default 'Nog te verwerken' check (status in ('Nog te verwerken', 'Verwerkt')),
+  geupload_door_user_id uuid references users(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_documenten_werkjaar on documenten(werkjaar_id);
+
+create table if not exists bon_regels (
+  id uuid primary key default gen_random_uuid(),
+  document_id uuid references documenten(id) on delete cascade,
+  omschrijving text not null,
+  bedrag numeric(10,2) not null,
+  bestemming text not null check (bestemming in ('kamp', 'evenement', 'fv')),
+  kamp_hoofdcategorie text,                    -- ingevuld als bestemming = 'kamp'
+  evenement_id uuid references evenementen(id) on delete set null,  -- ingevuld als bestemming = 'evenement'
+  evenement_hoofdcategorie text,
+  fv_user_id uuid references users(id) on delete set null,          -- ingevuld als bestemming = 'fv'
+  fv_maand_id uuid references fv_maanden(id) on delete set null,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_bon_regels_document on bon_regels(document_id);
+
 -- ============ ROW LEVEL SECURITY ============
 -- Deze app gebruikt geen Supabase Auth (login loopt via NextAuth/Discord, zie
 -- lib/auth.js) — er is dus geen auth.uid() beschikbaar om policies op te
@@ -461,3 +499,14 @@ alter table wisselgeld_aanvragen enable row level security;
 alter table kalender_items enable row level security;
 alter table kamp_categorieen enable row level security;
 alter table kamp_transacties enable row level security;
+alter table documenten enable row level security;
+alter table bon_regels enable row level security;
+
+-- ============ STORAGE ============
+-- Private bucket voor documenten (bonnetjes/facturen) — enkel toegankelijk
+-- via de service_role key (supabaseAdmin), net als de databasetabellen. De
+-- backend genereert telkens een tijdelijke signed URL om een bestand te
+-- tonen; er is geen publieke/permanente link.
+insert into storage.buckets (id, name, public)
+values ('documenten', 'documenten', false)
+on conflict (id) do nothing;

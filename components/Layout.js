@@ -45,6 +45,7 @@ export default function Layout({ session, children }) {
       ],
     },
     { href: "/wisselgeld", label: "Wisselgeld", children: [] },
+    { href: "/documenten", label: "Documenten", children: [] },
     { href: "/kalender", label: "Kalender", children: [] },
   ];
   if (recht === "admin") {
