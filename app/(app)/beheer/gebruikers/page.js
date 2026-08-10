@@ -11,32 +11,29 @@ const RECHTEN = [
   { value: "financieel_verantwoordelijke", label: "Financieel verantwoordelijke" },
   { value: "lid", label: "Lid (enkel eigen fv)" },
 ];
-const VERANTWOORDELIJKHEDEN = [
-  "Financiën",
-  "Ledenadministratie",
-  "Taartenslag",
-  "Vlaams weekend",
-  "De fuif",
-  "Winkelverantwoordelijke",
-];
 
 export default function GebruikersBeheer() {
   const { data: session } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
   const [users, setUsers] = useState([]);
+  const [verantwoordelijkheden, setVerantwoordelijkheden] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  useEffect(() => {
+  const laden = () =>
     fetch("/api/gebruikers")
       .then((r) => r.json())
       .then((data) => {
         if (data.error) setError(data.error);
-        else setUsers(data.users);
+        else {
+          setUsers(data.users);
+          setVerantwoordelijkheden(data.verantwoordelijkheden || []);
+        }
       })
       .finally(() => setLoading(false));
-  }, []);
+
+  useEffect(() => { laden(); }, []);
 
   if (loading) {
     return (
@@ -59,12 +56,58 @@ export default function GebruikersBeheer() {
     });
   };
 
-  const toggleVerantwoordelijkheid = (u, v) => {
-    const has = (u.verantwoordelijkheden || []).includes(v);
-    const nieuw = has
-      ? u.verantwoordelijkheden.filter((x) => x !== v)
-      : [...(u.verantwoordelijkheden || []), v];
-    updateUser(u.id, { verantwoordelijkheden: nieuw });
+  const toggleVerantwoordelijkheid = async (u, v) => {
+    const heeft = u.verantwoordelijkheden.some((x) => x.id === v.id);
+    if (heeft) {
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, verantwoordelijkheden: x.verantwoordelijkheden.filter((y) => y.id !== v.id) } : x)));
+      await fetch(`/api/verantwoordelijkheden/toewijzingen?verantwoordelijkheidId=${v.id}&userId=${u.id}`, { method: "DELETE" });
+    } else {
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, verantwoordelijkheden: [...x.verantwoordelijkheden, { id: v.id, naam: v.naam, isHoofdverantwoordelijke: false }] } : x)));
+      await fetch("/api/verantwoordelijkheden/toewijzingen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ verantwoordelijkheidId: v.id, userId: u.id, isHoofdverantwoordelijke: false }),
+      });
+    }
+    laden();
+  };
+
+  const hoofdverantwoordelijkeInstellen = async (verantwoordelijkheidId, userId) => {
+    if (!userId) return;
+    await fetch("/api/verantwoordelijkheden/toewijzingen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ verantwoordelijkheidId, userId, isHoofdverantwoordelijke: true }),
+    });
+    laden();
+    toast.success("Hoofdverantwoordelijke ingesteld");
+  };
+
+  const nieuweVerantwoordelijkheid = async () => {
+    const naam = prompt("Naam van de nieuwe verantwoordelijkheid:");
+    if (!naam?.trim()) return;
+    const res = await fetch("/api/verantwoordelijkheden", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ naam: naam.trim() }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    laden();
+    toast.success(`Verantwoordelijkheid "${naam.trim()}" toegevoegd`);
+  };
+
+  const verantwoordelijkheidVerwijderen = async (v) => {
+    const ok = await confirm({
+      title: "Verantwoordelijkheid verwijderen",
+      message: `"${v.naam}" verwijderen? Dit haalt de toewijzing ook bij iedereen weg.`,
+      danger: true,
+      bevestigLabel: "Verwijderen",
+    });
+    if (!ok) return;
+    await fetch(`/api/verantwoordelijkheden?id=${v.id}`, { method: "DELETE" });
+    laden();
+    toast.success("Verantwoordelijkheid verwijderd");
   };
 
   const nieuweGebruiker = async () => {
@@ -109,6 +152,47 @@ export default function GebruikersBeheer() {
         Wijs hier per persoon het type, de groep, verantwoordelijkheden en platformrecht toe.
         Wijzigingen worden meteen opgeslagen.
       </p>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+          <div style={{ fontWeight: 600, fontSize: 14 }}>Verantwoordelijkheden</div>
+          <button onClick={nieuweVerantwoordelijkheid} style={{ fontSize: 12 }}>+ Nieuwe verantwoordelijkheid</button>
+        </div>
+        {verantwoordelijkheden.length === 0 ? (
+          <p className="muted" style={{ fontStyle: "italic", fontSize: 13 }}>Nog geen verantwoordelijkheden aangemaakt.</p>
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Naam</th>
+                  <th>Hoofdverantwoordelijke</th>
+                  <th>Medeverantwoordelijken</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {verantwoordelijkheden.map((v) => (
+                  <tr key={v.id}>
+                    <td style={{ fontWeight: 600 }}>{v.naam}</td>
+                    <td>
+                      <select value={v.hoofdverantwoordelijke?.id || ""} onChange={(e) => hoofdverantwoordelijkeInstellen(v.id, e.target.value)} style={{ fontSize: 12 }}>
+                        <option value="">- niemand -</option>
+                        {users.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
+                      </select>
+                    </td>
+                    <td className="muted" style={{ fontSize: 12 }}>
+                      {v.medeverantwoordelijken.length > 0 ? v.medeverantwoordelijken.map((m) => m.naam).join(", ") : "-"}
+                    </td>
+                    <td><button className="btn-danger" onClick={() => verantwoordelijkheidVerwijderen(v)}>🗑️</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="table-wrap" style={{ overflowX: "auto" }}>
         <table>
           <thead>
@@ -145,16 +229,19 @@ export default function GebruikersBeheer() {
                   </select>
                 </td>
                 <td>
-                  {VERANTWOORDELIJKHEDEN.map((v) => (
-                    <label key={v} style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 10, fontSize: 12 }}>
-                      <input
-                        type="checkbox"
-                        checked={(u.verantwoordelijkheden || []).includes(v)}
-                        onChange={() => toggleVerantwoordelijkheid(u, v)}
-                      />
-                      {v}
-                    </label>
-                  ))}
+                  {verantwoordelijkheden.map((v) => {
+                    const toegewezen = u.verantwoordelijkheden.find((x) => x.id === v.id);
+                    return (
+                      <label key={v.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 10, fontSize: 12 }}>
+                        <input
+                          type="checkbox"
+                          checked={!!toegewezen}
+                          onChange={() => toggleVerantwoordelijkheid(u, v)}
+                        />
+                        {v.naam}{toegewezen?.isHoofdverantwoordelijke && " ★"}
+                      </label>
+                    );
+                  })}
                 </td>
                 <td>
                   <select value={u.platform_recht || "lid"} onChange={(e) => updateUser(u.id, { platform_recht: e.target.value })}>

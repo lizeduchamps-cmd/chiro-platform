@@ -12,7 +12,6 @@ create table if not exists users (
   iban text,                               -- eigen rekeningnummer, voor terugbetalingen (bv. kilometers)
   type text not null default 'Leiding' check (type in ('Hoofdleiding', 'Leiding', 'Logistiek', 'Aspi')),
   groep text check (groep in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi') or groep is null),
-  verantwoordelijkheden text[] default '{}',
   -- Platformrecht wordt handmatig toegekend door een admin via het beheerscherm
   -- (niet automatisch uit Discord-rollen gehaald — zie README).
   platform_recht text not null default 'lid' check (platform_recht in ('admin', 'financieel_verantwoordelijke', 'lid')),
@@ -22,6 +21,30 @@ create table if not exists users (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
+
+-- Vervangt de vroegere users.verantwoordelijkheden text[] — een echte tabel
+-- zodat een verantwoordelijkheid een naam, een hoofdverantwoordelijke én
+-- medeverantwoordelijken kan hebben (een tag in een array kon dat niet).
+-- session.user.verantwoordelijkheden blijft voor de rest van de app gewoon
+-- een array van namen (zie lib/auth.js), dus evenementMatchTag() e.d. hoeven
+-- niet aangepast te worden.
+create table if not exists verantwoordelijkheden (
+  id uuid primary key default gen_random_uuid(),
+  naam text unique not null,
+  created_at timestamptz default now()
+);
+
+create table if not exists user_verantwoordelijkheden (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  verantwoordelijkheid_id uuid references verantwoordelijkheden(id) on delete cascade,
+  is_hoofdverantwoordelijke boolean not null default false,
+  created_at timestamptz default now(),
+  unique(user_id, verantwoordelijkheid_id)
+);
+
+create index if not exists idx_user_verant_user on user_verantwoordelijkheden(user_id);
+create index if not exists idx_user_verant_verant on user_verantwoordelijkheden(verantwoordelijkheid_id);
 
 -- ============ INSTELLINGEN ============
 -- Generieke key/waarde-tabel voor platforminstellingen (bv. prijs per streepje).
@@ -402,10 +425,39 @@ create table if not exists kamp_transacties (
 create index if not exists idx_kamp_transacties_werkjaar on kamp_transacties(werkjaar_id);
 
 -- ============ ROW LEVEL SECURITY ============
--- Ingeschakeld zodat enkel de backend (via service_role key) mag schrijven;
--- gedetailleerde policies per rol voegen we toe zodra de rolmapping compleet is.
-
+-- Deze app gebruikt geen Supabase Auth (login loopt via NextAuth/Discord, zie
+-- lib/auth.js) — er is dus geen auth.uid() beschikbaar om policies op te
+-- baseren, en alle databasetoegang loopt uitsluitend server-side via
+-- supabaseAdmin (service_role key, die RLS altijd omzeilt). De publieke
+-- anon-key-client (createBrowserSupabaseClient in lib/supabase.js) wordt
+-- nergens aangeroepen. Concreet betekent dit: RLS aan + geen policies =
+-- volledig afgesloten voor de anon/authenticated-rol, enkel de backend kan
+-- erbij — precies wat we willen. Mocht er ooit rechtstreekse client-side
+-- Supabase-toegang nodig zijn (bv. realtime), dan is een echte
+-- auth-integratie nodig vóór policies hier zinvol worden.
 alter table users enable row level security;
+alter table verantwoordelijkheden enable row level security;
+alter table user_verantwoordelijkheden enable row level security;
+alter table instellingen enable row level security;
+alter table werkjaren enable row level security;
+alter table rekeningen enable row level security;
+alter table evenementen enable row level security;
+alter table categorieen enable row level security;
+alter table categorisatie_regels enable row level security;
 alter table transacties enable row level security;
+alter table csv_imports enable row level security;
+alter table fv_maanden enable row level security;
 alter table fv_regels enable row level security;
 alter table fv_status enable row level security;
+alter table bestellingen enable row level security;
+alter table bestelling_regels enable row level security;
+alter table evenement_kassas enable row level security;
+alter table evenement_categorieen enable row level security;
+alter table evenement_budgetten enable row level security;
+alter table evenement_transacties enable row level security;
+alter table kamp_tarieven enable row level security;
+alter table groepsbudgetten enable row level security;
+alter table wisselgeld_aanvragen enable row level security;
+alter table kalender_items enable row level security;
+alter table kamp_categorieen enable row level security;
+alter table kamp_transacties enable row level security;

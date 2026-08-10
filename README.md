@@ -1,26 +1,44 @@
 # Chiro Hoepertingen — Financiënplatform
 
-Fase 1: gebruikers/rollen (via Discord OAuth2) + kasboek, met een echte database (Supabase).
+Financiënplatform voor Chiro Hoepertingen: gebruikers/rollen (via Discord OAuth2),
+kasboek, Financieel Verslag, evenementen en kampbeheer, met een echte database
+(Supabase).
 
 ## Wat staat er al
 
-- Echte Discord-login (OAuth2) via NextAuth — geen nep-login meer
-- Elke gebruiker krijgt een platformrecht (`admin` / `financieel_verantwoordelijke` /
-  `lid`), standaard `lid`. Een admin kent dit handmatig toe via het beheerscherm
-  (`/beheer/gebruikers`) — dit staat los van iemands Discord-rol, zodat een
-  wijziging in Discord nooit per ongeluk iemands platformrechten verandert
-- Databaseschema (`supabase/schema.sql`) met users, werkjaren, rekeningen,
-  categorieën, transacties (incl. interne transacties), fv per persoon
-- Elke inlogger wordt automatisch aangemaakt/bijgewerkt in de `users`-tabel,
-  gekoppeld aan hun Discord ID (niet hun gebruikersnaam)
+- Echte Discord-login (OAuth2) via NextAuth. Elke gebruiker krijgt een
+  platformrecht (`admin` / `financieel_verantwoordelijke` / `lid`), standaard
+  `lid` — een admin kent dit handmatig toe via `/beheer/gebruikers`, los van
+  iemands Discord-rol
+- **Kasboek**: transacties (zicht-/spaarrekening, interne overschrijvingen),
+  saldoberekening per rekening, categorieën met automatische
+  categorisatieregels, KBC Touch CSV-import met duplicaatdetectie en
+  importhistoriek
+- **Financieel Verslag (FV)**: maandelijkse afrekening per persoon
+  (streepjes/online drank, kilometervergoeding, bestellingen, handmatige
+  regels), gegroepeerd per type (Leiding/Logistiek/Aspi), met "slim plakken"
+  om lijstjes (kilometers, bestellingen) in bulk te verwerken
+  (`lib/smartPaste.js`)
+- **Bestellingen**: een rekening (frituur, pizza, ...) per persoon opsplitsen
+  en in bulk verdelen over ieders FV
+- **Evenementen**: kassabeheer (incl. briefjes/muntjes-teller), budget per
+  hoofdcategorie, kosten-/inkomstenlogboek met klik-om-te-bewerken
+  transacties, koppeling met kasboektransacties om dubbel boeken te vermijden
+- **Kamp**: Kampdashboard, Kampbudgetten (gedeelde tarieven winkelen/
+  dropping/weekend per leeftijdsgroep), Kampkosten (kosten/inkomsten per
+  afdeling, telt automatisch mee tegen het kampbudget), Wisselgeld-aanvragen
+  met statusflow, een volledige Kalender die FV-deadlines, wisselgeld en
+  evenementen automatisch toont
+- Jaaroverzicht met aandachtspunten-dashboard (wat vraagt actie, over alle
+  modules heen) en een grafiek per maand
+- Toasts/undo/bevestigingsmodals i.p.v. browser alert()/confirm(), skeleton-
+  loaders, mobielvriendelijke layout
 
-## Wat nog moet gebeuren voor dit 100% "af" is
+## Wat nog moet gebeuren
 
-- Eerste admin handmatig aanduiden in Supabase (zie hieronder) — daarna kan die
-  persoon verder iedereen via het beheerscherm rechten geven
-- Kasboek-, fv- en rollenbeheer-schermen (UI) verder afwerken
-- Saldo-per-transactie-berekening en dynamische jaarvergelijking
-- KBC CSV-import aankoppelen op de nieuwe database (nu nog los)
+Zie [`TAKENLIJST-FINANCIEN.md`](./TAKENLIJST-FINANCIEN.md) voor de actuele,
+gefaseerde takenlijst (opruimwerk, RLS-policies, documentenmodule,
+kilometers als eigen tabel, automatisering, ...).
 
 ## Lokaal opstarten
 

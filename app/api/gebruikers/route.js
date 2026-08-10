@@ -10,13 +10,33 @@ export async function GET() {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .select("id, naam, discord_username, type, groep, verantwoordelijkheden, platform_recht, iban")
-    .order("naam");
+  const [{ data: users, error: usersError }, { data: verantwoordelijkheden, error: verantError }, { data: toewijzingen, error: toewijzingenError }] = await Promise.all([
+    supabaseAdmin.from("users").select("id, naam, discord_username, type, groep, platform_recht, iban").order("naam"),
+    supabaseAdmin.from("verantwoordelijkheden").select("id, naam").order("naam"),
+    supabaseAdmin.from("user_verantwoordelijkheden").select("id, user_id, verantwoordelijkheid_id, is_hoofdverantwoordelijke, users(naam), verantwoordelijkheden(naam)"),
+  ]);
+  if (usersError) return NextResponse.json({ error: usersError.message }, { status: 500 });
+  if (verantError) return NextResponse.json({ error: verantError.message }, { status: 500 });
+  if (toewijzingenError) return NextResponse.json({ error: toewijzingenError.message }, { status: 500 });
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ users: data });
+  const usersMetVerant = (users || []).map((u) => ({
+    ...u,
+    verantwoordelijkheden: (toewijzingen || [])
+      .filter((t) => t.user_id === u.id)
+      .map((t) => ({ id: t.verantwoordelijkheid_id, naam: t.verantwoordelijkheden?.naam, isHoofdverantwoordelijke: t.is_hoofdverantwoordelijke })),
+  }));
+
+  const verantMetToewijzingen = (verantwoordelijkheden || []).map((v) => {
+    const rijen = (toewijzingen || []).filter((t) => t.verantwoordelijkheid_id === v.id);
+    const hoofdRij = rijen.find((r) => r.is_hoofdverantwoordelijke);
+    return {
+      ...v,
+      hoofdverantwoordelijke: hoofdRij ? { id: hoofdRij.user_id, naam: hoofdRij.users?.naam } : null,
+      medeverantwoordelijken: rijen.filter((r) => !r.is_hoofdverantwoordelijke).map((r) => ({ id: r.user_id, naam: r.users?.naam })),
+    };
+  });
+
+  return NextResponse.json({ users: usersMetVerant, verantwoordelijkheden: verantMetToewijzingen });
 }
 
 export async function POST(req) {
@@ -43,11 +63,11 @@ export async function POST(req) {
       discord_username: discordUsername,
       naam: naam || discordUsername,
     })
-    .select("id, naam, discord_username, type, groep, verantwoordelijkheden, platform_recht, iban")
+    .select("id, naam, discord_username, type, groep, platform_recht, iban")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ user: data });
+  return NextResponse.json({ user: { ...data, verantwoordelijkheden: [] } });
 }
 
 export async function PATCH(req) {
@@ -57,13 +77,12 @@ export async function PATCH(req) {
   }
 
   const body = await req.json();
-  const { id, type, groep, verantwoordelijkheden, platform_recht, iban } = body;
+  const { id, type, groep, platform_recht, iban } = body;
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
 
   const updateFields = { updated_at: new Date().toISOString() };
   if (type !== undefined) updateFields.type = type;
   if (groep !== undefined) updateFields.groep = groep || null;
-  if (verantwoordelijkheden !== undefined) updateFields.verantwoordelijkheden = verantwoordelijkheden;
   if (platform_recht !== undefined) updateFields.platform_recht = platform_recht;
   if (iban !== undefined) updateFields.iban = iban || null;
 
