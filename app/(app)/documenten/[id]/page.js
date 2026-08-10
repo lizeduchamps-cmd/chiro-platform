@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
 import { AFDELINGEN_VOLGORDE } from "@/lib/kampAfdelingen";
+import { parseKassabon } from "@/lib/receiptParser";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -25,6 +26,9 @@ export default function DocumentDetail({ params }) {
   const [gebruikers, setGebruikers] = useState([]);
   const [fvMaanden, setFvMaanden] = useState([]);
   const [nieuweRegel, setNieuweRegel] = useState(LEGE_REGEL);
+  const [scanBezig, setScanBezig] = useState(false);
+  const [scanKandidaten, setScanKandidaten] = useState(null);
+  const [evenementCategorieenPerEvenement, setEvenementCategorieenPerEvenement] = useState({});
 
   const laden = () => fetch(`/api/documenten/overzicht?id=${id}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
 
@@ -95,6 +99,83 @@ export default function DocumentDetail({ params }) {
     });
   };
 
+  // Zuivere OCR (Tesseract.js, draait in de browser) + een regex-parser om
+  // productregels te herkennen — geen AI/LLM. De mens controleert en
+  // corrigeert altijd voor er iets bevestigd wordt, net als bij een manueel
+  // ingevulde regel.
+  const scanStarten = async () => {
+    if (!signedUrl) return;
+    setScanBezig(true);
+    try {
+      const Tesseract = (await import("tesseract.js")).default;
+      const {
+        data: { text },
+      } = await Tesseract.recognize(signedUrl, "nld");
+      const kandidaten = parseKassabon(text);
+      if (kandidaten.length === 0) {
+        toast.error("Geen regels herkend op dit bonnetje. Vul ze hieronder handmatig in, of pas de foto aan (scherper/rechter).");
+      }
+      const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
+      setScanKandidaten(
+        kandidaten.map((k) => ({
+          omschrijving: k.omschrijving,
+          bedrag: String(k.bedrag),
+          bestemming: standaardBestemming,
+          kampHoofdcategorie: "",
+          evenementId: "",
+          evenementHoofdcategorie: "",
+          fvUserId: "",
+          fvMaandId: "",
+        }))
+      );
+    } catch (err) {
+      toast.error("OCR mislukt: " + err.message);
+    } finally {
+      setScanBezig(false);
+    }
+  };
+
+  const laadEvenementCategorieenVoorRij = async (evenementId) => {
+    if (!evenementId || evenementCategorieenPerEvenement[evenementId]) return;
+    const d = await fetch(`/api/evenementen/overzicht?evenementId=${evenementId}`).then((r) => r.json());
+    setEvenementCategorieenPerEvenement((prev) => ({ ...prev, [evenementId]: d.categorieen || [] }));
+  };
+
+  const scanRijWijzigen = (index, veld, waarde) => {
+    setScanKandidaten((prev) => prev.map((r, i) => (i === index ? { ...r, [veld]: waarde } : r)));
+    if (veld === "evenementId") laadEvenementCategorieenVoorRij(waarde);
+  };
+
+  const scanRijVerwijderen = (index) => {
+    setScanKandidaten((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const scanBevestigen = async () => {
+    const onvolledig = scanKandidaten.filter(
+      (r) =>
+        !r.omschrijving ||
+        !r.bedrag ||
+        (r.bestemming === "evenement" && !r.evenementId) ||
+        (r.bestemming === "fv" && (!r.fvUserId || !r.fvMaandId))
+    );
+    if (onvolledig.length > 0) return toast.error("Vul voor elke regel een omschrijving, bedrag en bestemming in (of verwijder de regel).");
+    setScanBezig(true);
+    await Promise.all(
+      scanKandidaten.map((r) =>
+        fetch("/api/documenten/regels", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ documentId: id, ...r }),
+        })
+      )
+    );
+    setScanBezig(false);
+    const aantal = scanKandidaten.length;
+    setScanKandidaten(null);
+    laden();
+    toast.success(`${aantal} regel(s) toegevoegd vanuit de scan`);
+  };
+
   const verwerken = async () => {
     const ok = await confirm({
       title: "Document verwerken",
@@ -135,6 +216,107 @@ export default function DocumentDetail({ params }) {
             </a>
           ) : (
             <a href={signedUrl} target="_blank" rel="noreferrer">📄 Bekijk document ↗</a>
+          )}
+        </div>
+      )}
+
+      {magBewerken && !isVerwerkt && signedUrl && document.bestand_type?.startsWith("image/") && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Bonnetje scannen</div>
+          {!scanKandidaten ? (
+            <>
+              <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                Leest tekst van de foto (OCR, geen AI) en herkent regels met een product en een prijs. Controleer en vul aan voor je bevestigt.
+              </p>
+              <button className="btn-primary" disabled={scanBezig} onClick={scanStarten}>
+                {scanBezig ? "Bezig met scannen..." : "📷 Bonnetje scannen"}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                {scanKandidaten.length === 0
+                  ? "Niets herkend — pas gerust handmatig aan via 'Regel toevoegen' hieronder."
+                  : `${scanKandidaten.length} regel(s) herkend. Controleer omschrijving, bedrag en bestemming voor je bevestigt.`}
+              </p>
+              {scanKandidaten.length > 0 && (
+                <div className="table-wrap" style={{ marginBottom: 8 }}>
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>Omschrijving</th>
+                        <th style={{ textAlign: "right" }}>Bedrag</th>
+                        <th>Bestemming</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {scanKandidaten.map((r, i) => (
+                        <tr key={i}>
+                          <td><input value={r.omschrijving} onChange={(e) => scanRijWijzigen(i, "omschrijving", e.target.value)} style={{ fontSize: 12, width: 160 }} /></td>
+                          <td style={{ textAlign: "right" }}>
+                            <input type="number" step="0.01" value={r.bedrag} onChange={(e) => scanRijWijzigen(i, "bedrag", e.target.value)} style={{ fontSize: 12, width: 70, textAlign: "right" }} />
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                              <select value={r.bestemming} onChange={(e) => scanRijWijzigen(i, "bestemming", e.target.value)} style={{ fontSize: 12 }}>
+                                <option value="kamp">Kamp</option>
+                                <option value="evenement">Evenement</option>
+                                <option value="fv">FV (persoon)</option>
+                              </select>
+                              {r.bestemming === "kamp" && (
+                                <select value={r.kampHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "kampHoofdcategorie", e.target.value)} style={{ fontSize: 12 }}>
+                                  <option value="">Hoofdcategorie...</option>
+                                  <optgroup label="Afdeling">
+                                    {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
+                                  </optgroup>
+                                  <optgroup label="Algemeen">
+                                    {kampCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                                  </optgroup>
+                                </select>
+                              )}
+                              {r.bestemming === "evenement" && (
+                                <>
+                                  <select value={r.evenementId} onChange={(e) => scanRijWijzigen(i, "evenementId", e.target.value)} style={{ fontSize: 12 }}>
+                                    <option value="">Evenement...</option>
+                                    {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
+                                  </select>
+                                  <select value={r.evenementHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "evenementHoofdcategorie", e.target.value)} disabled={!r.evenementId} style={{ fontSize: 12 }}>
+                                    <option value="">Hoofdcategorie...</option>
+                                    {(evenementCategorieenPerEvenement[r.evenementId] || []).map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                                  </select>
+                                </>
+                              )}
+                              {r.bestemming === "fv" && (
+                                <>
+                                  <select value={r.fvUserId} onChange={(e) => scanRijWijzigen(i, "fvUserId", e.target.value)} style={{ fontSize: 12 }}>
+                                    <option value="">Persoon...</option>
+                                    {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                                  </select>
+                                  <select value={r.fvMaandId} onChange={(e) => scanRijWijzigen(i, "fvMaandId", e.target.value)} style={{ fontSize: 12 }}>
+                                    <option value="">FV-maand...</option>
+                                    {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
+                                  </select>
+                                </>
+                              )}
+                            </div>
+                          </td>
+                          <td><button className="btn-danger" onClick={() => scanRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <div style={{ display: "flex", gap: 8 }}>
+                {scanKandidaten.length > 0 && (
+                  <button className="btn-primary" disabled={scanBezig} onClick={scanBevestigen}>
+                    {scanBezig ? "Bezig..." : `Alles toevoegen (${scanKandidaten.length})`}
+                  </button>
+                )}
+                <button onClick={() => setScanKandidaten(null)}>Annuleren</button>
+              </div>
+            </>
           )}
         </div>
       )}
