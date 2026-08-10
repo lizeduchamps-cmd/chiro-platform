@@ -6,6 +6,7 @@ import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
 import { AFDELINGEN_VOLGORDE } from "@/lib/kampAfdelingen";
 import { parseKassabon } from "@/lib/receiptParser";
+import { preprocessKassabon } from "@/lib/receiptImage";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -28,6 +29,8 @@ export default function DocumentDetail({ params }) {
   const [nieuweRegel, setNieuweRegel] = useState(LEGE_REGEL);
   const [scanBezig, setScanBezig] = useState(false);
   const [scanKandidaten, setScanKandidaten] = useState(null);
+  const [scanRuweTekst, setScanRuweTekst] = useState(null);
+  const [scanRuweTekstOpen, setScanRuweTekstOpen] = useState(false);
   const [evenementCategorieenPerEvenement, setEvenementCategorieenPerEvenement] = useState({});
 
   const laden = () => fetch(`/api/documenten/overzicht?id=${id}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
@@ -106,14 +109,31 @@ export default function DocumentDetail({ params }) {
   const scanStarten = async () => {
     if (!signedUrl) return;
     setScanBezig(true);
+    setScanRuweTekst(null);
     try {
-      const Tesseract = (await import("tesseract.js")).default;
+      // Vaal thermisch bonpapier / foto met schaduw is voor ruwe OCR vaak
+      // onleesbaar — eerst opschalen + zwart/wit maken (Otsu) helpt enorm.
+      // Lukt de voorbewerking niet (bv. CORS op de afbeelding), val dan terug
+      // op de ongewijzigde foto in plaats van helemaal te stoppen.
+      let beeld = signedUrl;
+      try {
+        beeld = await preprocessKassabon(signedUrl);
+      } catch {
+        // fallback op signedUrl hierboven
+      }
+
+      const { createWorker, PSM } = await import("tesseract.js");
+      const worker = await createWorker("nld");
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_COLUMN });
       const {
         data: { text },
-      } = await Tesseract.recognize(signedUrl, "nld");
+      } = await worker.recognize(beeld);
+      await worker.terminate();
+
+      setScanRuweTekst(text);
       const kandidaten = parseKassabon(text);
       if (kandidaten.length === 0) {
-        toast.error("Geen regels herkend op dit bonnetje. Vul ze hieronder handmatig in, of pas de foto aan (scherper/rechter).");
+        toast.error("Geen regels herkend op dit bonnetje. Bekijk 'Ruwe OCR-tekst' hieronder om te zien wat er gelezen werd, of vul handmatig in.");
       }
       const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
       setScanKandidaten(
@@ -172,6 +192,7 @@ export default function DocumentDetail({ params }) {
     setScanBezig(false);
     const aantal = scanKandidaten.length;
     setScanKandidaten(null);
+    setScanRuweTekst(null);
     laden();
     toast.success(`${aantal} regel(s) toegevoegd vanuit de scan`);
   };
@@ -239,6 +260,18 @@ export default function DocumentDetail({ params }) {
                   ? "Niets herkend — pas gerust handmatig aan via 'Regel toevoegen' hieronder."
                   : `${scanKandidaten.length} regel(s) herkend. Controleer omschrijving, bedrag en bestemming voor je bevestigt.`}
               </p>
+              {scanRuweTekst && (
+                <div style={{ marginBottom: 8 }}>
+                  <button onClick={() => setScanRuweTekstOpen(!scanRuweTekstOpen)} style={{ fontSize: 11 }}>
+                    {scanRuweTekstOpen ? "▾" : "▸"} Ruwe OCR-tekst tonen
+                  </button>
+                  {scanRuweTekstOpen && (
+                    <pre style={{ fontSize: 11, background: "var(--primary-tint)", padding: 8, borderRadius: 6, marginTop: 6, whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto" }}>
+                      {scanRuweTekst}
+                    </pre>
+                  )}
+                </div>
+              )}
               {scanKandidaten.length > 0 && (
                 <div className="table-wrap" style={{ marginBottom: 8 }}>
                   <table>
@@ -314,7 +347,7 @@ export default function DocumentDetail({ params }) {
                     {scanBezig ? "Bezig..." : `Alles toevoegen (${scanKandidaten.length})`}
                   </button>
                 )}
-                <button onClick={() => setScanKandidaten(null)}>Annuleren</button>
+                <button onClick={() => { setScanKandidaten(null); setScanRuweTekst(null); }}>Annuleren</button>
               </div>
             </>
           )}
