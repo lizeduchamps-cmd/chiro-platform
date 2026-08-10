@@ -65,11 +65,13 @@ export async function GET(req) {
   const inkomstenTransacties = (transacties || []).filter((t) => t.type_geldstroom === "inkomst");
   const uitgaveTransacties = (transacties || []).filter((t) => t.type_geldstroom === "uitgave");
 
-  const gekoppeldInkomsten = (gekoppeldeTransacties || []).filter((t) => t.soort === "inkomst").reduce((s, t) => s + Number(t.bedrag), 0);
-  const gekoppeldUitgaven = (gekoppeldeTransacties || []).filter((t) => t.soort === "uitgave").reduce((s, t) => s + Number(t.bedrag), 0);
-
-  const totaalInkomsten = kassaOmzetTotaal + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0) + gekoppeldInkomsten;
-  const totaalUitgaven = uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0) + gekoppeldUitgaven;
+  // Het kasboek is de enige waarheid voor echt geld — gekoppelde
+  // kasboektransacties tellen daarom bewust NIET mee in de balans hieronder,
+  // die blijft puur wat de groep zelf via kassa's/transacties bijhoudt. Zo
+  // niet zou eenzelfde bedrag dubbel meetellen zodra je (bv. na de
+  // bankstorting) de kasboektransactie aan het evenement koppelt.
+  const totaalInkomsten = kassaOmzetTotaal + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+  const totaalUitgaven = uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
 
   const kostenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost !== "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
   const investeringenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost === "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
