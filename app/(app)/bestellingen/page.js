@@ -461,7 +461,7 @@ export default function Bestellingen() {
                     {plakOpen && (
                       <>
                         <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
-                          Plak een lijst zoals "Aline: mini friet met tomaten ketchup en boulet" (één persoon per regel, producten gescheiden door "met"/"en"). Nadien kan je alles controleren en aanpassen voor je bevestigt.
+                          Plak een lijst zoals "Aline: mini friet met tomaten ketchup en boulet" (één persoon per regel, producten gescheiden door "met", "en" of een komma). Nadien kan je alles controleren en aanpassen voor je bevestigt.
                         </p>
                         <textarea
                           value={plakTekst}
