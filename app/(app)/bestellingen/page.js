@@ -30,6 +30,10 @@ export default function Bestellingen() {
   const [plakOpen, setPlakOpen] = useState(false);
   const [plakTekst, setPlakTekst] = useState("");
   const [plakPreview, setPlakPreview] = useState(null);
+  const [gelijkOpen, setGelijkOpen] = useState(false);
+  const [gelijkOmschrijving, setGelijkOmschrijving] = useState("");
+  const [gelijkTotaal, setGelijkTotaal] = useState("");
+  const [gelijkGeselecteerd, setGelijkGeselecteerd] = useState(new Set());
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
@@ -185,6 +189,44 @@ export default function Bestellingen() {
     if (bestellingId) ladenOverzicht(bestellingId);
   };
 
+  const gelijkToggle = (userId) => {
+    setGelijkGeselecteerd((prev) => {
+      const next = new Set(prev);
+      if (next.has(userId)) next.delete(userId);
+      else next.add(userId);
+      return next;
+    });
+  };
+
+  // Voor leefweek e.d.: iedereen betaalt evenveel, dus i.p.v. per product een
+  // regel per persoon met hetzelfde bedrag (totaal/aantal deelnemers) — geen
+  // eigen module nodig, dit hergebruikt gewoon dezelfde bestelling_regels.
+  const gelijkBevestigen = async () => {
+    const totaal = Number(gelijkTotaal);
+    if (!gelijkOmschrijving.trim() || !totaal || gelijkGeselecteerd.size === 0) {
+      return toast.error("Vul een omschrijving en totaalbedrag in, en vink minstens één deelnemer aan.");
+    }
+    const perPersoon = Math.round((totaal / gelijkGeselecteerd.size) * 100) / 100;
+    setBezig(true);
+    await Promise.all(
+      [...gelijkGeselecteerd].map((userId) =>
+        fetch("/api/bestellingen/regels", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bestellingId, userId, product: gelijkOmschrijving.trim(), aantal: "1", prijsPerStuk: String(perPersoon) }),
+        })
+      )
+    );
+    setBezig(false);
+    setGelijkOmschrijving("");
+    setGelijkTotaal("");
+    setGelijkGeselecteerd(new Set());
+    setGelijkOpen(false);
+    ladenOverzicht(bestellingId);
+    ladenGlobaleProducten();
+    toast.success(`${gelijkGeselecteerd.size} regels toegevoegd (${euro(perPersoon)} per persoon)`);
+  };
+
   const totaalBestelling = (overzicht?.personen || []).reduce((s, p) => s + p.totaal, 0);
   const openstaandeBestellingen = bestellingen.filter((b) => !b.verdeeld_naar_fv_maand_id);
 
@@ -263,7 +305,7 @@ export default function Bestellingen() {
     <div style={{ padding: 32, maxWidth: 1000 }}>
       <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Bestellingen</h1>
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Splits een rekening (frituur, pizza, ...) per persoon op en verdeel het automatisch over hun Financieel Verslag.
+        Splits een rekening (frituur, pizza, leefweek, ...) per persoon op en verdeel het automatisch over hun Financieel Verslag. Gebruik "Regel toevoegen" of "Slim plakken" als iedereen iets anders koos, of "Gelijk verdelen" als iedereen evenveel betaalt (bv. leefweek).
       </p>
 
       {magBewerken && openstaandeBestellingen.length > 0 && (
@@ -424,6 +466,38 @@ export default function Bestellingen() {
                             </div>
                           </>
                         )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className="card" style={{ marginBottom: 16 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gelijkOpen ? 8 : 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>Gelijk verdelen</div>
+                      <button onClick={() => setGelijkOpen(!gelijkOpen)} style={{ fontSize: 12 }}>{gelijkOpen ? "Annuleren" : "🍽️ Totaalbedrag delen"}</button>
+                    </div>
+                    {gelijkOpen && (
+                      <>
+                        <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                          Voor leefweek e.d.: iedereen die meeat betaalt evenveel — vul het totaalbedrag in en vink de deelnemers aan, het bedrag wordt gelijk verdeeld.
+                        </p>
+                        <div className="grid-2" style={{ marginBottom: 8 }}>
+                          <input placeholder="Omschrijving, bv. Leefweek maandag" value={gelijkOmschrijving} onChange={(e) => setGelijkOmschrijving(e.target.value)} />
+                          <input type="number" step="0.01" placeholder="Totaalbedrag" value={gelijkTotaal} onChange={(e) => setGelijkTotaal(e.target.value)} />
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginBottom: 8 }}>
+                          {gebruikers.map((g) => (
+                            <label key={g.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 12, fontSize: 13 }}>
+                              <input type="checkbox" checked={gelijkGeselecteerd.has(g.id)} onChange={() => gelijkToggle(g.id)} />
+                              {g.naam}
+                            </label>
+                          ))}
+                        </div>
+                        {gelijkGeselecteerd.size > 0 && Number(gelijkTotaal) > 0 && (
+                          <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                            {euro(Math.round((Number(gelijkTotaal) / gelijkGeselecteerd.size) * 100) / 100)} per persoon ({gelijkGeselecteerd.size} deelnemers)
+                          </p>
+                        )}
+                        <button className="btn-primary" disabled={bezig} onClick={gelijkBevestigen}>+ Regels toevoegen</button>
                       </>
                     )}
                   </div>
