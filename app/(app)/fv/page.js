@@ -47,6 +47,8 @@ export default function FinancieelVerslag() {
     verbruik: "7",
     betaaldeadline: "",
   });
+  const [kmBewerkOpen, setKmBewerkOpen] = useState(false);
+  const [kmBewerk, setKmBewerk] = useState({ dieselprijs: "", verbruik: "7" });
   const [nieuweRegel, setNieuweRegel] = useState({});
   const [nieuweKm, setNieuweKm] = useState({});
   const [plakOpen, setPlakOpen] = useState(false);
@@ -119,6 +121,35 @@ export default function FinancieelVerslag() {
     setFvMaandId(data.fvMaand.id);
     setNieuweMaandOpen(false);
     toast.success(`FV-maand ${maandLabel(data.fvMaand.maand)} aangemaakt`);
+  };
+
+  // Dieselprijs verandert soms tijdens het jaar — laat toe de km-vergoeding
+  // van een bestaande FV-maand achteraf te herberekenen, niet enkel bij aanmaken.
+  const kmBewerkOpenen = () => {
+    const huidigeDiesel = overzicht?.fvMaand?.dieselprijs;
+    const huidigTarief = overzicht?.fvMaand?.km_tarief_leiding;
+    // Verbruik zelf wordt niet opgeslagen (enkel het resultaat), dus reken
+    // het terug uit tarief = diesel × verbruik ÷ 100 als beide gekend zijn.
+    const verbruik = huidigeDiesel && huidigTarief ? Math.round(((huidigTarief * 100) / huidigeDiesel) * 10) / 10 : 7;
+    setKmBewerk({ dieselprijs: huidigeDiesel ? String(huidigeDiesel) : "", verbruik: String(verbruik) });
+    setKmBewerkOpen(true);
+  };
+
+  const kmVergoedingOpslaan = async () => {
+    const diesel = parseFloat(kmBewerk.dieselprijs);
+    const verbruik = parseFloat(kmBewerk.verbruik);
+    if (!diesel || !verbruik) return toast.error("Vul dieselprijs en verbruik in.");
+    const tarief = Math.round(((diesel * verbruik) / 100) * 1000) / 1000;
+    const res = await fetch("/api/fv/maanden", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: fvMaandId, dieselprijs: diesel, kmTariefLeiding: tarief, kmTariefLogistiek: tarief }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setKmBewerkOpen(false);
+    ladenOverzicht(fvMaandId);
+    toast.success(`Km-vergoeding bijgewerkt naar €${tarief}/km`);
   };
 
   const regelToevoegen = async (userId) => {
@@ -310,7 +341,40 @@ export default function FinancieelVerslag() {
                 Km-vergoeding: €{overzicht.fvMaand.km_tarief_leiding}/km
               </span>
             )}
+            {magBewerken && !kmBewerkOpen && (
+              <button onClick={kmBewerkOpenen} style={{ fontSize: 11, marginLeft: 10, padding: "2px 8px" }}>
+                ✏️ {overzicht.fvMaand.km_tarief_leiding ? "Aanpassen" : "Km-vergoeding instellen"}
+              </button>
+            )}
           </h2>
+
+          {kmBewerkOpen && (
+            <div className="no-print card" style={{ marginBottom: 20 }}>
+              <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Km-vergoeding aanpassen</div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                Geldt voor deze FV-maand (dieselprijs verandert soms tijdens het jaar). Nieuw tarief telt enkel voor kilometers die je vanaf nu toevoegt.
+              </p>
+              <div className="grid-2" style={{ marginBottom: 10 }}>
+                <label style={{ fontSize: 12 }}>
+                  Dieselprijs (€/L)
+                  <input type="number" step="0.01" value={kmBewerk.dieselprijs} onChange={(e) => setKmBewerk({ ...kmBewerk, dieselprijs: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />
+                </label>
+                <label style={{ fontSize: 12 }}>
+                  Gem. verbruik (L/100km)
+                  <input type="number" step="0.1" value={kmBewerk.verbruik} onChange={(e) => setKmBewerk({ ...kmBewerk, verbruik: e.target.value })} style={{ display: "block", width: "100%", marginTop: 2 }} />
+                </label>
+              </div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                {parseFloat(kmBewerk.dieselprijs) && parseFloat(kmBewerk.verbruik)
+                  ? `Nieuwe km-vergoeding: €${Math.round(((parseFloat(kmBewerk.dieselprijs) * parseFloat(kmBewerk.verbruik)) / 100) * 1000) / 1000}/km`
+                  : "vul dieselprijs en verbruik in"}
+              </p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-primary" onClick={kmVergoedingOpslaan}>Opslaan</button>
+                <button onClick={() => setKmBewerkOpen(false)}>Annuleren</button>
+              </div>
+            </div>
+          )}
 
           {overzicht.personen.length === 0 && (
             <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>

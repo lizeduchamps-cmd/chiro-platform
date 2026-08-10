@@ -355,7 +355,7 @@ export default function EvenementDetail({ params }) {
                     <td style={{ textAlign: "right" }}>
                       {magBewerken && k.type === "cash" ? (
                         <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
-                          <input type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 80, textAlign: "right" }} />
+                          <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 80, textAlign: "right" }} />
                           <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "wisselgeldStart")} style={{ padding: "4px 6px", fontSize: 12 }}>🧮</button>
                         </div>
                       ) : k.type === "cash" ? euro(k.wisselgeld_start) : "-"}
@@ -363,7 +363,7 @@ export default function EvenementDetail({ params }) {
                     <td style={{ textAlign: "right" }}>
                       {magBewerken ? (
                         <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
-                          <input type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 80, textAlign: "right" }} />
+                          <input key={`${k.id}-ie-${k.inhoud_einde}`} type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 80, textAlign: "right" }} />
                           {k.type === "cash" && (
                             <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "inhoudEinde")} style={{ padding: "4px 6px", fontSize: 12 }}>🧮</button>
                           )}
@@ -374,6 +374,7 @@ export default function EvenementDetail({ params }) {
                     <td style={{ textAlign: "right" }}>
                       {magBewerken ? (
                         <input
+                          key={`${k.id}-vb-${k.verwacht_bedrag}`}
                           type="number" step="0.01" defaultValue={k.verwacht_bedrag ?? ""} placeholder="optioneel"
                           onBlur={(e) => kassaBijwerken(k.id, "verwachtBedrag", e.target.value)}
                           style={{ width: 80, textAlign: "right" }}

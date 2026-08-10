@@ -59,3 +59,25 @@ export async function POST(req) {
 
   return NextResponse.json({ fvMaand });
 }
+
+// Achteraf aanpassen van een bestaande FV-maand — vooral bedoeld voor de
+// km-vergoeding (dieselprijs verandert soms tijdens het jaar) en de deadline.
+export async function PATCH(req) {
+  const session = await getServerSession(authOptions);
+  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+    return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  }
+
+  const { id, dieselprijs, kmTariefLeiding, kmTariefLogistiek, betaaldeadline } = await req.json();
+  if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+
+  const updateFields = {};
+  if (dieselprijs !== undefined) updateFields.dieselprijs = dieselprijs === "" ? null : dieselprijs;
+  if (kmTariefLeiding !== undefined) updateFields.km_tarief_leiding = kmTariefLeiding === "" ? null : kmTariefLeiding;
+  if (kmTariefLogistiek !== undefined) updateFields.km_tarief_logistiek = kmTariefLogistiek === "" ? null : kmTariefLogistiek;
+  if (betaaldeadline !== undefined) updateFields.betaaldeadline = betaaldeadline === "" ? null : betaaldeadline;
+
+  const { error } = await supabaseAdmin.from("fv_maanden").update(updateFields).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
+}
