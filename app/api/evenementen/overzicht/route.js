@@ -29,7 +29,7 @@ export async function GET(req) {
     { data: transacties, error: transactiesError },
     { data: gekoppeldeTransacties, error: gekoppeldeError },
   ] = await Promise.all([
-    supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling").eq("evenement_id", evenementId),
+    supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling, verwacht_bedrag").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_budgetten").select("id, hoofdcategorie, budget_toegewezen").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_categorieen").select("id, naam").eq("evenement_id", evenementId).order("naam"),
     supabaseAdmin
@@ -55,12 +55,24 @@ export async function GET(req) {
   if (gekoppeldeError) return NextResponse.json({ error: gekoppeldeError.message }, { status: 500 });
 
   // Kassa-omzet: cash = geteld eindbedrag - klaargezet wisselgeld; digitaal = volledig eindbedrag.
+  // Tekort/overschot: enkel bepaald als er een verwacht_bedrag is ingevuld (de
+  // leiding schat dit zelf in op basis van verkochte drank/tickets/...) en er
+  // ook al effectief geteld is — anders is er niets om mee te vergelijken.
   const kassasMetOmzet = (kassas || []).map((k) => {
     const eind = Number(k.inhoud_einde || 0);
     const omzet = k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind;
-    return { ...k, omzet: Math.round(omzet * 100) / 100 };
+    const omzetAfgerond = Math.round(omzet * 100) / 100;
+    const heeftVergelijking = k.verwacht_bedrag !== null && k.verwacht_bedrag !== undefined && k.inhoud_einde !== null;
+    const verschil = heeftVergelijking ? Math.round((omzetAfgerond - Number(k.verwacht_bedrag)) * 100) / 100 : null;
+    return {
+      ...k,
+      omzet: omzetAfgerond,
+      verschil,
+      heeftTekort: verschil !== null && verschil < -0.01,
+    };
   });
   const kassaOmzetTotaal = kassasMetOmzet.reduce((s, k) => s + k.omzet, 0);
+  const kassasMetTekort = kassasMetOmzet.filter((k) => k.heeftTekort);
 
   const inkomstenTransacties = (transacties || []).filter((t) => t.type_geldstroom === "inkomst");
   const uitgaveTransacties = (transacties || []).filter((t) => t.type_geldstroom === "uitgave");
@@ -103,6 +115,7 @@ export async function GET(req) {
     evenement,
     kassas: kassasMetOmzet,
     kassaOmzetTotaal: Math.round(kassaOmzetTotaal * 100) / 100,
+    kassasMetTekort: kassasMetTekort.map((k) => ({ id: k.id, naam: k.naam, verschil: k.verschil })),
     categorieen,
     transacties,
     gekoppeldeTransacties: gekoppeldeTransacties || [],

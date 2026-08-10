@@ -39,10 +39,12 @@ export async function PATCH(req) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
+  const { verwachtBedrag } = body;
   const updateFields = {};
   if (naam !== undefined) updateFields.naam = naam;
   if (wisselgeldStart !== undefined) updateFields.wisselgeld_start = wisselgeldStart;
   if (inhoudEinde !== undefined) updateFields.inhoud_einde = inhoudEinde === "" ? null : inhoudEinde;
+  if (verwachtBedrag !== undefined) updateFields.verwacht_bedrag = verwachtBedrag === "" ? null : verwachtBedrag;
   // Samenstelling (briefjes/muntjes-aantallen) is optioneel: enkel meegegeven
   // als het via de teller is ingevuld, anders blijft een gewoon ingetypt
   // totaalbedrag gewoon werken zonder samenstelling.

@@ -263,7 +263,7 @@ export default function EvenementDetail({ params }) {
     toast.success("Categorie verwijderd");
   };
 
-  const { evenement, kassas, kassaOmzetTotaal, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
+  const { evenement, kassas, kassaOmzetTotaal, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
 
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
@@ -323,6 +323,11 @@ export default function EvenementDetail({ params }) {
       {/* Kassabeheer */}
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Kassabeheer</div>
+        {kassasMetTekort.length > 0 && (
+          <div style={{ background: "var(--danger-tint, #fdecea)", border: "1px solid var(--danger)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
+            ⚠️ Kassa-tekort gedetecteerd: {kassasMetTekort.map((k) => `${k.naam} (${euro(Math.abs(k.verschil))} te weinig)`).join(", ")}
+          </div>
+        )}
         <div className="table-wrap" style={{ marginBottom: magBewerken ? 12 : 0 }}>
           <table>
             <thead>
@@ -332,12 +337,14 @@ export default function EvenementDetail({ params }) {
                 <th style={{ textAlign: "right" }}>Wisselgeld start</th>
                 <th style={{ textAlign: "right" }}>Inhoud na afloop</th>
                 <th style={{ textAlign: "right" }}>Omzet</th>
+                <th style={{ textAlign: "right" }}>Verwacht</th>
+                <th style={{ textAlign: "right" }}>Verschil</th>
                 {magBewerken && <th></th>}
               </tr>
             </thead>
             <tbody>
               {kassas.length === 0 && (
-                <tr><td colSpan={6} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen kassa's.</td></tr>
+                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen kassa's.</td></tr>
               )}
               {kassas.map((k) => (
                 <>
@@ -363,13 +370,25 @@ export default function EvenementDetail({ params }) {
                       ) : k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}
                     </td>
                     <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(k.omzet)}</td>
+                    <td style={{ textAlign: "right" }}>
+                      {magBewerken ? (
+                        <input
+                          type="number" step="0.01" defaultValue={k.verwacht_bedrag ?? ""} placeholder="optioneel"
+                          onBlur={(e) => kassaBijwerken(k.id, "verwachtBedrag", e.target.value)}
+                          style={{ width: 80, textAlign: "right" }}
+                        />
+                      ) : k.verwacht_bedrag !== null ? euro(k.verwacht_bedrag) : "-"}
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: k.verschil === null ? undefined : k.heeftTekort ? "var(--danger)" : k.verschil > 0.01 ? "var(--success, #1a7f37)" : undefined }}>
+                      {k.verschil === null ? "-" : `${k.verschil > 0 ? "+" : ""}${euro(k.verschil)}`}
+                    </td>
                     {magBewerken && (
                       <td><button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button></td>
                     )}
                   </tr>
                   {tellerOpen?.kassaId === k.id && (
                     <tr>
-                      <td colSpan={magBewerken ? 6 : 5} style={{ background: "var(--primary-tint)", padding: 12 }}>
+                      <td colSpan={magBewerken ? 8 : 7} style={{ background: "var(--primary-tint)", padding: 12 }}>
                         <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
                           {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
                         </div>

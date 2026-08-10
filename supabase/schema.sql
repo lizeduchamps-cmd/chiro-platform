@@ -301,6 +301,10 @@ create table if not exists evenement_kassas (
   -- gewoon ingetypt totaalbedrag.
   wisselgeld_start_samenstelling jsonb,
   inhoud_einde_samenstelling jsonb,
+  -- Optioneel: wat de leiding zelf verwacht op basis van verkochte
+  -- drank/tickets/... Vergeleken met de omzet hieronder om een kassa-tekort
+  -- (of -overschot) op te sporen. Leeg = geen vergelijking, geen waarschuwing.
+  verwacht_bedrag numeric(10,2),
   created_at timestamptz default now()
 );
 
