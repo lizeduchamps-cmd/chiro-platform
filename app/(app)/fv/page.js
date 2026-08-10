@@ -139,14 +139,10 @@ export default function FinancieelVerslag() {
     const veld = nieuweKm[userId] || {};
     const km = parseFloat(veld.km);
     if (!km) return toast.error("Vul een aantal kilometer in.");
-    const tarief = overzicht.fvMaand.km_tarief_leiding;
-    if (!tarief) return toast.error("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
-    const bedrag = -(Math.round(km * tarief * 100) / 100);
-    const omschrijving = veld.reden ? `Kilometervergoeding ${veld.reden} (${km} km)` : `Kilometervergoeding (${km} km)`;
-    const res = await fetch("/api/fv/regels", {
+    const res = await fetch("/api/kilometers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fvMaandId, userId, omschrijving, bedrag }),
+      body: JSON.stringify({ fvMaandId, userId, km, activiteit: veld.reden || null }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
@@ -177,24 +173,21 @@ export default function FinancieelVerslag() {
   };
 
   const plakBevestigen = async () => {
-    const tarief = overzicht.fvMaand.km_tarief_leiding;
-    if (!tarief) return toast.error("Er is nog geen km-tarief ingesteld voor deze FV-maand.");
     const onvolledig = plakPreview.filter((r) => !r.userId || !r.km);
     if (onvolledig.length > 0) return toast.error("Vul voor elke regel een persoon en aantal kilometer in (of verwijder de regel).");
     setPlakBezig(true);
-    await Promise.all(
-      plakPreview.map((r) => {
-        const km = parseFloat(r.km);
-        const bedrag = -(Math.round(km * tarief * 100) / 100);
-        const omschrijving = plakReden ? `Kilometervergoeding ${plakReden} (${km} km)` : `Kilometervergoeding (${km} km)`;
-        return fetch("/api/fv/regels", {
+    const resultaten = await Promise.all(
+      plakPreview.map((r) =>
+        fetch("/api/kilometers", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fvMaandId, userId: r.userId, omschrijving, bedrag }),
-        });
-      })
+          body: JSON.stringify({ fvMaandId, userId: r.userId, km: r.km, activiteit: plakReden || null }),
+        }).then((res) => res.json())
+      )
     );
     setPlakBezig(false);
+    const fout = resultaten.find((r) => r.error);
+    if (fout) return toast.error(fout.error);
     setPlakTekst("");
     setPlakReden("");
     setPlakPreview(null);

@@ -240,6 +240,27 @@ create table if not exists fv_status (
   unique(fv_maand_id, user_id)
 );
 
+-- Gestructureerde kilometerregistratie i.p.v. vrije tekst-parsing — elke rij
+-- maakt automatisch de bijhorende fv_regel aan (bron='kilometers') en
+-- verwijdert die ook weer mee als je de kilometer-rij zelf verwijdert. Het
+-- tarief wordt hier bevroren op het moment van registratie, zodat een latere
+-- tariefwijziging oude regels niet met terugwerkende kracht verandert.
+create table if not exists kilometers (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  fv_maand_id uuid references fv_maanden(id) on delete cascade,
+  datum date not null default current_date,
+  km numeric(10,2) not null,
+  activiteit text,
+  tarief numeric(6,3) not null,
+  bedrag numeric(10,2) not null,
+  fv_regel_id uuid references fv_regels(id) on delete cascade,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_kilometers_user on kilometers(user_id);
+create index if not exists idx_kilometers_fv_maand on kilometers(fv_maand_id);
+
 -- ============ BESTELLINGEN (bv. frituur, pizza na de Chiro) ============
 -- Eén rekening/bestelling wordt per product/persoon opgesplitst, en kan
 -- daarna in één keer verdeeld worden over ieders Financieel Verslag.
@@ -501,6 +522,7 @@ alter table kamp_categorieen enable row level security;
 alter table kamp_transacties enable row level security;
 alter table documenten enable row level security;
 alter table bon_regels enable row level security;
+alter table kilometers enable row level security;
 
 -- ============ STORAGE ============
 -- Private bucket voor documenten (bonnetjes/facturen) — enkel toegankelijk
