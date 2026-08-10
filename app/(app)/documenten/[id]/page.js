@@ -6,8 +6,9 @@ import Link from "next/link";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
 import { AFDELINGEN_VOLGORDE } from "@/lib/kampAfdelingen";
-import { parseKassabon } from "@/lib/receiptParser";
+import { parseKassabon, vindKlantNaam } from "@/lib/receiptParser";
 import { preprocessKassabon } from "@/lib/receiptImage";
+import { vindGebruiker } from "@/lib/smartPaste";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -104,6 +105,30 @@ export default function DocumentDetail({ params }) {
     });
   };
 
+  // Bouwt de bewerkbare kandidaat-rijen op uit herkende {omschrijving,bedrag}-
+  // paren. Sommige afhaalbonnen (bv. Domino's) drukken de besteller af
+  // ('Klant: ALINE DEVEUX') — matcht dat met een bekende gebruiker, dan wordt
+  // die alvast als FV-persoon ingevuld (nog steeds aan te passen/te verwijderen).
+  const bouwScanRijen = (kandidaten, ruweTekst) => {
+    const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
+    let klantUserId = "";
+    if (standaardBestemming === "fv") {
+      const klantNaam = vindKlantNaam(ruweTekst);
+      const klant = klantNaam ? vindGebruiker(gebruikers, klantNaam) : null;
+      if (klant) klantUserId = klant.id;
+    }
+    return kandidaten.map((k) => ({
+      omschrijving: k.omschrijving,
+      bedrag: String(k.bedrag),
+      bestemming: standaardBestemming,
+      kampHoofdcategorie: "",
+      evenementId: "",
+      evenementHoofdcategorie: "",
+      fvUserId: klantUserId,
+      fvMaandId: klantUserId ? fvMaanden[0]?.id || "" : "",
+    }));
+  };
+
   // Zuivere OCR (Tesseract.js, draait in de browser) + een regex-parser om
   // productregels te herkennen — geen AI/LLM. De mens controleert en
   // corrigeert altijd voor er iets bevestigd wordt, net als bij een manueel
@@ -138,19 +163,11 @@ export default function DocumentDetail({ params }) {
         setScanRuweTekstOpen(true);
         toast.error("Geen regels herkend op dit bonnetje. Bekijk/corrigeer de ruwe OCR-tekst hieronder en klik op 'Opnieuw parsen', of vul handmatig in.");
       }
-      const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
-      setScanKandidaten(
-        kandidaten.map((k) => ({
-          omschrijving: k.omschrijving,
-          bedrag: String(k.bedrag),
-          bestemming: standaardBestemming,
-          kampHoofdcategorie: "",
-          evenementId: "",
-          evenementHoofdcategorie: "",
-          fvUserId: "",
-          fvMaandId: "",
-        }))
-      );
+      const rijen = bouwScanRijen(kandidaten, text);
+      if (rijen[0]?.fvUserId) {
+        toast.success(`Besteller herkend als ${gebruikers.find((g) => g.id === rijen[0].fvUserId)?.naam} — alvast ingevuld bij elke regel.`);
+      }
+      setScanKandidaten(rijen);
     } catch (err) {
       toast.error("OCR mislukt: " + err.message);
     } finally {
@@ -181,19 +198,7 @@ export default function DocumentDetail({ params }) {
     if (kandidaten.length === 0) {
       toast.error("Nog steeds niets herkend in deze tekst.");
     }
-    const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
-    setScanKandidaten(
-      kandidaten.map((k) => ({
-        omschrijving: k.omschrijving,
-        bedrag: String(k.bedrag),
-        bestemming: standaardBestemming,
-        kampHoofdcategorie: "",
-        evenementId: "",
-        evenementHoofdcategorie: "",
-        fvUserId: "",
-        fvMaandId: "",
-      }))
-    );
+    setScanKandidaten(bouwScanRijen(kandidaten, scanRuweTekst));
     toast.success(`${kandidaten.length} regel(s) herkend na herparsen`);
   };
 
