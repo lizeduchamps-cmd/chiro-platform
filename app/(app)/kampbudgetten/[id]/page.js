@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
+import { budgetKleurEmoji } from "@/lib/budgetKleur";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -38,7 +39,9 @@ export default function KampbudgetDetail({ params }) {
       <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="stat">
           <div className="muted" style={{ fontSize: 12 }}>Toegewezen budget</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(balans.totaalToegewezen)}</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>
+            {budgetKleurEmoji(balans.uitgegeven, balans.totaalToegewezen)} {euro(balans.totaalToegewezen)}
+          </div>
           <div className="subtle" style={{ fontSize: 11 }}>{groepsbudget.aantal_leden} leden</div>
         </div>
         <div className="stat">

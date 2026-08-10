@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonTable } from "@/components/Skeleton";
 import { AFDELINGEN_OUD } from "@/lib/kampAfdelingen";
+import { budgetKleurEmoji } from "@/lib/budgetKleur";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -162,7 +163,10 @@ export default function Kampbudgetten() {
                 <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(g.totaalToegewezen)}</td>
                 <td style={{ textAlign: "right" }}>{euro(g.uitgegeven)}</td>
                 <td className={g.resterend < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700 }}>{euro(g.resterend)}</td>
-                <td><span className={`badge ${g.statusBudget === "Overschreden" ? "badge-neutral amount-neg" : "badge-primary"}`}>{g.statusBudget}</span></td>
+                <td>
+                  {budgetKleurEmoji(g.uitgegeven, g.totaalToegewezen)}{" "}
+                  <span className={`badge ${g.statusBudget === "Overschreden" ? "badge-neutral amount-neg" : "badge-primary"}`}>{g.statusBudget}</span>
+                </td>
               </tr>
             ))}
           </tbody>

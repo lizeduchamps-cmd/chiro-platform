@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { evenementMatchTag } from "@/lib/evenementMatch";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
+import { budgetKleurEmoji } from "@/lib/budgetKleur";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -460,6 +461,7 @@ export default function EvenementDetail({ params }) {
           <table>
             <thead>
               <tr>
+                <th></th>
                 <th>Hoofdcategorie</th>
                 <th style={{ textAlign: "right" }}>Budget</th>
                 <th style={{ textAlign: "right" }}>Uitgegeven</th>
@@ -469,13 +471,14 @@ export default function EvenementDetail({ params }) {
             </thead>
             <tbody>
               {categorieen.length === 0 && (
-                <tr><td colSpan={5} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</td></tr>
+                <tr><td colSpan={6} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</td></tr>
               )}
               {categorieen.map((c) => {
                 const cat = c.naam;
                 const rij = budgetBurnRate.find((b) => b.hoofdcategorie === cat);
                 return (
                   <tr key={c.id}>
+                    <td>{budgetKleurEmoji(rij?.uitgegeven || 0, rij?.budget)}</td>
                     <td>{cat}</td>
                     <td style={{ textAlign: "right" }}>
                       {magBewerken ? (
