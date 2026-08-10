@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonTable } from "@/components/Skeleton";
+import { comprimeerFoto } from "@/lib/imageCompress";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -59,16 +60,30 @@ export default function Documenten() {
   const uploaden = async () => {
     if (!bestand || !upload.titel || !upload.totaalbedrag) return toast.error("Kies een bestand en vul titel + totaalbedrag in.");
     setBezig(true);
+    // Grote telefoonfoto's (5-10MB) doen de upload vasthangen — comprimeren
+    // in de browser vóór het versturen (PDF's en al kleine foto's blijven ongemoeid).
+    const teUploaden = await comprimeerFoto(bestand);
     const formData = new FormData();
-    formData.append("bestand", bestand);
+    formData.append("bestand", teUploaden);
     formData.append("titel", upload.titel);
     formData.append("totaalbedrag", upload.totaalbedrag);
     formData.append("werkjaarId", werkjaarId);
     if (upload.gekoppeldAan) formData.append("gekoppeldAan", upload.gekoppeldAan);
     if (upload.gekoppeldAan === "evenement" && upload.evenementId) formData.append("evenementId", upload.evenementId);
 
-    const res = await fetch("/api/documenten/upload", { method: "POST", body: formData });
-    const data = await res.json();
+    let data;
+    try {
+      // Zonder timeout blijft de knop oneindig 'Bezig...' tonen als de upload
+      // om een of andere reden vasthangt — dan liever een duidelijke fout.
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60_000);
+      const res = await fetch("/api/documenten/upload", { method: "POST", body: formData, signal: controller.signal });
+      clearTimeout(timeoutId);
+      data = await res.json();
+    } catch (err) {
+      setBezig(false);
+      return toast.error(err.name === "AbortError" ? "Upload duurde te lang (bestand mogelijk te groot) — probeer een kleinere foto." : "Upload mislukt: " + err.message);
+    }
     setBezig(false);
     if (data.error) return toast.error(data.error);
     setUpload(LEEG_UPLOAD);
