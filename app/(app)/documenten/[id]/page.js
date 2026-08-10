@@ -135,7 +135,8 @@ export default function DocumentDetail({ params }) {
       setScanRuweTekst(text);
       const kandidaten = parseKassabon(text);
       if (kandidaten.length === 0) {
-        toast.error("Geen regels herkend op dit bonnetje. Bekijk 'Ruwe OCR-tekst' hieronder om te zien wat er gelezen werd, of vul handmatig in.");
+        setScanRuweTekstOpen(true);
+        toast.error("Geen regels herkend op dit bonnetje. Bekijk/corrigeer de ruwe OCR-tekst hieronder en klik op 'Opnieuw parsen', of vul handmatig in.");
       }
       const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
       setScanKandidaten(
@@ -170,6 +171,30 @@ export default function DocumentDetail({ params }) {
 
   const scanRijVerwijderen = (index) => {
     setScanKandidaten((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Herparst de (eventueel handmatig gecorrigeerde) ruwe OCR-tekst opnieuw,
+  // zonder de foto nog eens te moeten scannen — handig als OCR een aantal of
+  // prijs verkeerd las maar de tekst zelf makkelijk te corrigeren is.
+  const scanHerparsen = () => {
+    const kandidaten = parseKassabon(scanRuweTekst);
+    if (kandidaten.length === 0) {
+      toast.error("Nog steeds niets herkend in deze tekst.");
+    }
+    const standaardBestemming = ["kamp", "evenement", "fv"].includes(document.gekoppeld_aan) ? document.gekoppeld_aan : "kamp";
+    setScanKandidaten(
+      kandidaten.map((k) => ({
+        omschrijving: k.omschrijving,
+        bedrag: String(k.bedrag),
+        bestemming: standaardBestemming,
+        kampHoofdcategorie: "",
+        evenementId: "",
+        evenementHoofdcategorie: "",
+        fvUserId: "",
+        fvMaandId: "",
+      }))
+    );
+    toast.success(`${kandidaten.length} regel(s) herkend na herparsen`);
   };
 
   const scanBevestigen = async () => {
@@ -277,17 +302,26 @@ export default function DocumentDetail({ params }) {
               <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
                 {scanKandidaten.length === 0
                   ? "Niets herkend — pas gerust handmatig aan via 'Regel toevoegen' hieronder."
-                  : `${scanKandidaten.length} regel(s) herkend. Controleer omschrijving, bedrag en bestemming voor je bevestigt.`}
+                  : `${scanKandidaten.length} regel(s) herkend. Controleer omschrijving, bedrag en bestemming voor je bevestigt. Ontbreekt er iets? Corrigeer de ruwe OCR-tekst hieronder en parse opnieuw.`}
               </p>
-              {scanRuweTekst && (
+              {scanRuweTekst !== null && (
                 <div style={{ marginBottom: 8 }}>
                   <button onClick={() => setScanRuweTekstOpen(!scanRuweTekstOpen)} style={{ fontSize: 11 }}>
-                    {scanRuweTekstOpen ? "▾" : "▸"} Ruwe OCR-tekst tonen
+                    {scanRuweTekstOpen ? "▾" : "▸"} Ruwe OCR-tekst bekijken/corrigeren
                   </button>
                   {scanRuweTekstOpen && (
-                    <pre style={{ fontSize: 11, background: "var(--primary-tint)", padding: 8, borderRadius: 6, marginTop: 6, whiteSpace: "pre-wrap", maxHeight: 200, overflow: "auto" }}>
-                      {scanRuweTekst}
-                    </pre>
+                    <>
+                      <p className="subtle" style={{ fontSize: 11, marginTop: 6, marginBottom: 4 }}>
+                        Herkende OCR iets verkeerd (een aantal, een prijs, een productnaam)? Corrigeer het hieronder en klik op "Opnieuw parsen" — dat leest de foto niet opnieuw, enkel deze tekst.
+                      </p>
+                      <textarea
+                        value={scanRuweTekst}
+                        onChange={(e) => setScanRuweTekst(e.target.value)}
+                        rows={10}
+                        style={{ width: "100%", fontSize: 11, fontFamily: "monospace", marginBottom: 6 }}
+                      />
+                      <button onClick={scanHerparsen} style={{ fontSize: 12 }}>🔁 Opnieuw parsen</button>
+                    </>
                   )}
                 </div>
               )}
