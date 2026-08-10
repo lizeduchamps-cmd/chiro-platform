@@ -13,7 +13,7 @@ export async function GET(req) {
 
   const { data: bestelling, error: bestellingError } = await supabaseAdmin
     .from("bestellingen")
-    .select("id, titel, datum, verdeeld_naar_fv_maand_id")
+    .select("id, titel, datum, winkel, verdeeld_naar_fv_maand_id")
     .eq("id", bestellingId)
     .maybeSingle();
   if (bestellingError) return NextResponse.json({ error: bestellingError.message }, { status: 500 });

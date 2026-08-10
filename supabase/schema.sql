@@ -269,6 +269,10 @@ create table if not exists bestellingen (
   id uuid primary key default gen_random_uuid(),
   titel text not null,                      -- bv. 'Frituur 16/05'
   datum date default current_date,
+  -- Optioneel: waar besteld (bv. 'Frituur Op Den Hoek', 'Anatolia'). Prijs-
+  -- suggesties bij het invullen van regels worden hierop gescoped, want
+  -- 'frietjes' of 'kebap' kosten niet overal hetzelfde.
+  winkel text,
   verdeeld_naar_fv_maand_id uuid references fv_maanden(id) on delete set null,
   created_at timestamptz default now()
 );

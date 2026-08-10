@@ -20,6 +20,7 @@ export default function Bestellingen() {
   const [loading, setLoading] = useState(true);
   const [nieuweTitel, setNieuweTitel] = useState("");
   const [nieuweDatum, setNieuweDatum] = useState(new Date().toISOString().slice(0, 10));
+  const [nieuweWinkel, setNieuweWinkel] = useState("");
   const [nieuweRegel, setNieuweRegel] = useState({ userId: "", product: "", aantal: "1", prijsPerStuk: "" });
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
@@ -39,8 +40,11 @@ export default function Bestellingen() {
 
   const ladenBestellingen = () => fetch("/api/bestellingen").then((r) => r.json()).then((d) => setBestellingen(d.bestellingen || []));
 
-  const ladenGlobaleProducten = () =>
-    fetch("/api/bestellingen/producten").then((r) => r.json()).then((d) => {
+  // Zonder winkel: prijzen over alle bestellingen heen. Met winkel: enkel
+  // prijzen die bij diezelfde winkel horen, want "frietjes" bij de ene
+  // frituur kost niet hetzelfde als bij de andere.
+  const ladenGlobaleProducten = (winkel) =>
+    fetch(`/api/bestellingen/producten${winkel ? `?winkel=${encodeURIComponent(winkel)}` : ""}`).then((r) => r.json()).then((d) => {
       const map = {};
       (d.producten || []).forEach((p) => { map[p.naam] = p.prijs; });
       setGlobaleProducten(map);
@@ -78,6 +82,10 @@ export default function Bestellingen() {
     ladenOverzicht(bestellingId);
   }, [bestellingId]);
 
+  useEffect(() => {
+    ladenGlobaleProducten(overzicht?.bestelling?.winkel || null);
+  }, [overzicht?.bestelling?.winkel]);
+
   if (loading) {
     return (
       <div style={{ padding: 32, maxWidth: 1000 }}>
@@ -91,13 +99,24 @@ export default function Bestellingen() {
     const res = await fetch("/api/bestellingen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ titel: nieuweTitel.trim(), datum: nieuweDatum }),
+      body: JSON.stringify({ titel: nieuweTitel.trim(), datum: nieuweDatum, winkel: nieuweWinkel.trim() || null }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
     setBestellingen([data.bestelling, ...bestellingen]);
     setBestellingId(data.bestelling.id);
     setNieuweTitel("");
+    setNieuweWinkel("");
+  };
+
+  const winkelBijwerken = async (waarde) => {
+    await fetch("/api/bestellingen", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: bestellingId, winkel: waarde }),
+    });
+    ladenBestellingen();
+    ladenOverzicht(bestellingId);
   };
 
   const bestellingVerwijderen = async (id) => {
@@ -124,7 +143,7 @@ export default function Bestellingen() {
     // voor dezelfde persoon toe te voegen (bv. frietjes, vlees, saus).
     setNieuweRegel((prev) => ({ userId: prev.userId, product: "", aantal: "1", prijsPerStuk: "" }));
     ladenOverzicht(bestellingId);
-    ladenGlobaleProducten();
+    ladenGlobaleProducten(overzicht?.bestelling?.winkel || null);
   };
 
   // Optimistisch: de regel (en desnoods de hele persoon, als het hun laatste
@@ -223,16 +242,17 @@ export default function Bestellingen() {
     setGelijkGeselecteerd(new Set());
     setGelijkOpen(false);
     ladenOverzicht(bestellingId);
-    ladenGlobaleProducten();
+    ladenGlobaleProducten(overzicht?.bestelling?.winkel || null);
     toast.success(`${gelijkGeselecteerd.size} regels toegevoegd (${euro(perPersoon)} per persoon)`);
   };
 
   const totaalBestelling = (overzicht?.personen || []).reduce((s, p) => s + p.totaal, 0);
   const openstaandeBestellingen = bestellingen.filter((b) => !b.verdeeld_naar_fv_maand_id);
+  const bekendeWinkels = [...new Set(bestellingen.map((b) => b.winkel).filter(Boolean))];
 
-  // Bekende producten: eerst alle producten die ooit besteld zijn (over alle
-  // bestellingen heen, bv. "Pizza salami" bij Anatolia), aangevuld/overschreven
-  // door wat binnen déze bestelling al is ingevuld.
+  // Bekende producten: eerst alle producten die ooit besteld zijn (gescoped op
+  // de winkel van déze bestelling, zie ladenGlobaleProducten), aangevuld/
+  // overschreven door wat binnen déze bestelling al is ingevuld.
   const productPrijzen = { ...globaleProducten };
   (overzicht?.personen || []).forEach((p) => {
     p.regels.forEach((r) => {
@@ -297,7 +317,7 @@ export default function Bestellingen() {
     setPlakPreview(null);
     setPlakOpen(false);
     ladenOverzicht(bestellingId);
-    ladenGlobaleProducten();
+    ladenGlobaleProducten(overzicht?.bestelling?.winkel || null);
     toast.success(`${plakPreview.length} regels toegevoegd`);
   };
 
@@ -336,7 +356,17 @@ export default function Bestellingen() {
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Nieuwe bestelling</div>
               <input placeholder="Titel, bv. Frituur 16/05" value={nieuweTitel} onChange={(e) => setNieuweTitel(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
-              <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
+              <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
+              <input
+                placeholder="Winkel, bv. Anatolia (optioneel)"
+                value={nieuweWinkel}
+                list="bekende-winkels"
+                onChange={(e) => setNieuweWinkel(e.target.value)}
+                style={{ width: "100%", marginBottom: 8 }}
+              />
+              <datalist id="bekende-winkels">
+                {bekendeWinkels.map((w) => <option key={w} value={w} />)}
+              </datalist>
               <button className="btn-primary" onClick={nieuweBestellingAanmaken} style={{ width: "100%" }}>+ Aanmaken</button>
             </div>
           )}
@@ -354,7 +384,7 @@ export default function Bestellingen() {
               >
                 <div style={{ fontWeight: 600 }}>{b.titel}</div>
                 <div className="subtle" style={{ fontSize: 11 }}>
-                  {b.datum} {b.verdeeld_naar_fv_maand_id && "· ✅ verdeeld over FV"}
+                  {b.datum} {b.winkel && `· ${b.winkel}`} {b.verdeeld_naar_fv_maand_id && "· ✅ verdeeld over FV"}
                 </div>
               </div>
             ))}
@@ -366,7 +396,26 @@ export default function Bestellingen() {
             <p className="muted" style={{ fontStyle: "italic" }}>Kies of maak een bestelling om regels toe te voegen.</p>
           ) : (
             <>
-              <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>{overzicht.bestelling.titel}</h2>
+              <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{overzicht.bestelling.titel}</h2>
+              <div style={{ marginBottom: 12 }}>
+                {magBewerken && !overzicht.bestelling.verdeeld_naar_fv_maand_id ? (
+                  <>
+                    <input
+                      key={`winkel-${overzicht.bestelling.id}-${overzicht.bestelling.winkel}`}
+                      placeholder="Winkel (optioneel)"
+                      defaultValue={overzicht.bestelling.winkel || ""}
+                      list="bekende-winkels"
+                      onBlur={(e) => winkelBijwerken(e.target.value.trim())}
+                      style={{ fontSize: 12, width: 200 }}
+                    />
+                    <p className="subtle" style={{ fontSize: 11, marginTop: 2 }}>
+                      Bepaalt welke eerder gebruikte prijzen als suggestie verschijnen.
+                    </p>
+                  </>
+                ) : overzicht.bestelling.winkel ? (
+                  <span className="subtle" style={{ fontSize: 12 }}>{overzicht.bestelling.winkel}</span>
+                ) : null}
+              </div>
 
               {overzicht.personen.length === 0 && (
                 <p className="muted" style={{ fontStyle: "italic", marginBottom: 12 }}>Nog geen regels.</p>
