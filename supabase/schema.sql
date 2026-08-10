@@ -251,6 +251,12 @@ create table if not exists evenement_kassas (
   type text not null default 'cash' check (type in ('cash', 'digitaal')),
   wisselgeld_start numeric(10,2) default 0,  -- enkel relevant bij type 'cash'
   inhoud_einde numeric(10,2),                -- cash: geteld bedrag na afloop; digitaal: totaalbedrag
+  -- Optionele samenstelling in briefjes/muntjes, bv. {"5": 10, "10": 7, "20": 3}
+  -- (denominatie in € als key, aantal als value) — het totaal hierboven wordt
+  -- er automatisch uit herberekend zodra dit ingevuld is; blijft leeg bij een
+  -- gewoon ingetypt totaalbedrag.
+  wisselgeld_start_samenstelling jsonb,
+  inhoud_einde_samenstelling jsonb,
   created_at timestamptz default now()
 );
 
@@ -300,37 +306,33 @@ create index if not exists idx_evenement_transacties_evenement on evenement_tran
 
 -- ============ FASE 4: KAMPBUDGETTEN, WISSELGELD & KALENDER ============
 
--- Eén rij per afdeling per werkjaar. Totaal_toegewezen/uitgegeven/resterend
--- worden niet opgeslagen maar berekend bij het opvragen (net als bij
--- evenement-budgetten), zodat ze altijd in sync zijn met de uitgaven.
+-- Tarieven zijn gedeeld over de afdelingen (jong = Sloebers/Speelclub/Rakwi,
+-- oud = Tito/Keti/Aspi krijgen ook dropping/weekend + een vast bedrag voor
+-- de weekendplaats zelf) — één rij per werkjaar, niet per afdeling.
+create table if not exists kamp_tarieven (
+  id uuid primary key default gen_random_uuid(),
+  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  winkelen_jong numeric(10,2) not null default 0,      -- €/lid, Sloebers/Speelclub/Rakwi
+  winkelen_oud numeric(10,2) not null default 0,        -- €/lid, Tito/Keti/Aspi
+  dropping_per_lid numeric(10,2) not null default 0,    -- €/lid, enkel Tito/Keti/Aspi
+  weekend_per_lid numeric(10,2) not null default 0,     -- €/lid, enkel Tito/Keti/Aspi
+  weekendplaats_vast numeric(10,2) not null default 50, -- vast bedrag per groep (niet per lid), enkel Tito/Keti/Aspi
+  created_at timestamptz default now(),
+  unique(werkjaar_id)
+);
+
+-- Eén rij per afdeling per werkjaar. Enkel het aantal leden wordt hier
+-- ingevuld — de tarieven komen uit kamp_tarieven en de uitgaven uit
+-- kamp_transacties (waar hoofdcategorie = deze afdeling), zodat je
+-- kampkosten maar op één plek moet ingeven en het automatisch meetelt.
 create table if not exists groepsbudgetten (
   id uuid primary key default gen_random_uuid(),
   werkjaar_id uuid references werkjaren(id) on delete cascade,
-  afdeling text not null check (afdeling in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi', 'Algemeen/Keuken')),
+  afdeling text not null check (afdeling in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi')),
   aantal_leden integer not null default 0,
-  budget_per_lid_winkelen numeric(10,2) not null default 0,
-  budget_per_lid_dropping numeric(10,2) not null default 0,   -- enkel van toepassing op Tito/Keti/Aspi
-  budget_per_lid_weekend numeric(10,2) not null default 0,    -- enkel van toepassing op Tito/Keti/Aspi
   created_at timestamptz default now(),
   unique(werkjaar_id, afdeling)
 );
-
--- Uitgaven/bonnetjes die van een groepsbudget worden afgetrokken (winkelen
--- voor kamp, dropping, weekend, ...) — zelfde bonnetje-patroon als
--- evenement_transacties, maar bewust eenvoudiger (geen BTW-splitsing nodig).
-create table if not exists groepsbudget_uitgaven (
-  id uuid primary key default gen_random_uuid(),
-  groepsbudget_id uuid references groepsbudgetten(id) on delete cascade,
-  datum date not null,
-  omschrijving text not null,
-  bedrag numeric(10,2) not null,
-  ingediend_door_user_id uuid references users(id) on delete set null,
-  bewijsstuk_url text,
-  status text not null default 'Ingediend' check (status in ('Ingediend', 'Goedgekeurd', 'Afgekeurd')),
-  created_at timestamptz default now()
-);
-
-create index if not exists idx_groepsbudget_uitgaven_budget on groepsbudget_uitgaven(groepsbudget_id);
 
 create table if not exists wisselgeld_aanvragen (
   id uuid primary key default gen_random_uuid(),

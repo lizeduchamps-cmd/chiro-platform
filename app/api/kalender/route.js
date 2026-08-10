@@ -3,12 +3,12 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
-// De kalender toont drie soorten items door elkaar: handmatige kalender_items
-// (opgeslagen), FV-betaaldeadlines en wisselgeld-aanvragen. De twee laatste
-// staan nergens dubbel opgeslagen — ze worden hier live berekend vanuit hun
-// eigen tabel, zodat de kalender nooit uit sync kan raken (bv. als een
-// wisselgeld-status wijzigt) en ook de volledige geschiedenis toont (niet
-// enkel de eerstvolgende deadline).
+// De kalender toont alles wat een datum heeft (behalve transacties) door
+// elkaar: handmatige kalender_items (opgeslagen) plus live berekende items
+// vanuit FV-betaaldeadlines, wisselgeld-aanvragen en evenementen — die drie
+// staan nergens dubbel opgeslagen, zodat de kalender nooit uit sync kan
+// raken (bv. als een wisselgeld-status wijzigt) en ook de volledige
+// geschiedenis toont (niet enkel de eerstvolgende deadline).
 export async function GET(req) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Niet ingelogd" }, { status: 401 });
@@ -16,7 +16,7 @@ export async function GET(req) {
   const werkjaarId = new URL(req.url).searchParams.get("werkjaarId");
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
 
-  const [{ data: handmatig, error: handmatigError }, { data: fvMaanden, error: fvError }, { data: wisselgeld, error: wisselgeldError }] = await Promise.all([
+  const [{ data: handmatig, error: handmatigError }, { data: fvMaanden, error: fvError }, { data: wisselgeld, error: wisselgeldError }, { data: evenementen, error: evenementenError }] = await Promise.all([
     supabaseAdmin
       .from("kalender_items")
       .select("id, titel, type, datum_deadline, toegewezen_aan, is_voltooid")
@@ -30,10 +30,16 @@ export async function GET(req) {
       .from("wisselgeld_aanvragen")
       .select("id, aanvraag_code, afdeling, datum_nodig, bedrag_gevraagd, status")
       .eq("werkjaar_id", werkjaarId),
+    supabaseAdmin
+      .from("evenementen")
+      .select("id, naam, datum, status")
+      .eq("werkjaar_id", werkjaarId)
+      .not("datum", "is", null),
   ]);
   if (handmatigError) return NextResponse.json({ error: handmatigError.message }, { status: 500 });
   if (fvError) return NextResponse.json({ error: fvError.message }, { status: 500 });
   if (wisselgeldError) return NextResponse.json({ error: wisselgeldError.message }, { status: 500 });
+  if (evenementenError) return NextResponse.json({ error: evenementenError.message }, { status: 500 });
 
   const fvItems = (fvMaanden || []).map((m) => ({
     id: `fv-${m.id}`,
@@ -57,7 +63,18 @@ export async function GET(req) {
     link: "/wisselgeld",
   }));
 
-  const kalenderItems = [...(handmatig || []), ...fvItems, ...wisselgeldItems].sort((a, b) => a.datum_deadline.localeCompare(b.datum_deadline));
+  const evenementItems = (evenementen || []).map((e) => ({
+    id: `ev-${e.id}`,
+    virtueel: true,
+    titel: e.naam,
+    type: "Evenement",
+    datum_deadline: e.datum,
+    toegewezen_aan: null,
+    is_voltooid: e.status === "afgerond",
+    link: `/evenementen/${e.id}`,
+  }));
+
+  const kalenderItems = [...(handmatig || []), ...fvItems, ...wisselgeldItems, ...evenementItems].sort((a, b) => a.datum_deadline.localeCompare(b.datum_deadline));
 
   return NextResponse.json({ kalenderItems });
 }

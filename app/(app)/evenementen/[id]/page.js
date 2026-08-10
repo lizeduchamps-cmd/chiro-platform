@@ -12,6 +12,12 @@ function euro(n) {
 const BETAALMETHODES = ["Overschrijving", "Cash", "Bancontact/Kaart", "Factuur op termijn"];
 const STATUSSEN = ["Gepland", "Te vergoeden", "Betaald", "Afgerond"];
 const STATUS_LABEL = { gepland: "Gepland", lopend: "Lopend", afgerond: "Afgerond" };
+const BRIEFJES = [50, 20, 10, 5];
+const MUNTEN = [2, 1, 0.5, 0.2, 0.1];
+
+function samenstellingTotaal(samenstelling) {
+  return Object.entries(samenstelling || {}).reduce((s, [denom, aantal]) => s + Number(denom) * Number(aantal || 0), 0);
+}
 
 const LEGE_TRANSACTIE = {
   datum: new Date().toISOString().slice(0, 10),
@@ -55,6 +61,8 @@ export default function EvenementDetail({ params }) {
   const [toonTransactieForm, setToonTransactieForm] = useState(false);
   const [bewerkId, setBewerkId] = useState(null);
   const [bewerkVeld, setBewerkVeld] = useState(null);
+  const [tellerOpen, setTellerOpen] = useState(null);
+  const [tellerAantallen, setTellerAantallen] = useState({});
 
   const laden = () => fetch(`/api/evenementen/overzicht?evenementId=${id}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
 
@@ -110,6 +118,26 @@ export default function EvenementDetail({ params }) {
       body: JSON.stringify({ id: kassaId, [veld]: waarde === "" ? "" : Number(waarde) }),
     });
     laden();
+  };
+
+  const tellerOpenen = (kassa, veld) => {
+    if (tellerOpen?.kassaId === kassa.id && tellerOpen?.veld === veld) { setTellerOpen(null); return; }
+    const bestaande = veld === "wisselgeldStart" ? kassa.wisselgeld_start_samenstelling : kassa.inhoud_einde_samenstelling;
+    setTellerAantallen(bestaande || {});
+    setTellerOpen({ kassaId: kassa.id, veld });
+  };
+
+  const tellerToepassen = async () => {
+    const totaal = Math.round(samenstellingTotaal(tellerAantallen) * 100) / 100;
+    const samenstellingVeld = tellerOpen.veld === "wisselgeldStart" ? "wisselgeldStartSamenstelling" : "inhoudEindeSamenstelling";
+    await fetch("/api/evenementen/kassas", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: tellerOpen.kassaId, [tellerOpen.veld]: totaal, [samenstellingVeld]: tellerAantallen }),
+    });
+    setTellerOpen(null);
+    laden();
+    toast.success("Kassa-inhoud bijgewerkt");
   };
 
   const kassaVerwijderen = async (kassaId) => {
@@ -312,24 +340,80 @@ export default function EvenementDetail({ params }) {
                 <tr><td colSpan={6} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen kassa's.</td></tr>
               )}
               {kassas.map((k) => (
-                <tr key={k.id}>
-                  <td style={{ fontWeight: 600 }}>{k.naam}</td>
-                  <td>{k.type === "cash" ? "Cash" : "Digitaal"}</td>
-                  <td style={{ textAlign: "right" }}>
-                    {magBewerken && k.type === "cash" ? (
-                      <input type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 90, textAlign: "right" }} />
-                    ) : k.type === "cash" ? euro(k.wisselgeld_start) : "-"}
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    {magBewerken ? (
-                      <input type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 90, textAlign: "right" }} />
-                    ) : k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}
-                  </td>
-                  <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(k.omzet)}</td>
-                  {magBewerken && (
-                    <td><button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button></td>
+                <>
+                  <tr key={k.id}>
+                    <td style={{ fontWeight: 600 }}>{k.naam}</td>
+                    <td>{k.type === "cash" ? "Cash" : "Digitaal"}</td>
+                    <td style={{ textAlign: "right" }}>
+                      {magBewerken && k.type === "cash" ? (
+                        <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
+                          <input type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 80, textAlign: "right" }} />
+                          <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "wisselgeldStart")} style={{ padding: "4px 6px", fontSize: 12 }}>🧮</button>
+                        </div>
+                      ) : k.type === "cash" ? euro(k.wisselgeld_start) : "-"}
+                    </td>
+                    <td style={{ textAlign: "right" }}>
+                      {magBewerken ? (
+                        <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
+                          <input type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 80, textAlign: "right" }} />
+                          {k.type === "cash" && (
+                            <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "inhoudEinde")} style={{ padding: "4px 6px", fontSize: 12 }}>🧮</button>
+                          )}
+                        </div>
+                      ) : k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}
+                    </td>
+                    <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(k.omzet)}</td>
+                    {magBewerken && (
+                      <td><button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button></td>
+                    )}
+                  </tr>
+                  {tellerOpen?.kassaId === k.id && (
+                    <tr>
+                      <td colSpan={magBewerken ? 6 : 5} style={{ background: "var(--primary-tint)", padding: 12 }}>
+                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
+                          {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
+                        </div>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 10 }}>
+                          <div>
+                            <div className="subtle" style={{ fontSize: 10, marginBottom: 4 }}>BRIEFJES</div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {BRIEFJES.map((d) => (
+                                <label key={d} style={{ fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                  €{d}
+                                  <input
+                                    type="number" min="0" step="1" style={{ width: 50, textAlign: "center" }}
+                                    value={tellerAantallen[d] ?? ""}
+                                    onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="subtle" style={{ fontSize: 10, marginBottom: 4 }}>MUNTJES</div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              {MUNTEN.map((d) => (
+                                <label key={d} style={{ fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                                  €{d}
+                                  <input
+                                    type="number" min="0" step="1" style={{ width: 50, textAlign: "center" }}
+                                    value={tellerAantallen[d] ?? ""}
+                                    onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))}
+                                  />
+                                </label>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <span style={{ fontWeight: 700 }}>Totaal: {euro(samenstellingTotaal(tellerAantallen))}</span>
+                          <button className="btn-primary" onClick={tellerToepassen}>Toepassen</button>
+                          <button onClick={() => setTellerOpen(null)}>Annuleren</button>
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </tr>
+                </>
               ))}
             </tbody>
           </table>

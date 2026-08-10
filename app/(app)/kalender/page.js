@@ -15,6 +15,7 @@ const TYPES = ["Jaarlijks Actiepunt", "Voorschot Deadline", "Factuur Vervaldatum
 function itemKleur(type) {
   if (type === "Wisselgeld Deadline") return { bg: "var(--primary-tint)", fg: "var(--primary)" };
   if (type === "FV Betaaldeadline") return { bg: "#fdf3e0", fg: "#92600a" };
+  if (type === "Evenement") return { bg: "#eaf5ee", fg: "#1b5c2e" };
   if (type === "Jaarlijks Actiepunt") return { bg: "#f4f4f5", fg: "var(--text-muted)" };
   return { bg: "var(--danger-tint)", fg: "var(--danger)" }; // Voorschot Deadline / Factuur Vervaldatum
 }

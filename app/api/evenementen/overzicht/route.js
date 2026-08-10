@@ -29,7 +29,7 @@ export async function GET(req) {
     { data: transacties, error: transactiesError },
     { data: gekoppeldeTransacties, error: gekoppeldeError },
   ] = await Promise.all([
-    supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde").eq("evenement_id", evenementId),
+    supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_budgetten").select("id, hoofdcategorie, budget_toegewezen").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_categorieen").select("id, naam").eq("evenement_id", evenementId).order("naam"),
     supabaseAdmin

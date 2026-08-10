@@ -43,6 +43,7 @@ export default function Jaaroverzicht() {
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [data, setData] = useState(null);
   const [evenementenWinst, setEvenementenWinst] = useState([]);
+  const [kalenderItems, setKalenderItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [aandacht, setAandacht] = useState(null);
 
@@ -59,6 +60,7 @@ export default function Jaaroverzicht() {
     if (!werkjaarId) return;
     fetch(`/api/jaaroverzicht?werkjaarId=${werkjaarId}`).then((r) => r.json()).then(setData);
     fetch(`/api/evenementen/afgerond?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setEvenementenWinst(d.evenementen || []));
+    fetch(`/api/kalender?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setKalenderItems(d.kalenderItems || []));
   }, [werkjaarId]);
 
   // Aandachtspunten: een korte samenvatting van wat nog actie vraagt, zodat
@@ -177,6 +179,28 @@ export default function Jaaroverzicht() {
               </div>
             </div>
           )}
+
+          {(() => {
+            const vandaag = new Date().toISOString().slice(0, 10);
+            const eerstvolgende = kalenderItems.filter((it) => !it.is_voltooid && it.datum_deadline >= vandaag).slice(0, 5);
+            if (eerstvolgende.length === 0) return null;
+            return (
+              <div className="card" style={{ marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>Eerstvolgend op de kalender</div>
+                  <Link href="/kalender" style={{ fontSize: 12 }}>Volledige kalender →</Link>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {eerstvolgende.map((it) => (
+                    <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                      <span>{it.titel}</span>
+                      <span className="subtle">{it.datum_deadline}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="grid-3" style={{ marginBottom: 24 }}>
             <div className="stat">

@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
+import { AFDELINGEN_VOLGORDE } from "@/lib/kampAfdelingen";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -167,7 +168,7 @@ export default function Kampkosten() {
         )}
       </div>
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Kosten en inkomsten van het kamp zelf (leiding, logistiek, tenten, kampplaats, keuken, ...) — los van de winkel-/dropping-/weekendbudgetten per afdeling die bij Kampbudgetten staan.
+        Kosten en inkomsten van het kamp. Kies bij "Hoofdcategorie" een afdeling (Sloebers t.e.m. Aspi) en het bedrag telt automatisch mee in hun kampbudget — kies een algemene categorie voor kosten die niet bij één afdeling horen (leiding, tenten, kampplaats, keuken, ...).
       </p>
 
       <div className="grid-3" style={{ marginBottom: 24 }}>
@@ -233,7 +234,12 @@ export default function Kampkosten() {
               <div style={{ display: "flex", gap: 4 }}>
                 <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
                   <option value="">Hoofdcategorie...</option>
-                  {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                  <optgroup label="Afdeling (telt mee voor kampbudget)">
+                    {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
+                  </optgroup>
+                  <optgroup label="Algemeen">
+                    {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                  </optgroup>
                 </select>
                 <button type="button" onClick={() => categorieToevoegen((naam) => setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
               </div>

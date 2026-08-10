@@ -37,9 +37,10 @@ export default function Layout({ session, children }) {
       children: [],
     },
     {
-      href: "/kampbudgetten",
+      href: "/kamp",
       label: "Kamp",
       children: [
+        { href: "/kampbudgetten", label: "Kampbudgetten" },
         { href: "/kampkosten", label: "Kampkosten" },
       ],
     },
