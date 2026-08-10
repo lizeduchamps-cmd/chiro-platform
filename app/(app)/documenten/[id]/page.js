@@ -1,6 +1,7 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
@@ -17,6 +18,7 @@ const LEGE_REGEL = { omschrijving: "", bedrag: "", bestemming: "kamp", kampHoofd
 export default function DocumentDetail({ params }) {
   const { id } = params;
   const { data: session } = useSession();
+  const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
   const [overzicht, setOverzicht] = useState(null);
@@ -213,6 +215,23 @@ export default function DocumentDetail({ params }) {
     if (data.error) return toast.error(data.error);
     laden();
     toast.success(`${data.aantal} regel(s) verwerkt`);
+  };
+
+  const documentVerwijderen = async () => {
+    const ok = await confirm({
+      title: "Document verwijderen",
+      message: isVerwerkt
+        ? "Dit document en het bijhorende bestand verwijderen? De transacties die er al uit aangemaakt zijn (kamp/evenement/FV) blijven gewoon bestaan — enkel het document zelf en zijn regels verdwijnen."
+        : "Dit document, het bijhorende bestand en zijn regels verwijderen?",
+      danger: true,
+      bevestigLabel: "Verwijderen",
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/documenten?id=${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    toast.success("Document verwijderd");
+    router.push("/documenten");
   };
 
   return (
@@ -457,6 +476,12 @@ export default function DocumentDetail({ params }) {
       {magBewerken && !isVerwerkt && (
         <button className="btn-primary" disabled={!volledigVerdeeld || regels.length === 0} onClick={verwerken}>
           {volledigVerdeeld ? "Verwerken" : `Nog ${euro(resterend)} te verdelen voor je kan verwerken`}
+        </button>
+      )}
+
+      {magBewerken && (
+        <button className="btn-danger" onClick={documentVerwijderen} style={{ marginTop: 16, fontSize: 12 }}>
+          🗑️ Document verwijderen
         </button>
       )}
     </div>

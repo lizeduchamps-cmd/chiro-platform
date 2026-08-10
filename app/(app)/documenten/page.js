@@ -2,7 +2,7 @@
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useToast } from "@/components/NotifyProvider";
+import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonTable } from "@/components/Skeleton";
 
 function euro(n) {
@@ -14,6 +14,7 @@ const LEEG_UPLOAD = { titel: "", totaalbedrag: "", gekoppeldAan: "", evenementId
 export default function Documenten() {
   const { data: session } = useSession();
   const toast = useToast();
+  const confirm = useConfirm();
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [documenten, setDocumenten] = useState([]);
@@ -77,6 +78,24 @@ export default function Documenten() {
     toast.success("Document geüpload");
   };
 
+  const documentVerwijderen = async (d) => {
+    const ok = await confirm({
+      title: "Document verwijderen",
+      message:
+        d.status === "Verwerkt"
+          ? `"${d.titel}" en het bijhorende bestand verwijderen? De transacties die er al uit aangemaakt zijn blijven bestaan — enkel het document zelf verdwijnt.`
+          : `"${d.titel}" en het bijhorende bestand verwijderen?`,
+      danger: true,
+      bevestigLabel: "Verwijderen",
+    });
+    if (!ok) return;
+    const res = await fetch(`/api/documenten?id=${d.id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setDocumenten((prev) => prev.filter((x) => x.id !== d.id));
+    toast.success("Document verwijderd");
+  };
+
   return (
     <div style={{ padding: 32, maxWidth: 1000 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
@@ -135,11 +154,12 @@ export default function Documenten() {
               <th style={{ textAlign: "right" }}>Totaalbedrag</th>
               <th>Status</th>
               <th>Datum</th>
+              {magUploaden && <th></th>}
             </tr>
           </thead>
           <tbody>
             {documenten.length === 0 && (
-              <tr><td colSpan={5} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen documenten.</td></tr>
+              <tr><td colSpan={6} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen documenten.</td></tr>
             )}
             {documenten.map((d) => (
               <tr key={d.id}>
@@ -152,6 +172,9 @@ export default function Documenten() {
                 <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(d.totaalbedrag)}</td>
                 <td><span className={`badge ${d.status === "Verwerkt" ? "badge-primary" : "badge-neutral"}`}>{d.status}</span></td>
                 <td className="subtle" style={{ whiteSpace: "nowrap" }}>{new Date(d.created_at).toLocaleDateString("nl-BE")}</td>
+                {magUploaden && (
+                  <td><button className="btn-danger" onClick={() => documentVerwijderen(d)} style={{ fontSize: 11 }}>🗑️</button></td>
+                )}
               </tr>
             ))}
           </tbody>
