@@ -14,7 +14,6 @@ export default function Kampdashboard() {
   const [budgetten, setBudgetten] = useState(null);
   const [kosten, setKosten] = useState(null);
   const [wisselgeld, setWisselgeld] = useState([]);
-  const [kalenderItems, setKalenderItems] = useState([]);
 
   useEffect(() => {
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
@@ -28,7 +27,6 @@ export default function Kampdashboard() {
     fetch(`/api/kampbudgetten?werkjaarId=${werkjaarId}`).then((r) => r.json()).then(setBudgetten);
     fetch(`/api/kampkosten?werkjaarId=${werkjaarId}`).then((r) => r.json()).then(setKosten);
     fetch(`/api/wisselgeld?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setWisselgeld(d.wisselgeldAanvragen || []));
-    fetch(`/api/kalender?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setKalenderItems(d.kalenderItems || []));
   }, [werkjaarId]);
 
   if (loading || (werkjaarId && (!budgetten || !kosten))) {
@@ -49,10 +47,6 @@ export default function Kampdashboard() {
     { toegewezen: 0, uitgegeven: 0 }
   );
   const budgettenOverschreden = (budgetten.groepsbudgetten || []).filter((g) => g.statusBudget === "Overschreden");
-
-  const vandaag = new Date().toISOString().slice(0, 10);
-  const eerstvolgende = kalenderItems.filter((it) => !it.is_voltooid && it.datum_deadline >= vandaag).slice(0, 6);
-
   const wisselgeldOpen = wisselgeld.filter((w) => w.status === "Aangevraagd" || w.status === "Goedgekeurd");
 
   return (
@@ -85,25 +79,6 @@ export default function Kampdashboard() {
           <div style={{ fontSize: 20, fontWeight: 700 }}>{wisselgeldOpen.length} <span className="subtle" style={{ fontSize: 12, fontWeight: 400 }}>nog klaar te zetten</span></div>
           <div className="subtle" style={{ fontSize: 11, marginTop: 4 }}>{wisselgeld.length} aanvra(a)g(en) totaal</div>
         </Link>
-      </div>
-
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Eerstvolgend op de kalender</div>
-          <Link href="/kalender" style={{ fontSize: 12 }}>Volledige kalender →</Link>
-        </div>
-        {eerstvolgende.length === 0 ? (
-          <p className="muted" style={{ fontStyle: "italic", fontSize: 13 }}>Niets op til.</p>
-        ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {eerstvolgende.map((it) => (
-              <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                <span>{it.titel}</span>
-                <span className="subtle">{it.datum_deadline}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="grid-3">
