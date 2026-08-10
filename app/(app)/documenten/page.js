@@ -113,6 +113,7 @@ export default function Documenten() {
               <option value="">Niet gekoppeld</option>
               <option value="kamp">Kamp</option>
               <option value="evenement">Evenement</option>
+              <option value="fv">Financieel Verslag</option>
             </select>
             {upload.gekoppeldAan === "evenement" && (
               <select value={upload.evenementId} onChange={(e) => setUpload({ ...upload, evenementId: e.target.value })} style={{ gridColumn: "span 2" }}>
@@ -146,7 +147,7 @@ export default function Documenten() {
                   <Link href={`/documenten/${d.id}`} style={{ fontWeight: 600, color: "var(--primary)" }}>{d.titel}</Link>
                 </td>
                 <td className="muted" style={{ fontSize: 12 }}>
-                  {d.gekoppeld_aan === "evenement" ? d.evenementen?.naam : d.gekoppeld_aan === "kamp" ? "Kamp" : "-"}
+                  {d.gekoppeld_aan === "evenement" ? d.evenementen?.naam : d.gekoppeld_aan === "kamp" ? "Kamp" : d.gekoppeld_aan === "fv" ? "Financieel Verslag" : "-"}
                 </td>
                 <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(d.totaalbedrag)}</td>
                 <td><span className={`badge ${d.status === "Verwerkt" ? "badge-primary" : "badge-neutral"}`}>{d.status}</span></td>

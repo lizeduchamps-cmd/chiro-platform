@@ -120,7 +120,7 @@ export default function DocumentDetail({ params }) {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{document.titel}</h1>
           <p className="muted" style={{ fontSize: 13 }}>
-            {document.gekoppeld_aan === "evenement" ? document.evenementen?.naam : document.gekoppeld_aan === "kamp" ? "Kamp" : "Niet gekoppeld"}
+            {document.gekoppeld_aan === "evenement" ? document.evenementen?.naam : document.gekoppeld_aan === "kamp" ? "Kamp" : document.gekoppeld_aan === "fv" ? "Financieel Verslag" : "Niet gekoppeld"}
             {document.users?.naam && ` · geüpload door ${document.users.naam}`}
           </p>
         </div>

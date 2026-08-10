@@ -437,7 +437,7 @@ create table if not exists documenten (
   bestand_pad text not null,
   bestand_type text,
   totaalbedrag numeric(10,2) not null,
-  gekoppeld_aan text check (gekoppeld_aan in ('kamp', 'evenement') or gekoppeld_aan is null),
+  gekoppeld_aan text check (gekoppeld_aan in ('kamp', 'evenement', 'fv') or gekoppeld_aan is null),
   evenement_id uuid references evenementen(id) on delete set null,
   status text not null default 'Nog te verwerken' check (status in ('Nog te verwerken', 'Verwerkt')),
   geupload_door_user_id uuid references users(id) on delete set null,
