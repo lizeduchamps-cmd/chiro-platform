@@ -8,6 +8,7 @@ import { SkeletonCard } from "@/components/Skeleton";
 import { AFDELINGEN_VOLGORDE } from "@/lib/kampAfdelingen";
 import { parseKassabon, vindKlantNaam } from "@/lib/receiptParser";
 import { preprocessKassabon } from "@/lib/receiptImage";
+import { reconstrueerRijen } from "@/lib/receiptRows";
 import { vindGebruiker } from "@/lib/smartPaste";
 
 function euro(n) {
@@ -149,19 +150,21 @@ export default function DocumentDetail({ params }) {
         // fallback op signedUrl hierboven
       }
 
-      // PSM.AUTO (Tesseract's eigen automatische lay-out-analyse) i.p.v.
-      // SINGLE_COLUMN: een bon heeft eigenlijk twee kolommen (naam + prijs,
-      // met een grote witruimte ertussen). SINGLE_COLUMN dwingt dat tot één
-      // lineaire tekststroom, waarbij het taalmodel (Nederlands) geïsoleerde
-      // prijscijfers soms als een 'woord' probeert te lezen i.p.v. als getal
-      // — dat gaf op een echte bon prijzen als 'ee' of 'WJ,' i.p.v. cijfers.
+      // Zowel SINGLE_COLUMN als AUTO lieten Tesseract's eigen leesvolgorde-
+      // logica in de war raken door de brede kolomafstand tussen naam en
+      // prijs (prijs als woord gelezen, of de hele kolom weggelaten). SPARSE_
+      // TEXT laat Tesseract enkel zoeken naar tekst waar dan ook, zonder een
+      // samenhangende leesvolgorde te veronderstellen — en we vragen de
+      // positie (bbox) van elk woord op, zodat we de rijen zelf reconstrueren
+      // op basis van fysieke hoogte i.p.v. Tesseract te laten raden.
       const { createWorker, PSM } = await import("tesseract.js");
       const worker = await createWorker("nld");
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
-      const {
-        data: { text },
-      } = await worker.recognize(beeld);
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+      const { data } = await worker.recognize(beeld, {}, { text: true, blocks: true });
       await worker.terminate();
+
+      const rijenTekst = reconstrueerRijen(data.blocks);
+      const text = rijenTekst.length > 0 ? rijenTekst.join("\n") : data.text;
 
       setScanRuweTekst(text);
       const kandidaten = parseKassabon(text);
