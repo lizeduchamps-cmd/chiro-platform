@@ -149,9 +149,15 @@ export default function DocumentDetail({ params }) {
         // fallback op signedUrl hierboven
       }
 
+      // PSM.AUTO (Tesseract's eigen automatische lay-out-analyse) i.p.v.
+      // SINGLE_COLUMN: een bon heeft eigenlijk twee kolommen (naam + prijs,
+      // met een grote witruimte ertussen). SINGLE_COLUMN dwingt dat tot één
+      // lineaire tekststroom, waarbij het taalmodel (Nederlands) geïsoleerde
+      // prijscijfers soms als een 'woord' probeert te lezen i.p.v. als getal
+      // — dat gaf op een echte bon prijzen als 'ee' of 'WJ,' i.p.v. cijfers.
       const { createWorker, PSM } = await import("tesseract.js");
       const worker = await createWorker("nld");
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_COLUMN });
+      await worker.setParameters({ tessedit_pageseg_mode: PSM.AUTO });
       const {
         data: { text },
       } = await worker.recognize(beeld);
