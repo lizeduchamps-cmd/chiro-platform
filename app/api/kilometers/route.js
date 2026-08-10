@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { verdeelNaarFv } from "@/lib/fvVerdeling";
 
 // Maakt een kilometers-rij én de bijhorende fv_regel in één keer aan — het
 // bedrag wordt hier berekend (nooit door de client meegegeven) zodat het
@@ -30,16 +31,9 @@ export async function POST(req) {
   const bedrag = -(Math.round(kmGetal * tarief * 100) / 100);
   const omschrijving = activiteit ? `Kilometervergoeding ${activiteit} (${kmGetal} km)` : `Kilometervergoeding (${kmGetal} km)`;
 
-  await supabaseAdmin
-    .from("fv_status")
-    .upsert({ fv_maand_id: fvMaandId, user_id: userId, status: "openstaand" }, { onConflict: "fv_maand_id,user_id", ignoreDuplicates: true });
-
-  const { data: fvRegel, error: regelError } = await supabaseAdmin
-    .from("fv_regels")
-    .insert({ fv_maand_id: fvMaandId, user_id: userId, omschrijving, bedrag, bron: "kilometers" })
-    .select("id")
-    .single();
-  if (regelError) return NextResponse.json({ error: regelError.message }, { status: 500 });
+  const { fvRegels, error: verdeelError } = await verdeelNaarFv([{ fvMaandId, userId, omschrijving, bedrag, bron: "kilometers" }]);
+  if (verdeelError) return NextResponse.json({ error: verdeelError }, { status: 500 });
+  const fvRegel = fvRegels[0];
 
   const { data: kilometerRij, error: kmError } = await supabaseAdmin
     .from("kilometers")

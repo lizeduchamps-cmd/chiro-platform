@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { verdeelNaarFv } from "@/lib/fvVerdeling";
 
 // Verdeelt een bestelling over de FV's van iedereen die er iets van besteld
 // heeft: per persoon één regel met het subtotaal van die bestelling.
@@ -39,19 +40,16 @@ export async function POST(req) {
     perPersoon[r.user_id] = (perPersoon[r.user_id] || 0) + Number(r.aantal) * Number(r.prijs_per_stuk);
   });
 
-  const statusRows = Object.keys(perPersoon).map((userId) => ({ fv_maand_id: fvMaandId, user_id: userId, status: "openstaand" }));
-  const fvRegelRows = Object.entries(perPersoon).map(([userId, totaal]) => ({
-    fv_maand_id: fvMaandId,
-    user_id: userId,
-    omschrijving: `${bestelling.titel} (${bestelling.datum})`,
-    bedrag: Math.round(totaal * 100) / 100,
-    bron: "bestelling",
-  }));
-
-  await supabaseAdmin.from("fv_status").upsert(statusRows, { onConflict: "fv_maand_id,user_id", ignoreDuplicates: true });
-
-  const { error: insertError } = await supabaseAdmin.from("fv_regels").insert(fvRegelRows);
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+  const { fvRegels, error: verdeelError } = await verdeelNaarFv(
+    Object.entries(perPersoon).map(([userId, totaal]) => ({
+      fvMaandId,
+      userId,
+      omschrijving: `${bestelling.titel} (${bestelling.datum})`,
+      bedrag: totaal,
+      bron: "bestelling",
+    }))
+  );
+  if (verdeelError) return NextResponse.json({ error: verdeelError }, { status: 500 });
 
   const { error: updateError } = await supabaseAdmin
     .from("bestellingen")
@@ -59,5 +57,5 @@ export async function POST(req) {
     .eq("id", bestellingId);
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, aantal: fvRegelRows.length });
+  return NextResponse.json({ ok: true, aantal: fvRegels.length });
 }

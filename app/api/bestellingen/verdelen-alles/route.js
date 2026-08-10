@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { verdeelNaarFv } from "@/lib/fvVerdeling";
 
 // Verdeelt in één keer alle nog niet-verdeelde bestellingen (die minstens één
 // regel hebben) over een gekozen FV-maand. Elke bestelling blijft een eigen
@@ -29,8 +30,7 @@ export async function POST(req) {
     .in("bestelling_id", openstaand.map((b) => b.id));
   if (regelsError) return NextResponse.json({ error: regelsError.message }, { status: 500 });
 
-  const statusRows = [];
-  const fvRegelRows = [];
+  const teVerdelen = [];
   const verdeeldeBestellingIds = [];
 
   for (const bestelling of openstaand) {
@@ -43,12 +43,11 @@ export async function POST(req) {
     });
 
     Object.entries(perPersoon).forEach(([userId, totaal]) => {
-      statusRows.push({ fv_maand_id: fvMaandId, user_id: userId, status: "openstaand" });
-      fvRegelRows.push({
-        fv_maand_id: fvMaandId,
-        user_id: userId,
+      teVerdelen.push({
+        fvMaandId,
+        userId,
         omschrijving: `${bestelling.titel} (${bestelling.datum})`,
-        bedrag: Math.round(totaal * 100) / 100,
+        bedrag: totaal,
         bron: "bestelling",
       });
     });
@@ -59,10 +58,8 @@ export async function POST(req) {
     return NextResponse.json({ ok: true, aantalBestellingen: 0, aantalRegels: 0 });
   }
 
-  await supabaseAdmin.from("fv_status").upsert(statusRows, { onConflict: "fv_maand_id,user_id", ignoreDuplicates: true });
-
-  const { error: insertError } = await supabaseAdmin.from("fv_regels").insert(fvRegelRows);
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
+  const { fvRegels, error: verdeelError } = await verdeelNaarFv(teVerdelen);
+  if (verdeelError) return NextResponse.json({ error: verdeelError }, { status: 500 });
 
   const { error: updateError } = await supabaseAdmin
     .from("bestellingen")
@@ -70,5 +67,5 @@ export async function POST(req) {
     .in("id", verdeeldeBestellingIds);
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, aantalBestellingen: verdeeldeBestellingIds.length, aantalRegels: fvRegelRows.length });
+  return NextResponse.json({ ok: true, aantalBestellingen: verdeeldeBestellingIds.length, aantalRegels: fvRegels.length });
 }

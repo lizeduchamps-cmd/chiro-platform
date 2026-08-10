@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { haalDocument, magDocumentBewerken } from "@/lib/documentPermissies";
+import { verdeelNaarFv } from "@/lib/fvVerdeling";
 
 // Zet elke bon_regel om in een echte transactie op zijn bestemming — daarna
 // is het document "Verwerkt" en staan de bedragen mee in Kampkosten,
@@ -66,16 +67,15 @@ export async function POST(req) {
         medewerker_user_id: document.geupload_door_user_id,
       });
     } else if (regel.bestemming === "fv" && regel.fv_user_id && regel.fv_maand_id) {
-      await supabaseAdmin
-        .from("fv_status")
-        .upsert({ fv_maand_id: regel.fv_maand_id, user_id: regel.fv_user_id, status: "openstaand" }, { onConflict: "fv_maand_id,user_id", ignoreDuplicates: true });
-      await supabaseAdmin.from("fv_regels").insert({
-        fv_maand_id: regel.fv_maand_id,
-        user_id: regel.fv_user_id,
-        omschrijving: regel.omschrijving,
-        bedrag: Number(regel.bedrag),
-        bron: "document",
-      });
+      await verdeelNaarFv([
+        {
+          fvMaandId: regel.fv_maand_id,
+          userId: regel.fv_user_id,
+          omschrijving: regel.omschrijving,
+          bedrag: Number(regel.bedrag),
+          bron: "document",
+        },
+      ]);
     }
   }
 
