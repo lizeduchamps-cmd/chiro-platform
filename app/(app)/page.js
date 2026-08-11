@@ -27,8 +27,8 @@ function MaandGrafiek({ perMaand }) {
       {maanden.map((m) => (
         <div key={m} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 56 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 130 }}>
-            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "#1b315c", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 3 }} />
-            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "#B3261E", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 3 }} />
+            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "var(--primary)", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 3 }} />
+            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "var(--danger)", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 3 }} />
           </div>
           <div className="subtle" style={{ fontSize: 10, marginTop: 6 }}>{m.slice(5)}/{m.slice(2, 4)}</div>
         </div>
@@ -222,8 +222,8 @@ export default function Jaaroverzicht() {
           <div className="card" style={{ marginBottom: 24 }}>
             <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Inkomsten &amp; uitgaven per maand</div>
             <div className="muted" style={{ display: "flex", gap: 16, fontSize: 11, marginBottom: 4 }}>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#1b315c", borderRadius: 2, marginRight: 4 }}></span>Inkomsten</span>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#B3261E", borderRadius: 2, marginRight: 4 }}></span>Uitgaven</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--primary)", borderRadius: 2, marginRight: 4 }}></span>Inkomsten</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--danger)", borderRadius: 2, marginRight: 4 }}></span>Uitgaven</span>
             </div>
             <MaandGrafiek perMaand={data.perMaand} />
           </div>

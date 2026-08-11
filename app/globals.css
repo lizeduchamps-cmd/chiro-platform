@@ -1,24 +1,37 @@
 :root {
-  --bg: #f9f9fa;
+  --bg: #efebe4;
   --surface: #ffffff;
-  --surface-hover: #f6f7f9;
-  --border: #e4e4e7;
-  --border-strong: #d4d4d8;
-  --text: #18181b;
-  --text-muted: #71717a;
-  --text-subtle: #a1a1aa;
+  --surface-alt: #f7f5f1;
+  --surface-hover: #f1eee9;
+  --border: #e9e6e0;
+  --border-soft: #f1eee9;
+  --border-strong: #dad5cc;
+  --text: #17161a;
+  --text-muted: #6e6b76;
+  --text-subtle: #b7b2a9;
   --primary: #1b315c;
-  --primary-hover: #142647;
-  --primary-tint: #eaf0fa;
-  --danger: #b3261e;
-  --danger-tint: #fbeaea;
-  --success: #1a7f37;
-  --success-tint: #e9f7ed;
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow-sm: 0 1px 2px rgba(24, 24, 27, 0.04);
-  --shadow-md: 0 4px 16px rgba(24, 24, 27, 0.08);
-  --shadow-lg: 0 12px 32px rgba(24, 24, 27, 0.16);
+  --primary-hover: #0f1c36;
+  --primary-tint: #e6ebf3;
+  --danger: #bc0610;
+  --danger-deep: #8e040c;
+  --danger-tint: #fbe6e7;
+  --danger-border: #efc3c5;
+  --success: #1ba36b;
+  --success-text: #15764e;
+  --success-tint: #e4f6ec;
+  --success-border: #bfe6d1;
+  --warning: #f08a24;
+  --warning-text: #9c5a0b;
+  --warning-tint: #fdf0df;
+  --warning-border: #f5ddb8;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --radius-lg: 22px;
+  --radius-pill: 999px;
+  --font-body: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Space Grotesk", ui-monospace, monospace;
+  --shadow-md: 0 4px 16px rgba(23, 22, 26, 0.1);
+  --shadow-lg: 0 12px 32px rgba(23, 22, 26, 0.16);
 }
 
 * {
@@ -29,17 +42,29 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
 a {
   color: inherit;
 }
+a.link {
+  color: var(--primary);
+  font-weight: 700;
+}
+a.link:hover {
+  color: var(--primary-hover);
+}
 
 h1, h2, h3, h4 {
   margin: 0;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
+}
+
+.money {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 button {
@@ -51,7 +76,6 @@ button {
   background: var(--surface);
   color: var(--text);
   cursor: pointer;
-  box-shadow: var(--shadow-sm);
   transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease, transform 0.06s ease;
 }
 button:hover {
@@ -70,13 +94,11 @@ button:disabled {
   background: var(--primary);
   border-color: var(--primary);
   color: white;
-  font-weight: 500;
-  box-shadow: 0 1px 2px rgba(27, 49, 92, 0.16), 0 1px 3px rgba(27, 49, 92, 0.08);
+  font-weight: 700;
 }
 .btn-primary:hover {
   background: var(--primary-hover);
   border-color: var(--primary-hover);
-  box-shadow: 0 2px 8px rgba(27, 49, 92, 0.24);
 }
 
 .btn-danger {
@@ -95,11 +117,11 @@ button:disabled {
   background: var(--danger);
   border-color: var(--danger);
   color: white;
-  font-weight: 500;
+  font-weight: 700;
 }
 .btn-danger-solid:hover {
-  background: #8f1e18;
-  border-color: #8f1e18;
+  background: var(--danger-deep);
+  border-color: var(--danger-deep);
 }
 
 .btn-plain {
@@ -120,7 +142,7 @@ textarea {
   font-size: 13px;
   padding: 7px 10px;
   border-radius: var(--radius-sm);
-  border: 1px solid var(--border-strong);
+  border: 1.5px solid var(--border-strong);
   background: var(--surface);
   color: var(--text);
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
@@ -145,7 +167,7 @@ select {
   appearance: none;
   -webkit-appearance: none;
   padding-right: 28px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2371717a' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%236e6b76' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   cursor: pointer;
@@ -160,7 +182,19 @@ label {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 20px;
-  box-shadow: var(--shadow-sm);
+}
+.card-lg {
+  border-radius: var(--radius-lg);
+  padding: 22px;
+}
+.card-danger {
+  border-color: var(--danger-border);
+}
+.card-warning {
+  border-color: var(--warning-border);
+}
+.card-success {
+  border-color: var(--success-border);
 }
 
 .table-wrap {
@@ -168,7 +202,6 @@ label {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow-x: auto;
-  box-shadow: var(--shadow-sm);
 }
 
 table {
@@ -180,18 +213,18 @@ table {
 th {
   padding: 10px 12px;
   text-align: left;
-  background: #fafafb;
+  background: var(--surface-alt);
   color: var(--text-muted);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 11px;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   border-bottom: 1px solid var(--border);
 }
 
 td {
   padding: 10px 12px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-soft);
 }
 
 tbody tr {
@@ -209,20 +242,60 @@ tbody tr:hover {
   color: var(--text-subtle);
 }
 
+.eyebrow {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
 .badge {
   display: inline-block;
   font-size: 11px;
-  font-weight: 500;
-  padding: 4px 10px;
-  border-radius: 20px;
+  font-weight: 700;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
 }
 .badge-primary {
   background: var(--primary-tint);
   color: var(--primary);
 }
 .badge-neutral {
-  background: #f4f4f5;
+  background: var(--bg);
   color: var(--text-muted);
+}
+.badge-success {
+  background: var(--success-tint);
+  color: var(--success-text);
+}
+.badge-danger {
+  background: var(--danger-tint);
+  color: var(--danger-deep);
+}
+.badge-warning {
+  background: var(--warning-tint);
+  color: var(--warning-text);
+}
+
+/* ============ VOORTGANGSBALK — kleur volgt de status, niet de merkkleur ============ */
+
+.progress-track {
+  height: 10px;
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--success);
+}
+.progress-fill.warning {
+  background: var(--warning);
+}
+.progress-fill.danger {
+  background: var(--danger);
 }
 
 /* ============ CHIPS + POPOVER (compacte multi-select, bv. verantwoordelijkheden) ============ */
@@ -232,9 +305,9 @@ tbody tr:hover {
   align-items: center;
   gap: 5px;
   font-size: 11px;
-  font-weight: 500;
-  padding: 3px 6px 3px 10px;
-  border-radius: 20px;
+  font-weight: 600;
+  padding: 4px 7px 4px 10px;
+  border-radius: var(--radius-pill);
   background: var(--primary-tint);
   color: var(--primary);
   white-space: nowrap;
@@ -260,10 +333,10 @@ tbody tr:hover {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  font-weight: 500;
-  padding: 3px 9px;
-  border-radius: 20px;
-  border: 1px dashed var(--border-strong);
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1.5px dashed var(--border-strong);
   box-shadow: none;
   background: none;
   color: var(--text-muted);
@@ -280,7 +353,7 @@ tbody tr:hover {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
 .popover-menu {
@@ -303,7 +376,7 @@ tbody tr:hover {
   align-items: center;
   gap: 8px;
   padding: 6px 8px;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 13px;
   cursor: pointer;
 }
@@ -318,16 +391,14 @@ tbody tr:hover {
 .stat {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   padding: 16px;
-  box-shadow: var(--shadow-sm);
 }
 .stat-primary {
   background: var(--primary);
   color: white;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   padding: 16px;
-  box-shadow: 0 2px 10px rgba(27, 49, 92, 0.2);
 }
 
 @media print {
@@ -337,10 +408,6 @@ tbody tr:hover {
 }
 
 /* ============ ZIJBALK ============ */
-
-.app-sidebar {
-  box-shadow: 2px 0 12px rgba(0, 0, 0, 0.12);
-}
 
 .nav-link {
   transition: background 0.1s ease, color 0.1s ease;
@@ -467,7 +534,7 @@ tbody tr:hover {
   border-radius: var(--radius-sm);
   padding: 10px 14px;
   font-size: 13px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  box-shadow: var(--shadow-lg);
   width: 320px;
   max-width: calc(100vw - 24px);
   animation: toast-in 0.15s ease;
@@ -485,7 +552,7 @@ tbody tr:hover {
   background: var(--danger);
 }
 .toast-success {
-  background: #1b5c2e;
+  background: var(--success-text);
 }
 .toast-undo {
   background: var(--text);
@@ -533,7 +600,7 @@ tbody tr:hover {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(24, 24, 27, 0.45);
+  background: rgba(23, 22, 26, 0.45);
   z-index: 110;
   display: flex;
   align-items: center;
@@ -547,14 +614,14 @@ tbody tr:hover {
   padding: 20px;
   width: 100%;
   max-width: 360px;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
+  box-shadow: var(--shadow-lg);
   animation: toast-in 0.12s ease;
 }
 
 /* ============ SKELETON LOADERS (vervangt "Laden…") ============ */
 
 .skeleton {
-  background: linear-gradient(90deg, #ececef 25%, #f5f5f6 37%, #ececef 63%);
+  background: linear-gradient(90deg, #e6e2d9 25%, #efece5 37%, #e6e2d9 63%);
   background-size: 400% 100%;
   animation: skeleton-shimmer 1.4s ease infinite;
   border-radius: var(--radius-sm);

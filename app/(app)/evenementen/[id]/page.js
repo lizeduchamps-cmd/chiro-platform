@@ -385,7 +385,7 @@ export default function EvenementDetail({ params }) {
       <div className="card" style={{ marginBottom: 24 }}>
         <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Kassabeheer</div>
         {kassasMetTekort.length > 0 && (
-          <div style={{ background: "var(--danger-tint, #fdecea)", border: "1px solid var(--danger)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
+          <div style={{ background: "var(--danger-tint)", border: "1px solid var(--danger)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
             ⚠️ Kassa-tekort gedetecteerd: {kassasMetTekort.map((k) => `${k.naam} (${euro(Math.abs(k.verschil))} te weinig)`).join(", ")}
           </div>
         )}
@@ -441,7 +441,7 @@ export default function EvenementDetail({ params }) {
                         />
                       ) : k.verwacht_bedrag !== null ? euro(k.verwacht_bedrag) : "-"}
                     </td>
-                    <td style={{ textAlign: "right", fontWeight: 600, color: k.verschil === null ? undefined : k.heeftTekort ? "var(--danger)" : k.verschil > 0.01 ? "var(--success, #1a7f37)" : undefined }}>
+                    <td style={{ textAlign: "right", fontWeight: 600, color: k.verschil === null ? undefined : k.heeftTekort ? "var(--danger)" : k.verschil > 0.01 ? "var(--success-text)" : undefined }}>
                       {k.verschil === null ? "-" : `${k.verschil > 0 ? "+" : ""}${euro(k.verschil)}`}
                     </td>
                     {magBewerken && (

@@ -14,9 +14,9 @@ const TYPES = ["Jaarlijks Actiepunt", "Voorschot Deadline", "Factuur Vervaldatum
 // /api/kalender) — dus geen toggle/verwijder-knop, klik linkt gewoon door.
 function itemKleur(type) {
   if (type === "Wisselgeld Deadline") return { bg: "var(--primary-tint)", fg: "var(--primary)" };
-  if (type === "FV Betaaldeadline") return { bg: "#fdf3e0", fg: "#92600a" };
-  if (type === "Evenement") return { bg: "#eaf5ee", fg: "#1b5c2e" };
-  if (type === "Jaarlijks Actiepunt") return { bg: "#f4f4f5", fg: "var(--text-muted)" };
+  if (type === "FV Betaaldeadline") return { bg: "var(--warning-tint)", fg: "var(--warning-text)" };
+  if (type === "Evenement") return { bg: "var(--success-tint)", fg: "var(--success-text)" };
+  if (type === "Jaarlijks Actiepunt") return { bg: "var(--bg)", fg: "var(--text-muted)" };
   return { bg: "var(--danger-tint)", fg: "var(--danger)" }; // Voorschot Deadline / Factuur Vervaldatum
 }
 
@@ -177,7 +177,7 @@ export default function Kalender() {
                 key={key}
                 style={{
                   minHeight: 92, padding: 6, borderBottom: "1px solid var(--border)", borderRight: "1px solid var(--border)",
-                  background: buitenMaand ? "#fafafb" : key === vandaag ? "var(--primary-tint)" : "var(--surface)",
+                  background: buitenMaand ? "var(--surface-alt)" : key === vandaag ? "var(--primary-tint)" : "var(--surface)",
                 }}
               >
                 <div className={buitenMaand ? "subtle" : "muted"} style={{ fontSize: 11, fontWeight: key === vandaag ? 700 : 400, marginBottom: 4 }}>{dag.getDate()}</div>
@@ -191,7 +191,7 @@ export default function Kalender() {
                         title={it.virtueel ? "Klik om te bekijken" : it.toegewezen_aan ? `Toegewezen aan: ${it.toegewezen_aan}` : it.type}
                         style={{
                           fontSize: 10, padding: "2px 5px", borderRadius: 5, cursor: it.virtueel || magBewerken ? "pointer" : "default",
-                          background: it.is_voltooid ? "#f4f4f5" : kleur.bg,
+                          background: it.is_voltooid ? "var(--bg)" : kleur.bg,
                           color: it.is_voltooid ? "var(--text-subtle)" : kleur.fg,
                           textDecoration: it.is_voltooid ? "line-through" : "none",
                           display: "flex", justifyContent: "space-between", gap: 4,
