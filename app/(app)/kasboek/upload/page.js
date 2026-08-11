@@ -85,6 +85,40 @@ function parseKbcCsv(text, regels) {
   return resultaat;
 }
 
+function TransactieRij({ t, geselecteerd, onToggleSelect, categorieNamen, onCategorie, onVerwijder, open, onToggleOpen, altijdOpen }) {
+  return (
+    <div>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px" }}>
+        <input type="checkbox" checked={geselecteerd} onChange={onToggleSelect} />
+        <div className="money muted" style={{ width: 56, fontSize: 13, flexShrink: 0 }}>
+          {t.datum ? new Date(t.datum + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short" }) : "-"}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15 }}>{t.tegenpartij}</div>
+          <div className="muted" style={{ fontSize: 12 }}>{t.vrijeMededeling || t.omschrijving || "Geen mededeling"}</div>
+        </div>
+        <div className={`money ${t.bedrag < 0 ? "amount-neg" : ""}`} style={{ width: 100, textAlign: "right", fontWeight: 700, fontSize: 15, color: t.bedrag > 0 ? "var(--success-text)" : undefined }}>
+          {euro(t.bedrag)}
+        </div>
+        {altijdOpen ? (
+          <button className="btn-danger" onClick={onVerwijder} title="Verwijderen">🗑️</button>
+        ) : (
+          <button className="btn-plain link" style={{ fontSize: 14 }} onClick={onToggleOpen}>{open ? "Sluiten" : "Wijzig"}</button>
+        )}
+      </div>
+      {(altijdOpen || open) && (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "0 18px 16px", marginLeft: 34, flexWrap: "wrap" }}>
+          <span className="muted" style={{ fontSize: 13 }}>{altijdOpen ? "Waarvoor was dit?" : "Categorie"}</span>
+          <select value={t.categorie} onChange={(e) => onCategorie(e.target.value)} style={{ fontWeight: t.categorie === ONBEKEND ? 700 : 500 }}>
+            {categorieNamen.map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+          {!altijdOpen && <button className="btn-danger" onClick={onVerwijder} title="Verwijderen">🗑️</button>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CsvUpload() {
   const { data: session } = useSession();
   const toast = useToast();
@@ -98,6 +132,8 @@ export default function CsvUpload() {
   const [filterCat, setFilterCat] = useState("");
   const [bezigMetOpslaan, setBezigMetOpslaan] = useState(false);
   const [toonRegels, setToonRegels] = useState(false);
+  const [toonAlleRegels, setToonAlleRegels] = useState(false);
+  const [bewerkId, setBewerkId] = useState(null);
   const [nieuweRegelTekst, setNieuweRegelTekst] = useState("");
   const [nieuweRegelCat, setNieuweRegelCat] = useState("");
   const [bestandsnaam, setBestandsnaam] = useState("");
@@ -135,6 +171,7 @@ export default function CsvUpload() {
       const aantalSlim = slimmePatroonherkenning(nieuw);
       setPending(nieuw);
       setGeselecteerd([]);
+      setToonAlleRegels(false);
       setBestandsnaam(file.name);
       let msg = `${nieuw.length} transacties uit '${file.name}' geladen!`;
       if (aantalSlim > 0) msg += ` Waarvan ${aantalSlim} automatisch toegewezen via herkenning van herhaalde bedragen.`;
@@ -159,8 +196,8 @@ export default function CsvUpload() {
     toast.undoable({ message: "Rij verwijderd uit de lijst", onUndo: () => setPending((prev) => [...prev, t]) });
   };
   const toggleSelect = (id) => setGeselecteerd((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
-  const toggleSelectAll = (ids, checked) =>
-    setGeselecteerd((prev) => (checked ? Array.from(new Set([...prev, ...ids])) : prev.filter((x) => !ids.includes(x))));
+  const toggleSelectAll = (ids) =>
+    setGeselecteerd((prev) => (ids.every((id) => prev.includes(id)) ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids]))));
   const bulkToepassen = () => {
     if (!bulkCat) return;
     setPending((prev) => prev.map((t) => (geselecteerd.includes(t.id) ? { ...t, categorie: bulkCat } : t)));
@@ -225,82 +262,70 @@ export default function CsvUpload() {
     toast.success(`Categorie "${naam}" toegevoegd`);
   };
 
-  const gefilterd = filterCat ? pending.filter((t) => t.categorie === filterCat) : pending;
   const categorieNamen = Array.from(new Set([...categorieen.map((c) => c.naam), ONBEKEND]));
+  const twijfel = pending.filter((t) => t.categorie === ONBEKEND);
+  const zichtbaar = (toonAlleRegels ? pending : twijfel).filter((t) => !filterCat || t.categorie === filterCat);
+  const percentageOk = pending.length ? Math.round(((pending.length - twijfel.length) / pending.length) * 100) : 0;
 
-  const BevestigKnop = () => (
-    <button
-      className="btn-primary"
-      onClick={bevestigen}
-      disabled={bezigMetOpslaan}
-      style={{ padding: "10px 20px", fontWeight: 600 }}
-    >
-      {bezigMetOpslaan ? "Bezig met opslaan…" : `✅ ${pending.length} transacties definitief toevoegen aan kasboek`}
-    </button>
-  );
+  const stap = pending.length === 0 ? 1 : 2;
 
   return (
-    <div style={{ padding: 32, maxWidth: 1100 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>KBC CSV Upload</h1>
-          <p className="muted" style={{ fontSize: 14 }}>
-            Upload je KBC Touch-export (.csv). Transacties worden automatisch gecategoriseerd; controleer en pas aan waar nodig.
+          <h1 style={{ fontSize: 30, fontWeight: 800 }}>Bankuittreksel importeren</h1>
+          <p className="muted" style={{ fontSize: 15, marginTop: 6, maxWidth: 560 }}>
+            Kies je KBC Touch-export (.csv). Transacties worden automatisch gecategoriseerd; controleer en pas aan waar nodig.
           </p>
+          <div style={{ display: "flex", gap: 8, fontSize: 14, marginTop: 12, alignItems: "center" }}>
+            <span style={{ fontWeight: stap === 1 ? 700 : 500, color: stap === 1 ? "var(--text)" : "var(--text-muted)" }}>1 · Bestand kiezen</span>
+            <span className="subtle">→</span>
+            <span style={{ fontWeight: stap === 2 ? 700 : 500, color: stap === 2 ? "var(--text)" : "var(--text-muted)" }}>2 · Twijfelgevallen</span>
+            <span className="subtle">→</span>
+            <span className="muted">3 · Toevoegen</span>
+          </div>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button onClick={() => setToonHistoriek(!toonHistoriek)} style={{ fontSize: 12 }}>
-            🕓 Importhistoriek {toonHistoriek ? "verbergen" : "tonen"}
-          </button>
-          <button onClick={() => setToonRegels(!toonRegels)} style={{ fontSize: 12 }}>
-            ⚙️ Categorisatieregels {toonRegels ? "verbergen" : "beheren"}
-          </button>
-        </div>
+        <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
+          {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
+        </select>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, margin: "16px 0 20px" }}>
+        <button onClick={() => setToonHistoriek(!toonHistoriek)}>🕓 Importhistoriek {toonHistoriek ? "verbergen" : "tonen"}</button>
+        <button onClick={() => setToonRegels(!toonRegels)}>⚙️ Categorisatieregels {toonRegels ? "verbergen" : "beheren"}</button>
+        {magBewerken && <button onClick={nieuweCategorie}>+ Categorie</button>}
       </div>
 
       {toonHistoriek && (
-        <div className="card" style={{ marginTop: 12, marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Importhistoriek (dit werkjaar)</div>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Importhistoriek (dit werkjaar)</div>
           {historiek.length === 0 ? (
-            <p className="muted" style={{ fontSize: 12, fontStyle: "italic" }}>Nog geen CSV geïmporteerd voor dit werkjaar.</p>
+            <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Nog geen CSV geïmporteerd voor dit werkjaar.</p>
           ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>Wanneer</th>
-                  <th>Door</th>
-                  <th>Bestand</th>
-                  <th style={{ textAlign: "right" }}>In bestand</th>
-                  <th style={{ textAlign: "right" }}>Nieuw</th>
-                  <th style={{ textAlign: "right" }}>Duplicaten</th>
-                </tr>
-              </thead>
-              <tbody>
-                {historiek.map((h) => (
-                  <tr key={h.id}>
-                    <td style={{ whiteSpace: "nowrap" }}>{new Date(h.created_at).toLocaleString("nl-BE")}</td>
-                    <td className="muted">{h.users?.naam || "-"}</td>
-                    <td className="muted">{h.bestandsnaam || "-"}</td>
-                    <td style={{ textAlign: "right" }}>{h.aantal_in_bestand}</td>
-                    <td style={{ textAlign: "right" }}>{h.aantal_nieuw}</td>
-                    <td style={{ textAlign: "right" }} className={h.aantal_duplicaten > 0 ? "amount-neg" : ""}>{h.aantal_duplicaten}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div>
+              {historiek.map((h, i) => (
+                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}>
+                  <div className="subtle" style={{ width: 130 }}>{new Date(h.created_at).toLocaleString("nl-BE")}</div>
+                  <div className="muted" style={{ flex: 1 }}>{h.bestandsnaam || "-"} · {h.users?.naam || "-"}</div>
+                  <div className="money">{h.aantal_in_bestand} in bestand</div>
+                  <div className="money" style={{ color: "var(--success-text)" }}>+{h.aantal_nieuw}</div>
+                  {h.aantal_duplicaten > 0 && <div className="money amount-neg">{h.aantal_duplicaten} dubbel</div>}
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
 
       {toonRegels && (
-        <div className="card" style={{ marginTop: 12, marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 8 }}>Categorisatieregels</div>
-          <p className="muted" style={{ fontSize: 12, marginBottom: 12 }}>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Categorisatieregels</div>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
             Als de mededeling, omschrijving of naam van de tegenpartij deze tekst bevat, wordt automatisch deze categorie toegewezen.
           </p>
-          <div style={{ maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
-            {regels.map((r) => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "4px 0", borderBottom: "1px solid var(--border)" }}>
+          <div style={{ maxHeight: 220, overflowY: "auto", marginBottom: 12 }}>
+            {regels.map((r, i) => (
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
                 <span><strong>"{r.bevat_tekst}"</strong> → {r.categorieen?.naam}</span>
                 <button className="btn-danger" onClick={() => regelVerwijderen(r)}>🗑️</button>
               </div>
@@ -317,92 +342,87 @@ export default function CsvUpload() {
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", margin: "20px 0", flexWrap: "wrap" }}>
-        <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)}>
-          {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
-        </select>
-        <label className="btn-primary" style={{ padding: "8px 16px", cursor: "pointer", fontSize: 13, display: "inline-block" }}>
-          📄 CSV-bestand kiezen
-          <input type="file" accept=".csv" onChange={onFile} style={{ display: "none" }} />
-        </label>
-        <button onClick={nieuweCategorie}>+ Categorie</button>
-        {pending.length > 0 && (
-          <>
-            <button onClick={draaiPatroonherkenningOpnieuw}>🔮 Patroonherkenning opnieuw</button>
-            <div style={{ flex: 1 }} />
-            <BevestigKnop />
-          </>
-        )}
-      </div>
-
       {pending.length === 0 ? (
-        <p className="muted" style={{ fontStyle: "italic" }}>Nog geen bestand geladen.</p>
+        <div className="card" style={{ display: "flex", flexDirection: "column", gap: 14, alignItems: "flex-start" }}>
+          <label className="btn-primary" style={{ cursor: "pointer" }}>
+            CSV-bestand kiezen
+            <input type="file" accept=".csv" onChange={onFile} style={{ display: "none" }} />
+          </label>
+          <p className="muted" style={{ fontSize: 13 }}>Nog geen bestand geladen.</p>
+        </div>
       ) : (
         <>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-            <span className="muted" style={{ fontSize: 13 }}>{pending.length} transacties klaar om te bevestigen</span>
-            <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} style={{ fontSize: 12 }}>
-              <option value="">Alle categorieën</option>
-              {categorieNamen.map((c) => <option key={c} value={c}>{c}</option>)}
-            </select>
-            {geselecteerd.length > 0 && (
-              <>
-                <select value={bulkCat} onChange={(e) => setBulkCat(e.target.value)} style={{ fontSize: 12 }}>
+          <div className={`card ${twijfel.length > 0 ? "card-warning" : "card-success"}`} style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span className={`badge ${twijfel.length > 0 ? "badge-warning" : "badge-success"}`}>{twijfel.length > 0 ? "Nog even nakijken" : "Klaar"}</span>
+              <span className="muted" style={{ fontSize: 14 }}>{bestandsnaam} · {pending.length} regels</span>
+            </div>
+            <div style={{ fontSize: 19, fontWeight: 700 }}>
+              {pending.length - twijfel.length} regels zijn automatisch gecategoriseerd.{twijfel.length > 0 ? ` Bij ${twijfel.length} twijfelen we.` : ""}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              <div className="progress-track" style={{ flex: 1 }}><div className={`progress-fill ${twijfel.length > 0 ? "warning" : ""}`} style={{ width: `${percentageOk}%` }} /></div>
+              <div className="money" style={{ fontSize: 13, fontWeight: 700, color: "var(--text-muted)" }}>{percentageOk}%</div>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button className="btn-primary" onClick={bevestigen} disabled={bezigMetOpslaan}>
+                {bezigMetOpslaan ? "Bezig met opslaan…" : `${pending.length} regels toevoegen aan het kasboek`}
+              </button>
+              <button onClick={draaiPatroonherkenningOpnieuw}>Herkenning opnieuw proberen</button>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+            <div className="eyebrow">{toonAlleRegels ? `Alle regels · ${pending.length}` : `Waarover we twijfelen · ${twijfel.length}`}</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {zichtbaar.length > 0 && (
+                <button className="btn-plain" style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }} onClick={() => toggleSelectAll(zichtbaar.map((t) => t.id))}>
+                  {zichtbaar.every((t) => geselecteerd.includes(t.id)) ? "☑" : "☐"} Alles selecteren
+                </button>
+              )}
+              <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)} style={{ fontSize: 12 }}>
+                <option value="">Alle categorieën</option>
+                {categorieNamen.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+              <button className="btn-plain link" style={{ fontSize: 13 }} onClick={() => setToonAlleRegels((v) => !v)}>
+                {toonAlleRegels ? "Enkel twijfelgevallen" : "Alle regels bekijken"}
+              </button>
+            </div>
+          </div>
+
+          {geselecteerd.length > 0 && (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--primary-tint)", borderRadius: 12, padding: "10px 16px", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+              <span style={{ fontSize: 14, fontWeight: 600 }}>{geselecteerd.length} geselecteerd</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select value={bulkCat} onChange={(e) => setBulkCat(e.target.value)}>
                   <option value="">Categorie voor selectie...</option>
                   {categorieNamen.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
-                <button onClick={bulkToepassen} style={{ fontSize: 12 }}>Toepassen op {geselecteerd.length} geselecteerd</button>
-              </>
+                <button className="btn-primary" onClick={bulkToepassen}>Toepassen</button>
+              </div>
+            </div>
+          )}
+
+          <div className="card" style={{ padding: 0, marginBottom: 20 }}>
+            {zichtbaar.length === 0 && (
+              <p className="muted" style={{ padding: 24, textAlign: "center" }}>{toonAlleRegels ? "Geen regels gevonden." : "Geen twijfelgevallen meer — alles is gecategoriseerd."}</p>
             )}
+            {zichtbaar.map((t, i) => (
+              <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                <TransactieRij
+                  t={t}
+                  geselecteerd={geselecteerd.includes(t.id)}
+                  onToggleSelect={() => toggleSelect(t.id)}
+                  categorieNamen={categorieNamen}
+                  onCategorie={(cat) => updateCat(t.id, cat)}
+                  onVerwijder={() => verwijder(t)}
+                  altijdOpen={!toonAlleRegels}
+                  open={bewerkId === t.id}
+                  onToggleOpen={() => setBewerkId(bewerkId === t.id ? null : t.id)}
+                />
+              </div>
+            ))}
           </div>
-
-          <div className="table-wrap" style={{ marginBottom: 16 }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>
-                    <input type="checkbox" onChange={(e) => toggleSelectAll(gefilterd.map((t) => t.id), e.target.checked)} />
-                  </th>
-                  <th>Datum</th>
-                  <th>Tegenpartij</th>
-                  <th>Mededeling</th>
-                  <th>Categorie</th>
-                  <th style={{ textAlign: "right" }}>Bedrag</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {gefilterd.map((t) => (
-                  <tr key={t.id}>
-                    <td>
-                      <input type="checkbox" checked={geselecteerd.includes(t.id)} onChange={() => toggleSelect(t.id)} />
-                    </td>
-                    <td style={{ whiteSpace: "nowrap" }}>{t.datum}</td>
-                    <td style={{ fontWeight: 600 }}>{t.tegenpartij}</td>
-                    <td className="muted" style={{ maxWidth: 220, overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {t.vrijeMededeling || t.omschrijving || <span className="subtle" style={{ fontStyle: "italic" }}>Geen mededeling</span>}
-                    </td>
-                    <td>
-                      <select
-                        value={t.categorie}
-                        onChange={(e) => updateCat(t.id, e.target.value)}
-                        className={t.categorie === ONBEKEND ? "amount-neg" : ""}
-                        style={{ fontSize: 12, fontWeight: t.categorie === ONBEKEND ? 700 : 400 }}
-                      >
-                        {categorieNamen.map((c) => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </td>
-                    <td className={t.bedrag < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700 }}>{euro(t.bedrag)}</td>
-                    <td>
-                      <button className="btn-danger" onClick={() => verwijder(t)}>🗑️</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-
-          <BevestigKnop />
         </>
       )}
     </div>
