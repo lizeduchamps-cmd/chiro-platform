@@ -303,7 +303,7 @@ export default function EvenementDetail({ params }) {
         <div className="card" style={{ marginBottom: 24 }}>
           <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Gekoppelde kasboektransacties</div>
           <p className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
-            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie (bv. om te zien wat er al effectief binnenkwam). Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt, zodat hetzelfde bedrag niet dubbel geteld wordt. Het kasboek zelf blijft de enige waarheid voor het Jaaroverzicht.
+            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie (bv. om te zien wat er al effectief binnenkwam). Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt, zodat hetzelfde bedrag niet dubbel geteld wordt. Het kasboek zelf blijft de enige waarheid voor het Financieel dashboard.
           </p>
           <table>
             <tbody>

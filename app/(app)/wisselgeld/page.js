@@ -116,7 +116,7 @@ export default function Wisselgeld() {
         )}
       </div>
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Vraag cash wisselgeld aan voor een activiteit of weekend. Financiën ziet nieuwe aanvragen meteen op het Jaaroverzicht en op de Kalender.
+        Vraag cash wisselgeld aan voor een activiteit of weekend. Financiën ziet nieuwe aanvragen meteen op het Financieel dashboard en op de Kalender.
       </p>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>

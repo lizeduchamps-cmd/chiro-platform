@@ -79,7 +79,7 @@ export default function Evenementen() {
         )}
       </div>
       <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Kassabeheer en winst/verliesbalans per evenement (fuif, taartenslag, ...). Winst van afgeronde evenementen verschijnt automatisch op het Jaaroverzicht.
+        Kassabeheer en winst/verliesbalans per evenement (fuif, taartenslag, ...). Winst van afgeronde evenementen verschijnt automatisch op het Financieel dashboard.
       </p>
 
       {magBewerken && (

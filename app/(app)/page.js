@@ -119,7 +119,7 @@ export default function Jaaroverzicht() {
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Jaaroverzicht</h1>
+        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Financieel dashboard</h1>
         {werkjaren.length > 0 && (
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
