@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isAdmin } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Aanmaken/verwijderen van verantwoordelijkheden zelf blijft voorbehouden aan
@@ -8,7 +9,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 // (net als de rest van /beheer/gebruikers) ook enkel door een admin.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -27,7 +28,7 @@ export async function POST(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 

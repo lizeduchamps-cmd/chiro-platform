@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export async function GET(req) {
@@ -21,7 +22,7 @@ export async function GET(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+  if (!isFinancieel(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 

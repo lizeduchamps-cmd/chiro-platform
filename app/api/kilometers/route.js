@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 import { verdeelNaarFv } from "@/lib/fvVerdeling";
 
@@ -9,7 +10,7 @@ import { verdeelNaarFv } from "@/lib/fvVerdeling";
 // altijd km × het tarief van de gekozen FV-maand is.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+  if (!isFinancieel(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 

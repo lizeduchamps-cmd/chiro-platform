@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isAdmin } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 import crypto from "crypto";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -41,7 +42,7 @@ export async function GET() {
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -72,7 +73,7 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -94,7 +95,7 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 

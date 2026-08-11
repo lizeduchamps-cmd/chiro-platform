@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
-
-const isFinancien = (session) => !!session && ["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht);
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
@@ -21,7 +20,7 @@ export async function GET(req) {
 // ze meteen aangemaakt met de meegegeven waarden.
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!isFinancien(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  if (!isFinancieel(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const { werkjaarId, winkelenJong, winkelenOud, droppingPerLid, weekendPerLid, weekendplaatsVast } = await req.json();
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isAdmin } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Wijst een gebruiker toe aan een verantwoordelijkheid (upsert: opnieuw
@@ -10,7 +11,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 // hoofdverantwoordelijke automatisch gedegradeerd tot medeverantwoordelijke.
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -42,7 +43,7 @@ export async function POST(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!session || session.user.platformRecht !== "admin") {
+  if (!isAdmin(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 

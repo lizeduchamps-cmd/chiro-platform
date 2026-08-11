@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export async function GET() {
@@ -18,7 +19,7 @@ export async function GET() {
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+  if (!isFinancieel(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -39,7 +40,7 @@ export async function POST(req) {
 // zijn bewust niet aanpasbaar via dit endpoint, dat blijft bij aanmaken vastliggen.
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+  if (!isFinancieel(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
@@ -53,7 +54,7 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!session || !["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht)) {
+  if (!isFinancieel(session)) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 

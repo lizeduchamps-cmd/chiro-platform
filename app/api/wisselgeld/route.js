@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { magAfdelingBewerken, afdelingVanWisselgeld } from "@/lib/kampPermissies";
+import { isFinancieel } from "@/lib/permissies";
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
@@ -66,8 +67,7 @@ export async function PATCH(req) {
   const { id, status } = await req.json();
   if (!id || !status) return NextResponse.json({ error: "id en status zijn verplicht" }, { status: 400 });
 
-  const isFinancien = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
-  if (!isFinancien) {
+  if (!isFinancieel(session)) {
     const afdeling = await afdelingVanWisselgeld(id);
     const magEigenAfdeling = await magAfdelingBewerken(session, afdeling);
     if (!magEigenAfdeling || status !== "Opgehaald") {

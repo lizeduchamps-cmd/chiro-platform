@@ -340,72 +340,70 @@ export default function DocumentDetail({ params }) {
                 </div>
               )}
               {scanKandidaten.length > 0 && (
-                <div className="table-wrap" style={{ marginBottom: 8 }}>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Omschrijving</th>
-                        <th style={{ textAlign: "right" }}>Bedrag</th>
-                        <th>Bestemming</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {scanKandidaten.map((r, i) => (
-                        <tr key={i}>
-                          <td><input value={r.omschrijving} onChange={(e) => scanRijWijzigen(i, "omschrijving", e.target.value)} style={{ fontSize: 12, width: 160 }} /></td>
-                          <td style={{ textAlign: "right" }}>
-                            <input type="number" step="0.01" value={r.bedrag} onChange={(e) => scanRijWijzigen(i, "bedrag", e.target.value)} style={{ fontSize: 12, width: 70, textAlign: "right" }} />
-                          </td>
-                          <td>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                              <select value={r.bestemming} onChange={(e) => scanRijWijzigen(i, "bestemming", e.target.value)} style={{ fontSize: 12 }}>
-                                <option value="kamp">Kamp</option>
-                                <option value="evenement">Evenement</option>
-                                <option value="fv">FV (persoon)</option>
-                              </select>
-                              {r.bestemming === "kamp" && (
-                                <select value={r.kampHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "kampHoofdcategorie", e.target.value)} style={{ fontSize: 12 }}>
-                                  <option value="">Hoofdcategorie...</option>
-                                  <optgroup label="Afdeling">
-                                    {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
-                                  </optgroup>
-                                  <optgroup label="Algemeen">
-                                    {kampCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
-                                  </optgroup>
-                                </select>
-                              )}
-                              {r.bestemming === "evenement" && (
-                                <>
-                                  <select value={r.evenementId} onChange={(e) => scanRijWijzigen(i, "evenementId", e.target.value)} style={{ fontSize: 12 }}>
-                                    <option value="">Evenement...</option>
-                                    {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
-                                  </select>
-                                  <select value={r.evenementHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "evenementHoofdcategorie", e.target.value)} disabled={!r.evenementId} style={{ fontSize: 12 }}>
-                                    <option value="">Hoofdcategorie...</option>
-                                    {(evenementCategorieenPerEvenement[r.evenementId] || []).map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
-                                  </select>
-                                </>
-                              )}
-                              {r.bestemming === "fv" && (
-                                <>
-                                  <select value={r.fvUserId} onChange={(e) => scanRijWijzigen(i, "fvUserId", e.target.value)} style={{ fontSize: 12 }}>
-                                    <option value="">Persoon...</option>
-                                    {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
-                                  </select>
-                                  <select value={r.fvMaandId} onChange={(e) => scanRijWijzigen(i, "fvMaandId", e.target.value)} style={{ fontSize: 12 }}>
-                                    <option value="">FV-maand...</option>
-                                    {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
-                                  </select>
-                                </>
-                              )}
-                            </div>
-                          </td>
-                          <td><button className="btn-danger" onClick={() => scanRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                // Kaartjes i.p.v. een tabel: op een telefoon (het meest voor de
+                // hand liggende moment om te scannen, meteen na een aankoop)
+                // moest je bij een tabel opzij scrollen om de bestemming/
+                // hoofdcategorie of het verwijder-knopje nog te bereiken.
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                  {scanKandidaten.map((r, i) => (
+                    <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                        <input
+                          value={r.omschrijving}
+                          onChange={(e) => scanRijWijzigen(i, "omschrijving", e.target.value)}
+                          style={{ fontSize: 12, flex: "1 1 140px", minWidth: 0 }}
+                        />
+                        <input
+                          type="number" step="0.01" value={r.bedrag}
+                          onChange={(e) => scanRijWijzigen(i, "bedrag", e.target.value)}
+                          style={{ fontSize: 12, width: 80, textAlign: "right" }}
+                        />
+                        <button className="btn-danger" onClick={() => scanRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button>
+                      </div>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                        <select value={r.bestemming} onChange={(e) => scanRijWijzigen(i, "bestemming", e.target.value)} style={{ fontSize: 12 }}>
+                          <option value="kamp">Kamp</option>
+                          <option value="evenement">Evenement</option>
+                          <option value="fv">FV (persoon)</option>
+                        </select>
+                        {r.bestemming === "kamp" && (
+                          <select value={r.kampHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "kampHoofdcategorie", e.target.value)} style={{ fontSize: 12 }}>
+                            <option value="">Hoofdcategorie...</option>
+                            <optgroup label="Afdeling">
+                              {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
+                            </optgroup>
+                            <optgroup label="Algemeen">
+                              {kampCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                            </optgroup>
+                          </select>
+                        )}
+                        {r.bestemming === "evenement" && (
+                          <>
+                            <select value={r.evenementId} onChange={(e) => scanRijWijzigen(i, "evenementId", e.target.value)} style={{ fontSize: 12 }}>
+                              <option value="">Evenement...</option>
+                              {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
+                            </select>
+                            <select value={r.evenementHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "evenementHoofdcategorie", e.target.value)} disabled={!r.evenementId} style={{ fontSize: 12 }}>
+                              <option value="">Hoofdcategorie...</option>
+                              {(evenementCategorieenPerEvenement[r.evenementId] || []).map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                            </select>
+                          </>
+                        )}
+                        {r.bestemming === "fv" && (
+                          <>
+                            <select value={r.fvUserId} onChange={(e) => scanRijWijzigen(i, "fvUserId", e.target.value)} style={{ fontSize: 12 }}>
+                              <option value="">Persoon...</option>
+                              {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                            </select>
+                            <select value={r.fvMaandId} onChange={(e) => scanRijWijzigen(i, "fvMaandId", e.target.value)} style={{ fontSize: 12 }}>
+                              <option value="">FV-maand...</option>
+                              {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
+                            </select>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
               <div style={{ display: "flex", gap: 8 }}>

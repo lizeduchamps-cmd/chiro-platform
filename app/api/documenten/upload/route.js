@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { magEvenementBewerken } from "@/lib/evenementPermissies";
+import { isFinancieel } from "@/lib/permissies";
 import crypto from "crypto";
 
 // Multipart upload i.p.v. JSON: het bestand gaat rechtstreeks naar de
@@ -25,7 +26,7 @@ export async function POST(req) {
     return NextResponse.json({ error: "Bestand, titel, totaalbedrag en werkjaar zijn verplicht" }, { status: 400 });
   }
 
-  const magAdmin = ["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht);
+  const magAdmin = isFinancieel(session);
   if (gekoppeldAan === "evenement" && evenementId) {
     if (!magAdmin && !(await magEvenementBewerken(session, evenementId))) {
       return NextResponse.json({ error: "Geen toegang" }, { status: 403 });

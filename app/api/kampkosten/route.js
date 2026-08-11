@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
+import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // Categorieën die overeenkomen met de vaste rubrieken uit het kamp-
@@ -16,8 +17,6 @@ async function zorgCategorieenBestaan(werkjaarId) {
       { onConflict: "werkjaar_id,naam", ignoreDuplicates: true }
     );
 }
-
-const isFinancien = (session) => !!session && ["admin", "financieel_verantwoordelijke"].includes(session.user.platformRecht);
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
@@ -75,7 +74,7 @@ export async function GET(req) {
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  if (!isFinancien(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  if (!isFinancieel(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const { werkjaarId, datum, omschrijving, typeGeldstroom, hoofdcategorie, bedrag, medewerkerUserId, bewijsstukUrl } = await req.json();
   if (!werkjaarId || !datum || !omschrijving || !typeGeldstroom || bedrag === undefined) {
@@ -107,7 +106,7 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  if (!isFinancien(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  if (!isFinancieel(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const body = await req.json();
   const { id } = body;
@@ -130,7 +129,7 @@ export async function PATCH(req) {
 
 export async function DELETE(req) {
   const session = await getServerSession(authOptions);
-  if (!isFinancien(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+  if (!isFinancieel(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const id = new URL(req.url).searchParams.get("id");
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
