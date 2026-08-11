@@ -74,12 +74,12 @@ export default function Layout({ session, children }) {
   useEffect(() => setMobielOpen(false), [pathname]);
 
   const groups = [
+    { key: "dashboard", href: "/", label: "Financieel dashboard", children: [] },
     {
-      key: "dashboard",
-      href: "/",
-      label: "Financieel dashboard",
+      key: "kasboek",
+      href: "/kasboek",
+      label: "Kasboek",
       children: [
-        { key: "kasboek", href: "/kasboek", label: "Kasboek" },
         { key: "csv", href: "/kasboek/upload", label: "CSV Upload" },
       ],
     },
