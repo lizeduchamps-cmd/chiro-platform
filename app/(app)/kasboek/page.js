@@ -1,12 +1,26 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonTable } from "@/components/Skeleton";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
+
+const LEGE_NIEUW = {
+  rekeningType: "zicht",
+  datum: new Date().toISOString().slice(0, 10),
+  soort: "uitgave",
+  tegenpartij: "",
+  vrijeMededeling: "",
+  omschrijving: "",
+  bedrag: "",
+  categorieId: "",
+  interneBestemmingRekening: "spaar",
+  evenementId: "",
+};
 
 export default function Kasboek() {
   const { data: session } = useSession();
@@ -21,21 +35,13 @@ export default function Kasboek() {
   const [saldos, setSaldos] = useState(null);
   const [zoekterm, setZoekterm] = useState("");
   const [filterCat, setFilterCat] = useState("");
+  const [alleenOngecategoriseerd, setAlleenOngecategoriseerd] = useState(false);
   const [geselecteerd, setGeselecteerd] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [nieuw, setNieuw] = useState({
-    rekeningType: "zicht",
-    datum: new Date().toISOString().slice(0, 10),
-    soort: "uitgave",
-    tegenpartij: "",
-    vrijeMededeling: "",
-    omschrijving: "",
-    bedrag: "",
-    categorieId: "",
-    interneBestemmingRekening: "spaar",
-    evenementId: "",
-  });
+  const [toonNieuwForm, setToonNieuwForm] = useState(false);
+  const [bewerkId, setBewerkId] = useState(null);
+  const [nieuw, setNieuw] = useState(LEGE_NIEUW);
 
   const magBewerken = session?.user?.platformRecht === "admin" || session?.user?.platformRecht === "financieel_verantwoordelijke";
 
@@ -74,7 +80,7 @@ export default function Kasboek() {
   // per ongeluk een verborgen (niet meer zichtbare) transactie meeverwijdert.
   useEffect(() => {
     setGeselecteerd(new Set());
-  }, [werkjaarId, zoekterm, filterCat]);
+  }, [werkjaarId, zoekterm, filterCat, alleenOngecategoriseerd]);
 
   if (loading) {
     return (
@@ -185,6 +191,7 @@ export default function Kasboek() {
   };
 
   const verwijderTx = (t) => {
+    if (bewerkId === t.id) setBewerkId(null);
     setTransacties((prev) => prev.filter((x) => x.id !== t.id));
     setGeselecteerd((prev) => {
       const next = new Set(prev);
@@ -247,12 +254,15 @@ export default function Kasboek() {
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
-    setNieuw({ ...nieuw, tegenpartij: "", vrijeMededeling: "", omschrijving: "", bedrag: "" });
+    setNieuw(LEGE_NIEUW);
+    setToonNieuwForm(false);
     herladen();
     toast.success("Transactie toegevoegd");
   };
 
-  const gefilterd = transacties.filter((t) => {
+  const ongecategoriseerd = transacties.filter((t) => !t.categorie_id);
+
+  const gefilterd = (alleenOngecategoriseerd ? ongecategoriseerd : transacties).filter((t) => {
     const term = zoekterm.toLowerCase();
     const matchZoek =
       !term ||
@@ -269,59 +279,92 @@ export default function Kasboek() {
     return (
       <div style={{ padding: 32 }}>
         <p className="amount-neg" style={{ marginBottom: 16 }}>{error}</p>
-        <button onClick={nieuwWerkjaar}>➕ Werkjaar aanmaken</button>
+        <button className="btn-primary" onClick={nieuwWerkjaar}>+ Werkjaar aanmaken</button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 32, maxWidth: 1100 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+    <div style={{ padding: 32, maxWidth: 1000 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <label className="muted" style={{ fontSize: 12, display: "block", marginBottom: 4 }}>Werkjaar</label>
+          <h1 style={{ fontSize: 30, fontWeight: 800 }}>Kasboek</h1>
+          <p className="muted" style={{ fontSize: 15, marginTop: 6 }}>Alles wat op de rekening van de Chiro binnenkomt en buitengaat.</p>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
-            {werkjaren.map((w) => (
-              <option key={w.id} value={w.id}>{w.naam}</option>
-            ))}
+            {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
           {magBewerken && (
-            <button onClick={nieuwWerkjaar} style={{ marginLeft: 8 }}>➕ Nieuw werkjaar</button>
+            <button onClick={nieuwWerkjaar} title="Nieuw werkjaar">+ Werkjaar</button>
           )}
           {magBewerken && werkjaarId && (
-            <button className="btn-danger" onClick={werkjaarVerwijderen} style={{ marginLeft: 4 }} title="Werkjaar verwijderen">🗑️</button>
+            <button className="btn-danger" onClick={werkjaarVerwijderen} title="Werkjaar verwijderen">🗑️</button>
           )}
+          <Link href="/kasboek/upload" className="btn-primary" style={{ display: "inline-block", textDecoration: "none" }}>
+            Bankuittreksel importeren
+          </Link>
         </div>
-        {magBewerken && <button onClick={nieuweCategorie}>+ Categorie</button>}
       </div>
 
       {saldos && (
         <div className="grid-3" style={{ marginBottom: 24 }}>
-          <div className="stat">
-            <div className="muted" style={{ fontSize: 12 }}>Algemene zichtrekening</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(saldos.zichtLopend)}</div>
-            <div className="subtle" style={{ fontSize: 11 }}>
-              Startsaldo: {euro(saldos.zichtStart)}{" "}
-              {magBewerken && <a href="#" onClick={(e) => { e.preventDefault(); wijzigStartsaldo("zicht", saldos.zichtStart); }}>(wijzig)</a>}
-            </div>
-          </div>
-          <div className="stat">
-            <div className="muted" style={{ fontSize: 12 }}>Spaarrekening</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(saldos.spaarLopend)}</div>
-            <div className="subtle" style={{ fontSize: 11 }}>
-              Startsaldo: {euro(saldos.spaarStart)}{" "}
-              {magBewerken && <a href="#" onClick={(e) => { e.preventDefault(); wijzigStartsaldo("spaar", saldos.spaarStart); }}>(wijzig)</a>}
-            </div>
-          </div>
           <div className="stat-primary">
-            <div style={{ fontSize: 12, opacity: 0.75 }}>Totaal lopend saldo</div>
-            <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(saldos.totaal)}</div>
+            <div style={{ fontSize: 13, opacity: 0.75 }}>Totaal lopend saldo</div>
+            <div className="money" style={{ fontSize: 26, fontWeight: 700 }}>{euro(saldos.totaal)}</div>
+          </div>
+          <div className="stat">
+            <div className="muted" style={{ fontSize: 13 }}>Algemene zichtrekening</div>
+            <div className="money" style={{ fontSize: 26, fontWeight: 700 }}>{euro(saldos.zichtLopend)}</div>
+            <div className="subtle" style={{ fontSize: 12, marginTop: 2 }}>
+              Startsaldo: {euro(saldos.zichtStart)}{" "}
+              {magBewerken && <a href="#" className="link" onClick={(e) => { e.preventDefault(); wijzigStartsaldo("zicht", saldos.zichtStart); }}>wijzig</a>}
+            </div>
+          </div>
+          <div className="stat">
+            <div className="muted" style={{ fontSize: 13 }}>Spaarrekening</div>
+            <div className="money" style={{ fontSize: 26, fontWeight: 700 }}>{euro(saldos.spaarLopend)}</div>
+            <div className="subtle" style={{ fontSize: 12, marginTop: 2 }}>
+              Startsaldo: {euro(saldos.spaarStart)}{" "}
+              {magBewerken && <a href="#" className="link" onClick={(e) => { e.preventDefault(); wijzigStartsaldo("spaar", saldos.spaarStart); }}>wijzig</a>}
+            </div>
           </div>
         </div>
       )}
 
-      {magBewerken && (
+      {ongecategoriseerd.length > 0 && (
+        <div className="card card-warning" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+          <span className="badge badge-warning" style={{ alignSelf: "flex-start" }}>Nog na te kijken</span>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{ongecategoriseerd.length} regel{ongecategoriseerd.length > 1 ? "s hebben" : " heeft"} nog geen duidelijke categorie</div>
+          <p className="muted" style={{ fontSize: 13 }}>Duid aan waarvoor die betaling was, dan kloppen de cijfers op het dashboard.</p>
+          <button onClick={() => setAlleenOngecategoriseerd((v) => !v)} style={{ alignSelf: "flex-start" }}>
+            {alleenOngecategoriseerd ? "✕ Toon alle regels" : "Toon enkel deze regels"}
+          </button>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+        <input
+          placeholder="Zoek op naam, mededeling, bedrag, datum..."
+          value={zoekterm}
+          onChange={(e) => setZoekterm(e.target.value)}
+          style={{ flex: 1, minWidth: 220 }}
+        />
+        <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
+          <option value="">Alle categorieën</option>
+          {categorieen.map((c) => <option key={c.id} value={c.id}>{c.naam}</option>)}
+        </select>
+        {magBewerken && (
+          <>
+            <button onClick={() => setToonNieuwForm((v) => !v)}>{toonNieuwForm ? "Annuleren" : "+ Handmatig toevoegen"}</button>
+            <button onClick={nieuweCategorie}>+ Categorie</button>
+          </>
+        )}
+      </div>
+
+      {magBewerken && toonNieuwForm && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 10 }}>Nieuwe transactie</div>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuwe transactie</div>
           <div className="grid-4" style={{ marginBottom: 8 }}>
             <select value={nieuw.rekeningType} onChange={(e) => setNieuw({ ...nieuw, rekeningType: e.target.value })}>
               <option value="zicht">Algemene zichtrekening</option>
@@ -345,134 +388,102 @@ export default function Kasboek() {
             <input placeholder="Vrije mededeling" value={nieuw.vrijeMededeling} onChange={(e) => setNieuw({ ...nieuw, vrijeMededeling: e.target.value })} />
             <select value={nieuw.categorieId} onChange={(e) => setNieuw({ ...nieuw, categorieId: e.target.value })}>
               <option value="">Categorie...</option>
-              {categorieen.map((c) => (
-                <option key={c.id} value={c.id}>{c.naam}</option>
-              ))}
+              {categorieen.map((c) => <option key={c.id} value={c.id}>{c.naam}</option>)}
             </select>
             <input type="number" step="0.01" placeholder="Bedrag" value={nieuw.bedrag} onChange={(e) => setNieuw({ ...nieuw, bedrag: e.target.value })} />
             {evenementen.length > 0 && (
               <select value={nieuw.evenementId} onChange={(e) => setNieuw({ ...nieuw, evenementId: e.target.value })}>
                 <option value="">Evenement (optioneel)...</option>
-                {evenementen.map((e) => (
-                  <option key={e.id} value={e.id}>{e.naam}</option>
-                ))}
+                {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
               </select>
             )}
           </div>
-          <button className="btn-primary" onClick={opslaanNieuw}>
-            Opslaan
-          </button>
+          <button className="btn-primary" onClick={opslaanNieuw}>Opslaan</button>
         </div>
       )}
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <input
-          placeholder="🔍 Zoek op naam, mededeling, bedrag, datum..."
-          value={zoekterm}
-          onChange={(e) => setZoekterm(e.target.value)}
-          style={{ flex: 1, minWidth: 240 }}
-        />
-        <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}>
-          <option value="">Alle categorieën</option>
-          {categorieen.map((c) => (
-            <option key={c.id} value={c.id}>{c.naam}</option>
-          ))}
-        </select>
-      </div>
-
       {magBewerken && geselecteerd.size > 0 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--primary-tint)", border: "1px solid var(--border)", borderRadius: 12, padding: "10px 16px", marginBottom: 16 }}>
-          <span>{geselecteerd.size} transactie{geselecteerd.size > 1 ? "s" : ""} geselecteerd</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--primary-tint)", borderRadius: 12, padding: "10px 16px", marginBottom: 16 }}>
+          <span style={{ fontSize: 14, fontWeight: 600 }}>{geselecteerd.size} transactie{geselecteerd.size > 1 ? "s" : ""} geselecteerd</span>
           <div style={{ display: "flex", gap: 8 }}>
             <button onClick={() => setGeselecteerd(new Set())}>Selectie opheffen</button>
-            <button onClick={verwijderGeselecteerd} style={{ background: "var(--danger)", color: "white", border: "none" }}>
-              🗑️ Verwijder geselecteerde
-            </button>
+            <button className="btn-danger-solid" onClick={verwijderGeselecteerd}>🗑️ Verwijder geselecteerde</button>
           </div>
         </div>
       )}
 
-      <div className="table-wrap" style={{ marginBottom: 24 }}>
-        <table>
-          <thead>
-            <tr>
-              {magBewerken && (
-                <th style={{ width: 28 }}>
-                  <input
-                    type="checkbox"
-                    checked={gefilterd.length > 0 && geselecteerd.size === gefilterd.length}
-                    onChange={toggleSelectieAlles}
-                    title="Alles selecteren"
-                  />
-                </th>
-              )}
-              <th>Datum</th>
-              <th>Rekening</th>
-              <th>Tegenpartij</th>
-              <th>Mededeling</th>
-              <th>Categorie</th>
-              <th>Evenement</th>
-              <th style={{ textAlign: "right" }}>Bedrag</th>
-              {magBewerken && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {gefilterd.length === 0 && (
-              <tr><td colSpan={9} className="muted" style={{ padding: 24, textAlign: "center", border: "none" }}>Geen transacties gevonden.</td></tr>
-            )}
-            {gefilterd.map((t) => {
-              const teken = t.soort === "uitgave" ? -1 : t.soort === "interne_transactie" ? 0 : 1;
-              return (
-                <tr key={t.id} style={{ background: geselecteerd.has(t.id) ? "var(--primary-tint)" : undefined }}>
-                  {magBewerken && (
-                    <td>
-                      <input type="checkbox" checked={geselecteerd.has(t.id)} onChange={() => toggleSelectie(t.id)} />
-                    </td>
-                  )}
-                  <td style={{ whiteSpace: "nowrap" }}>{t.datum}</td>
-                  <td>
-                    {t.rekening_type === "zicht" ? "Zicht" : "Spaar"}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+        <div className="eyebrow">Alle regels · {gefilterd.length}</div>
+        {magBewerken && gefilterd.length > 0 && (
+          <button className="btn-plain" onClick={toggleSelectieAlles} style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
+            {geselecteerd.size === gefilterd.length ? "☑" : "☐"} Alles selecteren
+          </button>
+        )}
+      </div>
+
+      <div className="card" style={{ padding: 0 }}>
+        {gefilterd.length === 0 && (
+          <p className="muted" style={{ padding: 24, textAlign: "center" }}>Geen transacties gevonden.</p>
+        )}
+        {gefilterd.map((t, i) => {
+          const teken = t.soort === "uitgave" ? -1 : t.soort === "interne_transactie" ? 0 : 1;
+          const open = bewerkId === t.id;
+          return (
+            <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", background: geselecteerd.has(t.id) ? "var(--primary-tint)" : undefined }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px" }}>
+                {magBewerken && (
+                  <input type="checkbox" checked={geselecteerd.has(t.id)} onChange={() => toggleSelectie(t.id)} />
+                )}
+                <div className="money muted" style={{ width: 60, fontSize: 13, flexShrink: 0 }}>
+                  {new Date(t.datum + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short" })}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{t.tegenpartij || t.omschrijving || "-"}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {t.vrije_mededeling || "Geen mededeling"}
+                    {t.rekening_type === "spaar" && " · Spaar"}
                     {t.soort === "interne_transactie" && ` → ${t.interne_bestemming_rekening === "zicht" ? "Zicht" : "Spaar"}`}
-                  </td>
-                  <td style={{ fontWeight: 600 }}>{t.tegenpartij || "-"}</td>
-                  <td className="muted">{t.vrije_mededeling || t.omschrijving || "-"}</td>
-                  <td>
-                    {magBewerken ? (
-                      <select value={t.categorie_id || ""} onChange={(e) => updateCategorie(t.id, e.target.value)} style={{ fontSize: 12 }}>
-                        <option value="">-</option>
-                        {categorieen.map((c) => (
-                          <option key={c.id} value={c.id}>{c.naam}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      t.categorieen?.naam || "-"
-                    )}
-                  </td>
-                  <td>
-                    {magBewerken ? (
-                      <select value={t.evenement_id || ""} onChange={(e) => updateEvenement(t.id, e.target.value)} style={{ fontSize: 12 }}>
-                        <option value="">-</option>
-                        {evenementen.map((e) => (
-                          <option key={e.id} value={e.id}>{e.naam}</option>
-                        ))}
-                      </select>
-                    ) : (
-                      t.evenementen?.naam || "-"
-                    )}
-                  </td>
-                  <td className={teken < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700 }}>
-                    {teken === 0 ? "" : teken > 0 ? "+" : "-"}{euro(t.bedrag)}
-                  </td>
-                  {magBewerken && (
-                    <td>
-                      <button className="btn-danger" onClick={() => verwijderTx(t)} title="Verwijderen">🗑️</button>
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  </div>
+                </div>
+                {!t.categorie_id ? (
+                  <span className="badge badge-warning" style={{ whiteSpace: "nowrap" }}>Nog aanduiden</span>
+                ) : (
+                  <span className="badge badge-neutral" style={{ whiteSpace: "nowrap" }}>{t.categorieen?.naam || "-"}</span>
+                )}
+                <div className={`money ${teken < 0 ? "amount-neg" : ""}`} style={{ width: 100, textAlign: "right", fontWeight: 700, fontSize: 15, color: teken > 0 ? "var(--success-text)" : undefined }}>
+                  {teken === 0 ? "" : teken > 0 ? "+" : "-"}{euro(t.bedrag)}
+                </div>
+                {magBewerken && (
+                  <button className="btn-plain link" style={{ fontSize: 14, whiteSpace: "nowrap" }} onClick={() => setBewerkId(open ? null : t.id)}>
+                    {open ? "Sluiten" : "Wijzig"}
+                  </button>
+                )}
+              </div>
+              {open && (
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-end", padding: "0 18px 18px", marginLeft: magBewerken ? 34 : 0, flexWrap: "wrap" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                    Categorie
+                    <select value={t.categorie_id || ""} onChange={(e) => updateCategorie(t.id, e.target.value)}>
+                      <option value="">-</option>
+                      {categorieen.map((c) => <option key={c.id} value={c.id}>{c.naam}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                    Hoort bij evenement
+                    <select value={t.evenement_id || ""} onChange={(e) => updateEvenement(t.id, e.target.value)}>
+                      <option value="">Geen</option>
+                      {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
+                    </select>
+                  </label>
+                  <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 12 }}>
+                    <span className="subtle" style={{ fontSize: 12 }}>{t.rekening_type === "zicht" ? "Zichtrekening" : "Spaarrekening"} · {t.datum}</span>
+                    <button className="btn-danger-solid" onClick={() => verwijderTx(t)}>Verwijderen</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
