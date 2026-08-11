@@ -12,6 +12,39 @@ const RECHTEN = [
   { value: "lid", label: "Lid (enkel eigen fv)" },
 ];
 
+// Compacte multi-select i.p.v. een rij aangevinkte checkboxes per gebruiker:
+// toegewezen verantwoordelijkheden tonen als chips, een "+ toewijzen"-knopje
+// opent een klein afvinklijstje om aan te passen.
+function VerantwoordelijkhedenCel({ user, alle, open, onToggleOpen, onToggle }) {
+  const toegewezen = user.verantwoordelijkheden;
+  return (
+    <div className="popover" data-verant-picker>
+      {toegewezen.map((v) => (
+        <span key={v.id} className="chip">
+          {v.naam}{v.isHoofdverantwoordelijke ? " ★" : ""}
+        </span>
+      ))}
+      <button type="button" className="chip-add" onClick={() => onToggleOpen(user.id)}>
+        + toewijzen
+      </button>
+      {open && (
+        <div className="popover-menu">
+          {alle.length === 0 ? (
+            <div className="muted" style={{ padding: 8, fontSize: 12 }}>Nog geen verantwoordelijkheden aangemaakt.</div>
+          ) : (
+            alle.map((v) => (
+              <label key={v.id} className="popover-item">
+                <input type="checkbox" checked={toegewezen.some((x) => x.id === v.id)} onChange={() => onToggle(user, v)} />
+                {v.naam}
+              </label>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function GebruikersBeheer() {
   const { data: session } = useSession();
   const toast = useToast();
@@ -20,6 +53,14 @@ export default function GebruikersBeheer() {
   const [verantwoordelijkheden, setVerantwoordelijkheden] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [openPicker, setOpenPicker] = useState(null);
+
+  useEffect(() => {
+    if (!openPicker) return;
+    const handler = (e) => { if (!e.target.closest("[data-verant-picker]")) setOpenPicker(null); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [openPicker]);
 
   const laden = () =>
     fetch("/api/gebruikers")
@@ -229,19 +270,13 @@ export default function GebruikersBeheer() {
                   </select>
                 </td>
                 <td>
-                  {verantwoordelijkheden.map((v) => {
-                    const toegewezen = u.verantwoordelijkheden.find((x) => x.id === v.id);
-                    return (
-                      <label key={v.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, marginRight: 10, fontSize: 12 }}>
-                        <input
-                          type="checkbox"
-                          checked={!!toegewezen}
-                          onChange={() => toggleVerantwoordelijkheid(u, v)}
-                        />
-                        {v.naam}{toegewezen?.isHoofdverantwoordelijke && " ★"}
-                      </label>
-                    );
-                  })}
+                  <VerantwoordelijkhedenCel
+                    user={u}
+                    alle={verantwoordelijkheden}
+                    open={openPicker === u.id}
+                    onToggleOpen={(id) => setOpenPicker((prev) => (prev === id ? null : id))}
+                    onToggle={toggleVerantwoordelijkheid}
+                  />
                 </td>
                 <td>
                   <select value={u.platform_recht || "lid"} onChange={(e) => updateUser(u.id, { platform_recht: e.target.value })}>

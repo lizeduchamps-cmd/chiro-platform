@@ -27,11 +27,12 @@ function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle 
     <div>
       <div style={{ display: "flex", alignItems: "center" }}>
         {node.href ? (
-          <Link href={node.href} style={{ ...linkStyle(actief, depth), flex: 1 }}>
+          <Link href={node.href} className="nav-link" style={{ ...linkStyle(actief, depth), flex: 1 }}>
             {node.label}
           </Link>
         ) : (
           <span
+            className="nav-link"
             onClick={() => toggleManueel(node.key)}
             style={{ ...linkStyle(false, depth), flex: 1, cursor: "pointer", opacity: 0.85 }}
           >
@@ -40,9 +41,10 @@ function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle 
         )}
         {heeftKinderen && (
           <button
+            className="btn-plain"
             onClick={() => toggleManueel(node.key)}
             aria-label={uitgeklapt ? "Inklappen" : "Uitklappen"}
-            style={{ background: "none", border: "none", padding: "8px 10px", color: "#D6DEEA", cursor: "pointer" }}
+            style={{ padding: "8px 10px", color: "#D6DEEA", cursor: "pointer" }}
           >
             <span style={{ display: "inline-block", fontSize: 10, opacity: 0.7, transform: uitgeklapt ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>▸</span>
           </button>
@@ -140,7 +142,7 @@ export default function Layout({ session, children }) {
     fontSize: depth > 1 ? 12 : 13,
     textDecoration: "none",
     color: actief ? "#1b315c" : "#D6DEEA",
-    background: actief ? "#F9F9FA" : "transparent",
+    background: actief ? "#F9F9FA" : undefined,
     fontWeight: actief ? 600 : 400,
   });
 
@@ -156,7 +158,7 @@ export default function Layout({ session, children }) {
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <div className="no-print mobile-topbar">
-        <button onClick={() => setMobielOpen(true)} aria-label="Menu openen" style={{ background: "none", border: "none", fontSize: 20, color: "#1b315c" }}>☰</button>
+        <button className="btn-plain" onClick={() => setMobielOpen(true)} aria-label="Menu openen" style={{ fontSize: 20, color: "#1b315c" }}>☰</button>
         <span style={{ fontWeight: 600, fontSize: 14 }}>Chiro Hoepertingen</span>
       </div>
 
@@ -168,7 +170,7 @@ export default function Layout({ session, children }) {
             <div style={{ fontSize: 13, fontWeight: 600, color: "white" }}>Chiro Hoepertingen</div>
             <div style={{ fontSize: 11, color: "#A9B7CE" }}>Financiënplatform</div>
           </div>
-          <button className="sidebar-close-btn" onClick={() => setMobielOpen(false)} aria-label="Menu sluiten" style={{ background: "none", border: "none", color: "#D6DEEA", fontSize: 18 }}>✕</button>
+          <button className="sidebar-close-btn btn-plain" onClick={() => setMobielOpen(false)} aria-label="Menu sluiten" style={{ color: "#D6DEEA", fontSize: 18 }}>✕</button>
         </div>
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
           {groups.map((g) => (
@@ -179,8 +181,9 @@ export default function Layout({ session, children }) {
           Ingelogd als
           <div style={{ color: "#F9F9FA", fontWeight: 600 }}>{session?.user?.name}</div>
           <button
+            className="sidebar-signout-btn"
             onClick={() => signOut()}
-            style={{ marginTop: 10, background: "none", border: "1px solid rgba(255,255,255,0.25)", color: "#D6DEEA", borderRadius: 6, padding: "4px 8px", fontSize: 11 }}
+            style={{ marginTop: 10, border: "1px solid rgba(255,255,255,0.25)", color: "#D6DEEA", borderRadius: 6, padding: "4px 8px", fontSize: 11 }}
           >
             Uitloggen
           </button>
