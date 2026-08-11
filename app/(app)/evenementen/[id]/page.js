@@ -52,7 +52,7 @@ function naarBewerkVeld(t) {
 }
 
 export default function EvenementDetail({ params }) {
-  const ruweId = params.id;
+  const ruweId = decodeURIComponent(params.id);
   const { data: session } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
