@@ -16,7 +16,38 @@ export async function GET(req) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ evenementen: data });
+
+  const evenementIds = (data || []).map((e) => e.id);
+  const evenementen = evenementIds.length ? await metBalansTotalen(data, evenementIds) : data;
+  return NextResponse.json({ evenementen });
+}
+
+// Lichte versie van de balansberekening uit /api/evenementen/overzicht, in bulk
+// voor de lijstweergave: enkel de totalen (geen budget-burn-rate, kassa-detail,
+// ...), zodat de lijst niet per evenement een apart request moet doen.
+async function metBalansTotalen(evenementen, evenementIds) {
+  const [{ data: kassas }, { data: transacties }] = await Promise.all([
+    supabaseAdmin.from("evenement_kassas").select("evenement_id, type, wisselgeld_start, inhoud_einde").in("evenement_id", evenementIds),
+    supabaseAdmin.from("evenement_transacties").select("evenement_id, type_geldstroom, bedrag_totaal").in("evenement_id", evenementIds),
+  ]);
+
+  return evenementen.map((e) => {
+    const kassaOmzet = (kassas || [])
+      .filter((k) => k.evenement_id === e.id)
+      .reduce((s, k) => {
+        const eind = Number(k.inhoud_einde || 0);
+        return s + (k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind);
+      }, 0);
+    const eigenTransacties = (transacties || []).filter((t) => t.evenement_id === e.id);
+    const inkomsten = kassaOmzet + eigenTransacties.filter((t) => t.type_geldstroom === "inkomst").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+    const uitgaven = eigenTransacties.filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+    return {
+      ...e,
+      totaalInkomsten: Math.round(inkomsten * 100) / 100,
+      totaalUitgaven: Math.round(uitgaven * 100) / 100,
+      nettoWinst: Math.round((inkomsten - uitgaven) * 100) / 100,
+    };
+  });
 }
 
 // Aanmaken blijft voorbehouden aan admin/financieel_verantwoordelijke — eens

@@ -7,6 +7,10 @@ import { SkeletonTable } from "@/components/Skeleton";
 
 const STATUS_LABEL = { gepland: "Gepland", lopend: "Lopend", afgerond: "Afgerond" };
 
+function euro(n) {
+  return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
+}
+
 export default function Evenementen() {
   const { data: session } = useSession();
   const toast = useToast();
@@ -100,12 +104,15 @@ export default function Evenementen() {
               <th>Naam</th>
               <th>Datum</th>
               <th>Status</th>
+              <th style={{ textAlign: "right" }}>Inkomsten</th>
+              <th style={{ textAlign: "right" }}>Uitgaven</th>
+              <th style={{ textAlign: "right" }}>Winst/verlies</th>
               {magBewerken && <th></th>}
             </tr>
           </thead>
           <tbody>
             {evenementen.length === 0 && (
-              <tr><td colSpan={4} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen evenementen dit werkjaar.</td></tr>
+              <tr><td colSpan={7} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen evenementen dit werkjaar.</td></tr>
             )}
             {evenementen.map((e) => (
               <tr key={e.id}>
@@ -114,6 +121,9 @@ export default function Evenementen() {
                 </td>
                 <td>{e.datum || "-"}</td>
                 <td><span className="badge badge-neutral">{STATUS_LABEL[e.status] || e.status}</span></td>
+                <td style={{ textAlign: "right" }}>{euro(e.totaalInkomsten)}</td>
+                <td className="amount-neg" style={{ textAlign: "right" }}>{euro(e.totaalUitgaven)}</td>
+                <td className={e.nettoWinst < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 600 }}>{euro(e.nettoWinst)}</td>
                 {magBewerken && (
                   <td>
                     <button className="btn-danger" onClick={() => verwijderen(e.id, e.naam)}>🗑️</button>
