@@ -1,10 +1,12 @@
 "use client";
-import { useSession } from "next-auth/react";
+import { useSession, getSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { evenementMatchTag } from "@/lib/evenementMatch";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
 import { budgetKleurEmoji } from "@/lib/budgetKleur";
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -50,10 +52,12 @@ function naarBewerkVeld(t) {
 }
 
 export default function EvenementDetail({ params }) {
-  const { id } = params;
+  const ruweId = params.id;
   const { data: session } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
+  const [evenementId, setEvenementId] = useState(null);
+  const [melding, setMelding] = useState(null);
   const [overzicht, setOverzicht] = useState(null);
   const [loading, setLoading] = useState(true);
   const [gebruikers, setGebruikers] = useState([]);
@@ -65,12 +69,68 @@ export default function EvenementDetail({ params }) {
   const [tellerOpen, setTellerOpen] = useState(null);
   const [tellerAantallen, setTellerAantallen] = useState({});
 
-  const laden = () => fetch(`/api/evenementen/overzicht?evenementId=${id}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
+  // Vaste namen in de zijbalk (bv. "Lazarus") wijzen rechtstreeks naar dit pad
+  // i.p.v. naar een evenement-id, want dat verandert elk werkjaar. Is het al
+  // een geldig id, gebruik het meteen; is het een naam, zoek (of maak, als
+  // het nog niet bestaat) het evenement voor het huidige werkjaar op — zonder
+  // de URL te wijzigen, zodat bv. /evenementen/Lazarus permanent hetzelfde
+  // adres blijft, elk werkjaar opnieuw.
+  useEffect(() => {
+    setLoading(true);
+    setMelding(null);
+    setOverzicht(null);
+    if (UUID_RE.test(ruweId)) { setEvenementId(ruweId); return; }
+
+    setEvenementId(null);
+    (async () => {
+      const w = await fetch("/api/werkjaren").then((r) => r.json());
+      const actueel = w.werkjaren?.[0];
+      if (!actueel) { setMelding("Nog geen werkjaar aangemaakt."); setLoading(false); return; }
+
+      const e = await fetch(`/api/evenementen?werkjaarId=${actueel.id}`).then((r) => r.json());
+      const zoek = ruweId.toLowerCase();
+      const lijst = e.evenementen || [];
+      const gevonden = lijst.find((ev) => ev.naam.toLowerCase() === zoek) || lijst.find((ev) => ev.naam.toLowerCase().includes(zoek));
+      if (gevonden) { setEvenementId(gevonden.id); return; }
+
+      const sessie = await getSession();
+      if (!["admin", "financieel_verantwoordelijke"].includes(sessie?.user?.platformRecht)) {
+        setMelding(`Nog geen evenement "${ruweId}" voor werkjaar ${actueel.naam}. Vraag een admin of financieel verantwoordelijke om dit aan te maken.`);
+        setLoading(false);
+        return;
+      }
+      const res = await fetch("/api/evenementen", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ naam: ruweId, werkjaarId: actueel.id }),
+      });
+      const data = await res.json();
+      if (data.error) {
+        toast.error(data.error);
+        setMelding(`Aanmaken van "${ruweId}" is mislukt.`);
+        setLoading(false);
+        return;
+      }
+      setEvenementId(data.evenement.id);
+    })();
+  }, [ruweId]);
+
+  const laden = () => fetch(`/api/evenementen/overzicht?evenementId=${evenementId}`).then((r) => r.json()).then((d) => { setOverzicht(d); setLoading(false); });
 
   useEffect(() => {
+    if (!evenementId) return;
     laden();
     fetch("/api/gebruikers/lijst").then((r) => r.json()).then((d) => setGebruikers(d.users || []));
-  }, [id]);
+  }, [evenementId]);
+
+  if (melding) {
+    return (
+      <div style={{ padding: 32, maxWidth: 500 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>{ruweId}</h1>
+        <p className="muted">{melding}</p>
+      </div>
+    );
+  }
 
   if (loading || !overzicht) {
     return (
@@ -93,7 +153,7 @@ export default function EvenementDetail({ params }) {
     await fetch("/api/evenementen", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, status }),
+      body: JSON.stringify({ id: evenementId, status }),
     });
     laden();
   };
@@ -103,7 +163,7 @@ export default function EvenementDetail({ params }) {
     const res = await fetch("/api/evenementen/kassas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evenementId: id, ...nieuweKassa }),
+      body: JSON.stringify({ evenementId, ...nieuweKassa }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
@@ -153,7 +213,7 @@ export default function EvenementDetail({ params }) {
     await fetch("/api/evenementen/budgetten", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evenementId: id, hoofdcategorie, budgetToegewezen: budgetToegewezen === "" ? "" : Number(budgetToegewezen) }),
+      body: JSON.stringify({ evenementId, hoofdcategorie, budgetToegewezen: budgetToegewezen === "" ? "" : Number(budgetToegewezen) }),
     });
     laden();
   };
@@ -165,7 +225,7 @@ export default function EvenementDetail({ params }) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        evenementId: id,
+        evenementId,
         datum: t.datum,
         omschrijving: t.omschrijving,
         typeGeldstroom: t.typeGeldstroom,
@@ -242,7 +302,7 @@ export default function EvenementDetail({ params }) {
     const res = await fetch("/api/evenementen/categorieen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evenementId: id, naam: naam.trim() }),
+      body: JSON.stringify({ evenementId, naam: naam.trim() }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);

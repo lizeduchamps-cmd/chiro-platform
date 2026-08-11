@@ -4,12 +4,8 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-// Bepaalt of een pad bij een nav-item hoort — enkel het deel vóór een
-// eventuele '?' vergelijken, want links naar vaste evenementen (bv.
-// '/evenementen/ga?naam=Lazarus') herleiden na het klikken altijd naar een
-// '/evenementen/<id>'-URL zonder querystring.
 function padVan(href) {
-  return href ? href.split("?")[0] : null;
+  return href || null;
 }
 
 function heeftActiefKind(node, pathname) {
@@ -97,16 +93,16 @@ export default function Layout({ session, children }) {
       href: "/evenementen",
       label: "Evenementen & uitstappen",
       children: [
-        { key: "lazarus", href: "/evenementen/ga?naam=Lazarus", label: "Lazarus" },
-        { key: "vlaams-weekend", href: "/evenementen/ga?naam=Vlaams%20Weekend", label: "Vlaams Weekend" },
-        { key: "taartenslag", href: "/evenementen/ga?naam=Taartenslag", label: "Taartenslag" },
+        { key: "lazarus", href: "/evenementen/Lazarus", label: "Lazarus" },
+        { key: "vlaams-weekend", href: "/evenementen/Vlaams Weekend", label: "Vlaams Weekend" },
+        { key: "taartenslag", href: "/evenementen/Taartenslag", label: "Taartenslag" },
         {
           key: "leiding-weekend-activiteit",
           href: null,
           label: "Leidingsweekend & -activiteit",
           children: [
-            { key: "leidingsweekend", href: "/evenementen/ga?naam=Leidingsweekend", label: "Leidingsweekend" },
-            { key: "leidingsactiviteit", href: "/evenementen/ga?naam=Leidingsactiviteit", label: "Leidingsactiviteit" },
+            { key: "leidingsweekend", href: "/evenementen/Leidingsweekend", label: "Leidingsweekend" },
+            { key: "leidingsactiviteit", href: "/evenementen/Leidingsactiviteit", label: "Leidingsactiviteit" },
           ],
         },
         {
@@ -114,8 +110,8 @@ export default function Layout({ session, children }) {
           href: null,
           label: "Ledenweekend & -activiteit",
           children: [
-            { key: "ledenweekend", href: "/evenementen/ga?naam=Ledenweekend", label: "Ledenweekend" },
-            { key: "ledenactiviteit", href: "/evenementen/ga?naam=Ledenactiviteit", label: "Ledenactiviteit" },
+            { key: "ledenweekend", href: "/evenementen/Ledenweekend", label: "Ledenweekend" },
+            { key: "ledenactiviteit", href: "/evenementen/Ledenactiviteit", label: "Ledenactiviteit" },
           ],
         },
         {
