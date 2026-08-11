@@ -16,6 +16,36 @@ function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
+// Icoontje per aandachtspunt: rode stip = actie/fout, oranje = vraagt aandacht
+// maar is geen probleem op zich, navy = neutrale actie (geen geld-oordeel).
+function AandachtIcoon({ kleur }) {
+  const tint = kleur === "danger" ? "var(--danger-tint)" : kleur === "warning" ? "var(--warning-tint)" : "var(--primary-tint)";
+  const dot = kleur === "danger" ? "var(--danger)" : kleur === "warning" ? "var(--warning)" : "var(--primary)";
+  return (
+    <div style={{ width: 38, height: 38, borderRadius: 12, background: tint, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <div style={{ width: 12, height: 12, borderRadius: 4, background: dot }} />
+    </div>
+  );
+}
+
+function AandachtRij({ href, kleur, titel, subtitel }) {
+  return (
+    <Link href={href} className="nav-row" style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 4px", textDecoration: "none", color: "inherit" }}>
+      <AandachtIcoon kleur={kleur} />
+      <div style={{ flex: 1 }}>
+        <div style={{ fontWeight: 600, fontSize: 15 }}>{titel}</div>
+        {subtitel && <div className="muted" style={{ fontSize: 13 }}>{subtitel}</div>}
+      </div>
+      <div className="subtle" style={{ fontSize: 20 }}>›</div>
+    </Link>
+  );
+}
+
+function daagVerschil(datum) {
+  const ms = new Date(datum + "T00:00:00") - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00");
+  return Math.round(ms / 86400000);
+}
+
 function MaandGrafiek({ perMaand }) {
   const maanden = Object.keys(perMaand).sort();
   if (maanden.length === 0) return <p className="subtle" style={{ fontStyle: "italic" }}>Nog geen transacties dit werkjaar.</p>;
@@ -27,8 +57,8 @@ function MaandGrafiek({ perMaand }) {
       {maanden.map((m) => (
         <div key={m} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 56 }}>
           <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 130 }}>
-            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "var(--primary)", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 3 }} />
-            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "var(--danger)", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 3 }} />
+            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "var(--primary)", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 4 }} />
+            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "var(--danger)", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 4 }} />
           </div>
           <div className="subtle" style={{ fontSize: 10, marginTop: 6 }}>{m.slice(5)}/{m.slice(2, 4)}</div>
         </div>
@@ -116,17 +146,29 @@ export default function Jaaroverzicht() {
     );
   }
 
+  const aandachtRijen = aandacht ? [
+    aandacht.fvOpenstaand > 0 && { href: "/fv", kleur: "danger", titel: `${aandacht.fvOpenstaand} persoon/personen nog niet betaald`, subtitel: `Financieel Verslag ${aandacht.fvMaandLabel}` },
+    aandacht.budgettenOverschreden > 0 && { href: "/kampbudgetten", kleur: "danger", titel: `${aandacht.budgettenOverschreden} groepsbudget(ten) overschreden` },
+    aandacht.evenementenTeVergoeden > 0 && { href: "/evenementen", kleur: "warning", titel: `${aandacht.evenementenTeVergoeden} evenement-transactie(s) nog terug te betalen` },
+    aandacht.kampkostenTeVergoeden > 0 && { href: "/kampkosten", kleur: "warning", titel: `${aandacht.kampkostenTeVergoeden} kampkosten-transactie(s) nog terug te betalen` },
+    aandacht.kasboekOngecategoriseerd > 0 && { href: "/kasboek", kleur: "warning", titel: `${aandacht.kasboekOngecategoriseerd} kasboektransactie(s) zonder duidelijke categorie` },
+    aandacht.wisselgeldNogKlaarzetten > 0 && { href: "/wisselgeld", kleur: "primary", titel: `${aandacht.wisselgeldNogKlaarzetten} wisselgeld-aanvra(a)g(en) nog klaar te zetten` },
+  ].filter(Boolean) : [];
+
+  const vandaag = new Date().toISOString().slice(0, 10);
+  const eerstvolgende = kalenderItems.filter((it) => !it.is_voltooid && it.datum_deadline >= vandaag).slice(0, 5);
+
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Financieel dashboard</h1>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Financieel dashboard</h1>
         {werkjaren.length > 0 && (
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
         )}
       </div>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 24 }}>
+      <p className="muted" style={{ fontSize: 15, marginBottom: 24 }}>
         Welkom, {session?.user?.name}. Voor de details kan je naar Kasboek of CSV Upload in de zijbalk.
       </p>
 
@@ -136,145 +178,103 @@ export default function Jaaroverzicht() {
         <SkeletonStatRow count={3} />
       ) : (
         <>
-          {aandacht && (aandacht.fvOpenstaand > 0 || aandacht.evenementenTeVergoeden > 0 || aandacht.kasboekOngecategoriseerd > 0 || aandacht.budgettenOverschreden > 0 || aandacht.wisselgeldNogKlaarzetten > 0 || aandacht.kampkostenTeVergoeden > 0) && (
-            <div className="card" style={{ marginBottom: 24, borderColor: "var(--primary)" }}>
-              <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Aandachtspunten</div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {aandacht.fvOpenstaand > 0 && (
-                  <Link href="/fv" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
-                    <span>⏳ {aandacht.fvOpenstaand} persoon/personen nog niet betaald op FV {aandacht.fvMaandLabel}</span>
-                    <span className="muted">Bekijken →</span>
-                  </Link>
-                )}
-                {aandacht.evenementenTeVergoeden > 0 && (
-                  <Link href="/evenementen" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
-                    <span>💸 {aandacht.evenementenTeVergoeden} evenement-transactie(s) nog terug te betalen</span>
-                    <span className="muted">Bekijken →</span>
-                  </Link>
-                )}
-                {aandacht.kasboekOngecategoriseerd > 0 && (
-                  <Link href="/kasboek" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
-                    <span>🏷️ {aandacht.kasboekOngecategoriseerd} kasboektransactie(s) zonder (duidelijke) categorie</span>
-                    <span className="muted">Bekijken →</span>
-                  </Link>
-                )}
-                {aandacht.budgettenOverschreden > 0 && (
-                  <Link href="/kampbudgetten" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
-                    <span>⚠️ {aandacht.budgettenOverschreden} groepsbudget(ten) overschreden</span>
-                    <span className="muted">Bekijken →</span>
-                  </Link>
-                )}
-                {aandacht.wisselgeldNogKlaarzetten > 0 && (
-                  <Link href="/wisselgeld" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
-                    <span>💶 {aandacht.wisselgeldNogKlaarzetten} wisselgeld-aanvra(a)g(en) nog klaar te zetten</span>
-                    <span className="muted">Bekijken →</span>
-                  </Link>
-                )}
-                {aandacht.kampkostenTeVergoeden > 0 && (
-                  <Link href="/kampkosten" style={{ display: "flex", justifyContent: "space-between", fontSize: 13, textDecoration: "none", color: "inherit" }}>
-                    <span>💸 {aandacht.kampkostenTeVergoeden} kampkosten-transactie(s) nog terug te betalen</span>
-                    <span className="muted">Bekijken →</span>
-                  </Link>
-                )}
+          {aandachtRijen.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div className="eyebrow" style={{ marginBottom: 10 }}>Vraagt jouw aandacht</div>
+              <div className="card" style={{ padding: "4px 16px" }}>
+                {aandachtRijen.map((r, i) => (
+                  <div key={r.href + r.titel} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                    <AandachtRij {...r} />
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {(() => {
-            const vandaag = new Date().toISOString().slice(0, 10);
-            const eerstvolgende = kalenderItems.filter((it) => !it.is_voltooid && it.datum_deadline >= vandaag).slice(0, 5);
-            if (eerstvolgende.length === 0) return null;
-            return (
-              <div className="card" style={{ marginBottom: 24 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>Eerstvolgend op de kalender</div>
-                  <Link href="/kalender" style={{ fontSize: 12 }}>Volledige kalender →</Link>
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {eerstvolgende.map((it) => (
-                    <div key={it.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-                      <span>{it.titel}</span>
-                      <span className="subtle">{it.datum_deadline}</span>
-                    </div>
-                  ))}
-                </div>
+          {eerstvolgende.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <div className="eyebrow">Eerstvolgend op de kalender</div>
+                <Link href="/kalender" className="link" style={{ fontSize: 13 }}>Volledige kalender →</Link>
               </div>
-            );
-          })()}
+              <div className="card" style={{ padding: "4px 16px" }}>
+                {eerstvolgende.map((it, i) => {
+                  const dagen = daagVerschil(it.datum_deadline);
+                  return (
+                    <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                      <span style={{ width: 10, height: 10, borderRadius: 99, background: "var(--primary)", flexShrink: 0 }} />
+                      <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{it.titel}</div>
+                      <span className="badge badge-primary money">{dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : `over ${dagen} dagen`}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid-3" style={{ marginBottom: 24 }}>
             <div className="stat">
-              <div className="muted" style={{ fontSize: 12 }}>Totale inkomsten</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>
-              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 11 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
+              <div className="muted" style={{ fontSize: 13 }}>Totale inkomsten</div>
+              <div className="money" style={{ fontSize: 28, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>
+              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
             </div>
             <div className="stat">
-              <div className="muted" style={{ fontSize: 12 }}>Totale uitgaven</div>
-              <div className="amount-neg" style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalUitgaven)}</div>
-              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 11 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
+              <div className="muted" style={{ fontSize: 13 }}>Totale uitgaven</div>
+              <div className="money" style={{ fontSize: 28, fontWeight: 700, color: "var(--danger-deep)" }}>{euro(data.totaalUitgaven)}</div>
+              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
             </div>
             <div className="stat-primary">
-              <div style={{ fontSize: 12, opacity: 0.75 }}>Netto resultaat</div>
-              <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.netto)}</div>
+              <div style={{ fontSize: 13, opacity: 0.75 }}>Netto resultaat</div>
+              <div className="money" style={{ fontSize: 28, fontWeight: 700 }}>{euro(data.netto)}</div>
             </div>
           </div>
 
           <div className="card" style={{ marginBottom: 24 }}>
-            <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Inkomsten &amp; uitgaven per maand</div>
-            <div className="muted" style={{ display: "flex", gap: 16, fontSize: 11, marginBottom: 4 }}>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--primary)", borderRadius: 2, marginRight: 4 }}></span>Inkomsten</span>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--danger)", borderRadius: 2, marginRight: 4 }}></span>Uitgaven</span>
+            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Inkomsten &amp; uitgaven per maand</div>
+            <div className="muted" style={{ display: "flex", gap: 16, fontSize: 12, marginBottom: 4 }}>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--primary)", borderRadius: 3, marginRight: 4 }}></span>Inkomsten</span>
+              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--danger)", borderRadius: 3, marginRight: 4 }}></span>Uitgaven</span>
             </div>
             <MaandGrafiek perMaand={data.perMaand} />
           </div>
 
           {evenementenWinst.length > 0 && (
             <div className="card" style={{ marginBottom: 24 }}>
-              <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Afgeronde evenementen</div>
-              <p className="muted" style={{ fontSize: 11, marginBottom: 8 }}>
+              <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Afgeronde evenementen</div>
+              <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
                 Kassa-omzet en kosten/inkomsten die nog niet als kasboektransactie geboekt staan. Zodra dat wel zo is (bv. de bank-uitbetaling geïmporteerd en aan het evenement gekoppeld), zit dat al vervat in de totalen hierboven — dit kaartje telt dan niet nog eens mee.
               </p>
-              <table>
-                <tbody>
-                  {evenementenWinst.map((e) => (
-                    <tr key={e.id}>
-                      <td style={{ border: "none", padding: "4px 0" }}>{e.naam}</td>
-                      <td className="subtle" style={{ border: "none", padding: "4px 0" }}>{e.datum || ""}</td>
-                      <td className={e.nettoWinst < 0 ? "amount-neg" : ""} style={{ border: "none", padding: "4px 0", textAlign: "right", fontWeight: 700 }}>
-                        {euro(e.nettoWinst)}
-                      </td>
-                    </tr>
-                  ))}
-                  <tr style={{ fontWeight: 700 }}>
-                    <td style={{ borderTop: "1px solid var(--border)", padding: "6px 0" }} colSpan={2}>Totaal</td>
-                    <td style={{ borderTop: "1px solid var(--border)", padding: "6px 0", textAlign: "right" }}>
-                      {euro(evenementenWinst.reduce((s, e) => s + e.nettoWinst, 0))}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                {evenementenWinst.map((e, i) => (
+                  <div key={e.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "9px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                    <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{e.naam}</div>
+                    <div className="subtle" style={{ fontSize: 12 }}>{e.datum || ""}</div>
+                    <div className={`money ${e.nettoWinst < 0 ? "amount-neg" : ""}`} style={{ fontWeight: 700, minWidth: 90, textAlign: "right" }}>
+                      {euro(e.nettoWinst)}
+                    </div>
+                  </div>
+                ))}
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "10px 0 0", borderTop: "1px solid var(--border)", fontWeight: 700 }}>
+                  <div style={{ flex: 1 }}>Totaal</div>
+                  <div className="money" style={{ minWidth: 90, textAlign: "right" }}>{euro(evenementenWinst.reduce((s, e) => s + e.nettoWinst, 0))}</div>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Categorie</th>
-                  <th style={{ textAlign: "right" }}>Inkomsten</th>
-                  <th style={{ textAlign: "right" }}>Uitgaven</th>
-                </tr>
-              </thead>
-              <tbody>
-                {Object.entries(data.perCategorie).sort((a, b) => (b[1].uitgaven + b[1].inkomsten) - (a[1].uitgaven + a[1].inkomsten)).map(([naam, v]) => (
-                  <tr key={naam}>
-                    <td>{naam}</td>
-                    <td style={{ textAlign: "right" }}>{v.inkomsten ? euro(v.inkomsten) : "-"}</td>
-                    <td className="amount-neg" style={{ textAlign: "right" }}>{v.uitgaven ? euro(v.uitgaven) : "-"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
+            <div className="eyebrow" style={{ flex: 1 }}>Per categorie</div>
+            <div className="eyebrow" style={{ minWidth: 90, textAlign: "right" }}>Inkomsten</div>
+            <div className="eyebrow" style={{ minWidth: 90, textAlign: "right" }}>Uitgaven</div>
+          </div>
+          <div className="card" style={{ padding: "4px 16px" }}>
+            {Object.entries(data.perCategorie).sort((a, b) => (b[1].uitgaven + b[1].inkomsten) - (a[1].uitgaven + a[1].inkomsten)).map(([naam, v], i) => (
+              <div key={naam} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{naam}</div>
+                <div className="money" style={{ minWidth: 90, textAlign: "right", fontSize: 13 }}>{v.inkomsten ? euro(v.inkomsten) : "-"}</div>
+                <div className="money amount-neg" style={{ minWidth: 90, textAlign: "right", fontSize: 13 }}>{v.uitgaven ? euro(v.uitgaven) : "-"}</div>
+              </div>
+            ))}
           </div>
         </>
       )}
