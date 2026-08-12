@@ -322,15 +322,15 @@ export default function Bestellingen() {
   };
 
   return (
-    <div style={{ padding: 32, maxWidth: 1000 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Bestellingen</h1>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
+    <div style={{ padding: 32, maxWidth: 1100 }}>
+      <h1 style={{ fontSize: 30, fontWeight: 800 }}>Bestellingen</h1>
+      <p className="muted" style={{ fontSize: 15, marginTop: 6, marginBottom: 20 }}>
         Splits een rekening (frituur, pizza, leefweek, ...) per persoon op en verdeel het automatisch over hun Financieel Verslag. Gebruik "Regel toevoegen" of "Slim plakken" als iedereen iets anders koos, of "Gelijk verdelen" als iedereen evenveel betaalt (bv. leefweek).
       </p>
 
       {magBewerken && openstaandeBestellingen.length > 0 && (
-        <div className="card" style={{ marginBottom: 20, background: "var(--primary-tint)", borderColor: "var(--primary)" }}>
-          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>
+        <div className="card card-lg" style={{ marginBottom: 20, background: "var(--primary)", color: "white", border: "none" }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 16 }}>
             {openstaandeBestellingen.length} bestelling{openstaandeBestellingen.length > 1 ? "en" : ""} nog niet verdeeld
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -343,7 +343,7 @@ export default function Bestellingen() {
               {fvMaanden.length === 0 && <option value="">Nog geen FV-maand</option>}
               {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
             </select>
-            <button className="btn-primary" disabled={bezig || !fvMaandId} onClick={verdelenAllesAction}>
+            <button style={{ background: "white", color: "var(--primary)", fontWeight: 700, border: "none" }} disabled={bezig || !fvMaandId} onClick={verdelenAllesAction}>
               Verdeel alle {openstaandeBestellingen.length} in één keer
             </button>
           </div>
@@ -351,18 +351,18 @@ export default function Bestellingen() {
       )}
 
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ width: 260, flexShrink: 0 }}>
+        <div style={{ width: 270, flexShrink: 0 }}>
           {magBewerken && (
             <div className="card" style={{ marginBottom: 16 }}>
-              <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Nieuwe bestelling</div>
-              <input placeholder="Titel, bv. Frituur 16/05" value={nieuweTitel} onChange={(e) => setNieuweTitel(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
-              <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} style={{ width: "100%", marginBottom: 6 }} />
+              <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuwe bestelling</div>
+              <input placeholder="Titel, bv. Frituur 16/05" value={nieuweTitel} onChange={(e) => setNieuweTitel(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
+              <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} style={{ width: "100%", marginBottom: 8 }} />
               <input
                 placeholder="Winkel, bv. Anatolia (optioneel)"
                 value={nieuweWinkel}
                 list="bekende-winkels"
                 onChange={(e) => setNieuweWinkel(e.target.value)}
-                style={{ width: "100%", marginBottom: 8 }}
+                style={{ width: "100%", marginBottom: 10 }}
               />
               <datalist id="bekende-winkels">
                 {bekendeWinkels.map((w) => <option key={w} value={w} />)}
@@ -370,22 +370,24 @@ export default function Bestellingen() {
               <button className="btn-primary" onClick={nieuweBestellingAanmaken} style={{ width: "100%" }}>+ Aanmaken</button>
             </div>
           )}
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {bestellingen.length === 0 && <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Nog geen bestellingen.</p>}
             {bestellingen.map((b) => (
               <div
                 key={b.id}
                 onClick={() => setBestellingId(b.id)}
+                className="card"
                 style={{
-                  padding: "8px 10px", borderRadius: 8, fontSize: 13, cursor: "pointer",
-                  background: bestellingId === b.id ? "var(--primary-tint)" : "transparent",
-                  border: "1px solid " + (bestellingId === b.id ? "var(--primary)" : "var(--border)"),
+                  padding: "10px 14px", cursor: "pointer",
+                  background: bestellingId === b.id ? "var(--primary-tint)" : "var(--surface)",
+                  borderColor: bestellingId === b.id ? "var(--primary)" : "var(--border)",
                 }}
               >
-                <div style={{ fontWeight: 600 }}>{b.titel}</div>
-                <div className="subtle" style={{ fontSize: 11 }}>
-                  {b.datum} {b.winkel && `· ${b.winkel}`} {b.verdeeld_naar_fv_maand_id && "· ✅ verdeeld over FV"}
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{b.titel}</div>
+                <div className="subtle" style={{ fontSize: 12 }}>
+                  {b.datum} {b.winkel && `· ${b.winkel}`}
                 </div>
+                {b.verdeeld_naar_fv_maand_id && <span className="badge badge-success" style={{ marginTop: 6, display: "inline-block" }}>Verdeeld over FV</span>}
               </div>
             ))}
           </div>
@@ -396,8 +398,8 @@ export default function Bestellingen() {
             <p className="muted" style={{ fontStyle: "italic" }}>Kies of maak een bestelling om regels toe te voegen.</p>
           ) : (
             <>
-              <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>{overzicht.bestelling.titel}</h2>
-              <div style={{ marginBottom: 12 }}>
+              <h2 style={{ fontSize: 22, fontWeight: 800, marginBottom: 6 }}>{overzicht.bestelling.titel}</h2>
+              <div style={{ marginBottom: 16 }}>
                 {magBewerken && !overzicht.bestelling.verdeeld_naar_fv_maand_id ? (
                   <>
                     <input
@@ -406,61 +408,62 @@ export default function Bestellingen() {
                       defaultValue={overzicht.bestelling.winkel || ""}
                       list="bekende-winkels"
                       onBlur={(e) => winkelBijwerken(e.target.value.trim())}
-                      style={{ fontSize: 12, width: 200 }}
+                      style={{ width: 220 }}
                     />
-                    <p className="subtle" style={{ fontSize: 11, marginTop: 2 }}>
+                    <p className="subtle" style={{ fontSize: 12, marginTop: 4 }}>
                       Bepaalt welke eerder gebruikte prijzen als suggestie verschijnen.
                     </p>
                   </>
                 ) : overzicht.bestelling.winkel ? (
-                  <span className="subtle" style={{ fontSize: 12 }}>{overzicht.bestelling.winkel}</span>
+                  <span className="subtle" style={{ fontSize: 13 }}>{overzicht.bestelling.winkel}</span>
                 ) : null}
               </div>
 
               {overzicht.personen.length === 0 && (
-                <p className="muted" style={{ fontStyle: "italic", marginBottom: 12 }}>Nog geen regels.</p>
+                <p className="muted" style={{ fontStyle: "italic", marginBottom: 16 }}>Nog geen regels.</p>
               )}
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
-                {overzicht.personen.map((p) => (
-                  <div key={p.user.id} className="card">
-                    <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, marginBottom: 6 }}>
-                      <span>{p.user.naam}</span>
-                      <span>{euro(p.totaal)}</span>
-                    </div>
-                    <table>
-                      <tbody>
-                        {p.regels.map((r) => (
-                          <tr key={r.id}>
-                            <td className="muted" style={{ border: "none", padding: "2px 0" }}>{r.aantal}× {r.product} (à {euro(r.prijsPerStuk)})</td>
-                            <td style={{ border: "none", padding: "2px 0", textAlign: "right", width: 90 }}>{euro(r.bedrag)}</td>
+              {overzicht.personen.length > 0 && (
+                <div className="card" style={{ padding: 0, marginBottom: 16 }}>
+                  {overzicht.personen.map((p, pi) => (
+                    <div key={p.user.id} style={{ padding: "14px 18px", borderTop: pi > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 700, fontSize: 15, marginBottom: 8 }}>
+                        <span>{p.user.naam}</span>
+                        <span className="money">{euro(p.totaal)}</span>
+                      </div>
+                      {p.regels.map((r, ri) => (
+                        <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "5px 0", borderTop: ri > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                          <span className="muted" style={{ fontSize: 13 }}>{r.aantal}× {r.product} (à {euro(r.prijsPerStuk)})</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span className="money" style={{ fontSize: 13, fontWeight: 600 }}>{euro(r.bedrag)}</span>
                             {magBewerken && !overzicht.bestelling.verdeeld_naar_fv_maand_id && (
-                              <td style={{ border: "none", padding: "2px 0", width: 20 }}>
-                                <button className="btn-danger" onClick={() => regelVerwijderen(p.user.id, r)} style={{ fontSize: 11 }}>🗑️</button>
-                              </td>
+                              <button className="btn-danger" onClick={() => regelVerwijderen(p.user.id, r)}>🗑️</button>
                             )}
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
-              </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {overzicht.personen.length > 0 && (
-                <p style={{ fontWeight: 700, marginBottom: 16 }}>Totaal bestelling: {euro(totaalBestelling)}</p>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+                  <span style={{ fontWeight: 700, fontSize: 15 }}>Totaal bestelling</span>
+                  <span className="money" style={{ fontWeight: 700, fontSize: 20 }}>{euro(totaalBestelling)}</span>
+                </div>
               )}
 
               {magBewerken && !overzicht.bestelling.verdeeld_naar_fv_maand_id && (
                 <>
                   <div className="card" style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: plakOpen ? 8 : 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>Slim plakken</div>
-                      <button onClick={() => setPlakOpen(!plakOpen)} style={{ fontSize: 12 }}>{plakOpen ? "Annuleren" : "📋 Lijst plakken"}</button>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: plakOpen ? 10 : 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>Slim plakken</div>
+                      <button onClick={() => setPlakOpen(!plakOpen)}>{plakOpen ? "Annuleren" : "Lijst plakken"}</button>
                     </div>
                     {plakOpen && (
                       <>
-                        <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                        <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>
                           Plak een lijst zoals "Aline: mini friet met tomaten ketchup en boulet" (één persoon per regel, producten gescheiden door "met", "en" of een komma). Nadien kan je alles controleren en aanpassen voor je bevestigt.
                         </p>
                         <textarea
@@ -468,7 +471,7 @@ export default function Bestellingen() {
                           onChange={(e) => setPlakTekst(e.target.value)}
                           placeholder={"Aline: mini friet met tomaten ketchup en boulet\nToon: kleine friet met joppie en broodje mexicano"}
                           rows={5}
-                          style={{ width: "100%", marginBottom: 8, fontFamily: "inherit", fontSize: 13 }}
+                          style={{ width: "100%", marginBottom: 8, fontFamily: "inherit" }}
                         />
                         {!plakPreview ? (
                           <button className="btn-primary" onClick={plakVerwerken}>Verwerken</button>
@@ -477,34 +480,19 @@ export default function Bestellingen() {
                             {plakPreview.length === 0 ? (
                               <p className="muted" style={{ fontStyle: "italic", marginBottom: 8 }}>Niets meer om toe te voegen.</p>
                             ) : (
-                              <div className="table-wrap" style={{ marginBottom: 8 }}>
-                                <table>
-                                  <thead>
-                                    <tr>
-                                      <th>Persoon</th>
-                                      <th>Product</th>
-                                      <th>Aantal</th>
-                                      <th>Prijs/stuk</th>
-                                      <th></th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {plakPreview.map((r, i) => (
-                                      <tr key={i}>
-                                        <td>
-                                          <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ fontSize: 12, borderColor: r.userId ? undefined : "var(--danger)" }}>
-                                            <option value="">{r.naam} (niet gevonden)</option>
-                                            {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
-                                          </select>
-                                        </td>
-                                        <td><input value={r.product} onChange={(e) => plakRijWijzigen(i, "product", e.target.value)} style={{ fontSize: 12, width: 160 }} /></td>
-                                        <td><input type="number" step="1" value={r.aantal} onChange={(e) => plakRijWijzigen(i, "aantal", e.target.value)} style={{ fontSize: 12, width: 50 }} /></td>
-                                        <td><input type="number" step="0.01" value={r.prijsPerStuk} onChange={(e) => plakRijWijzigen(i, "prijsPerStuk", e.target.value)} style={{ fontSize: 12, width: 70 }} /></td>
-                                        <td><button className="btn-danger" onClick={() => plakRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button></td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
+                              <div className="card" style={{ padding: 0, marginBottom: 8 }}>
+                                {plakPreview.map((r, i) => (
+                                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap" }}>
+                                    <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ flex: 1, minWidth: 140, borderColor: r.userId ? undefined : "var(--danger)" }}>
+                                      <option value="">{r.naam} (niet gevonden)</option>
+                                      {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                                    </select>
+                                    <input value={r.product} onChange={(e) => plakRijWijzigen(i, "product", e.target.value)} style={{ width: 160 }} />
+                                    <input type="number" step="1" value={r.aantal} onChange={(e) => plakRijWijzigen(i, "aantal", e.target.value)} style={{ width: 60 }} />
+                                    <input type="number" step="0.01" value={r.prijsPerStuk} onChange={(e) => plakRijWijzigen(i, "prijsPerStuk", e.target.value)} style={{ width: 80 }} />
+                                    <button className="btn-danger" onClick={() => plakRijVerwijderen(i)}>🗑️</button>
+                                  </div>
+                                ))}
                               </div>
                             )}
                             <div style={{ display: "flex", gap: 8 }}>
@@ -520,13 +508,13 @@ export default function Bestellingen() {
                   </div>
 
                   <div className="card" style={{ marginBottom: 16 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gelijkOpen ? 8 : 0 }}>
-                      <div style={{ fontWeight: 600, fontSize: 14 }}>Gelijk verdelen</div>
-                      <button onClick={() => setGelijkOpen(!gelijkOpen)} style={{ fontSize: 12 }}>{gelijkOpen ? "Annuleren" : "🍽️ Totaalbedrag delen"}</button>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: gelijkOpen ? 10 : 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>Gelijk verdelen</div>
+                      <button onClick={() => setGelijkOpen(!gelijkOpen)}>{gelijkOpen ? "Annuleren" : "Totaalbedrag delen"}</button>
                     </div>
                     {gelijkOpen && (
                       <>
-                        <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                        <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>
                           Voor leefweek e.d.: iedereen die meeat betaalt evenveel — vul het totaalbedrag in en vink de deelnemers aan, het bedrag wordt gelijk verdeeld.
                         </p>
                         <div className="grid-2" style={{ marginBottom: 8 }}>
@@ -542,7 +530,7 @@ export default function Bestellingen() {
                           ))}
                         </div>
                         {gelijkGeselecteerd.size > 0 && Number(gelijkTotaal) > 0 && (
-                          <p className="muted" style={{ fontSize: 12, marginBottom: 8 }}>
+                          <p className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
                             {euro(Math.round((Number(gelijkTotaal) / gelijkGeselecteerd.size) * 100) / 100)} per persoon ({gelijkGeselecteerd.size} deelnemers)
                           </p>
                         )}
@@ -552,12 +540,12 @@ export default function Bestellingen() {
                   </div>
 
                   <div className="card" style={{ marginBottom: 16 }}>
-                    <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Regel toevoegen</div>
-                    <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+                    <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>Regel toevoegen</div>
+                    <p className="subtle" style={{ fontSize: 12, marginBottom: 10 }}>
                       Tip: na het toevoegen blijft de persoon geselecteerd — handig om meteen het volgende product voor diezelfde persoon in te geven (bv. frietjes, vlees, saus). Enter werkt ook om toe te voegen.
                       Typ een productnaam die al ooit besteld is (ook in een vorige bestelling, bv. "Pizza salami" bij Anatolia) en de prijs wordt automatisch overgenomen.
                     </p>
-                    <div className="grid-2" style={{ marginBottom: 8 }}>
+                    <div className="grid-2" style={{ marginBottom: 10 }}>
                       <select value={nieuweRegel.userId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, userId: e.target.value })}>
                         <option value="">Persoon...</option>
                         {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
@@ -593,8 +581,8 @@ export default function Bestellingen() {
                   </div>
 
                   {overzicht.personen.length > 0 && (
-                    <div className="card">
-                      <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Verdelen over Financieel Verslag</div>
+                    <div className="card" style={{ marginBottom: 16 }}>
+                      <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Verdelen over Financieel Verslag</div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                         {werkjaren.length > 1 && (
                           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)}>
@@ -615,7 +603,7 @@ export default function Bestellingen() {
               )}
 
               {magBewerken && (
-                <button className="btn-danger" onClick={() => bestellingVerwijderen(bestellingId)} style={{ marginTop: 16, fontSize: 12 }}>
+                <button className="btn-danger" onClick={() => bestellingVerwijderen(bestellingId)}>
                   🗑️ Bestelling verwijderen
                 </button>
               )}
