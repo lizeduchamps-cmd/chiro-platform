@@ -24,6 +24,11 @@ function toDatumString(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
+function daagVerschil(datum, vandaag) {
+  const ms = new Date(datum + "T00:00:00") - new Date(vandaag + "T00:00:00");
+  return Math.round(ms / 86400000);
+}
+
 // Bouwt de volledige rasterweken voor een maand (start op maandag), inclusief
 // de laatste/eerste dagen van de vorige/volgende maand die nodig zijn om de
 // weken vol te maken.
@@ -53,6 +58,7 @@ export default function Kalender() {
   const [loading, setLoading] = useState(true);
   const [huidigeMaand, setHuidigeMaand] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [toonForm, setToonForm] = useState(false);
+  const [toonMaand, setToonMaand] = useState(false);
   const [nieuwItem, setNieuwItem] = useState(LEEG_ITEM);
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
@@ -122,11 +128,14 @@ export default function Kalender() {
 
   const dagen = maandRaster(huidigeMaand.getFullYear(), huidigeMaand.getMonth());
   const vandaag = toDatumString(new Date());
+  const openstaand = items.filter((it) => !it.is_voltooid);
+  const teLaat = openstaand.filter((it) => it.datum_deadline < vandaag).sort((a, b) => a.datum_deadline.localeCompare(b.datum_deadline));
+  const eerstvolgende = openstaand.filter((it) => it.datum_deadline >= vandaag).sort((a, b) => a.datum_deadline.localeCompare(b.datum_deadline));
 
   return (
-    <div style={{ padding: 32, maxWidth: 1200 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Kalender</h1>
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Kalender</h1>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           {werkjaren.length > 0 && (
             <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
@@ -138,13 +147,13 @@ export default function Kalender() {
           )}
         </div>
       </div>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Deadlines en actiepunten — FV-betaaldeadlines en alle wisselgeld-aanvragen (ook afgelopen) verschijnen hier automatisch, zodat je altijd ziet wat eraan komt en wat er al geweest is.
+      <p className="muted" style={{ fontSize: 15, marginBottom: 20 }}>
+        Wat eraan komt. Betaaldeadlines en wisselgeld-aanvragen verschijnen hier automatisch.
       </p>
 
       {toonForm && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Nieuw kalenderitem</div>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuw kalenderitem</div>
           <div className="grid-3" style={{ marginBottom: 8 }}>
             <input placeholder="Titel, bv. Waarborg kampplaats storten" value={nieuwItem.titel} onChange={(e) => setNieuwItem({ ...nieuwItem, titel: e.target.value })} style={{ gridColumn: "span 2" }} />
             <input type="date" value={nieuwItem.datumDeadline} onChange={(e) => setNieuwItem({ ...nieuwItem, datumDeadline: e.target.value })} />
@@ -157,59 +166,106 @@ export default function Kalender() {
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-        <button onClick={() => maandWisselen(-1)}>← Vorige</button>
-        <div style={{ fontWeight: 700, fontSize: 16 }}>{MAAND_NAMEN[huidigeMaand.getMonth()]} {huidigeMaand.getFullYear()}</div>
-        <button onClick={() => maandWisselen(1)}>Volgende →</button>
-      </div>
-
-      <div className="table-wrap" style={{ overflowX: "auto" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(120px, 1fr))", minWidth: 840 }}>
-          {DAG_NAMEN.map((d) => (
-            <div key={d} className="muted" style={{ padding: 8, fontSize: 11, fontWeight: 600, textAlign: "center", borderBottom: "1px solid var(--border)" }}>{d}</div>
-          ))}
-          {dagen.map((dag) => {
-            const key = toDatumString(dag);
-            const buitenMaand = dag.getMonth() !== huidigeMaand.getMonth();
-            const dagItems = itemsPerDag[key] || [];
-            return (
-              <div
-                key={key}
-                style={{
-                  minHeight: 92, padding: 6, borderBottom: "1px solid var(--border)", borderRight: "1px solid var(--border)",
-                  background: buitenMaand ? "var(--surface-alt)" : key === vandaag ? "var(--primary-tint)" : "var(--surface)",
-                }}
-              >
-                <div className={buitenMaand ? "subtle" : "muted"} style={{ fontSize: 11, fontWeight: key === vandaag ? 700 : 400, marginBottom: 4 }}>{dag.getDate()}</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                  {dagItems.map((it) => {
-                    const kleur = itemKleur(it.type);
-                    return (
-                      <div
-                        key={it.id}
-                        onClick={() => itemKlikken(it)}
-                        title={it.virtueel ? "Klik om te bekijken" : it.toegewezen_aan ? `Toegewezen aan: ${it.toegewezen_aan}` : it.type}
-                        style={{
-                          fontSize: 10, padding: "2px 5px", borderRadius: 5, cursor: it.virtueel || magBewerken ? "pointer" : "default",
-                          background: it.is_voltooid ? "var(--bg)" : kleur.bg,
-                          color: it.is_voltooid ? "var(--text-subtle)" : kleur.fg,
-                          textDecoration: it.is_voltooid ? "line-through" : "none",
-                          display: "flex", justifyContent: "space-between", gap: 4,
-                        }}
-                      >
-                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titel}</span>
-                        {magBewerken && !it.virtueel && (
-                          <span onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} style={{ flexShrink: 0 }}>✕</span>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+      {teLaat.length > 0 && (
+        <div className="card card-danger" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+          <span className="badge badge-danger" style={{ alignSelf: "flex-start" }}>Te laat</span>
+          <div style={{ fontSize: 19, fontWeight: 700 }}>{teLaat.length} deadline{teLaat.length > 1 ? "s zijn" : " is"} voorbij zonder afvinken</div>
+          {teLaat.map((it, i) => (
+            <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{it.titel}</div>
+                <div className="subtle" style={{ fontSize: 13 }}>{Math.abs(daagVerschil(it.datum_deadline, vandaag))} dagen geleden{it.toegewezen_aan ? ` · ${it.toegewezen_aan}` : ""}</div>
               </div>
-            );
-          })}
+              <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => itemKlikken(it)}>{it.virtueel ? "Bekijken" : "Afvinken"}</button>
+            </div>
+          ))}
         </div>
-      </div>
+      )}
+
+      {eerstvolgende.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Eerstvolgende</div>
+          <div className="card" style={{ padding: 0 }}>
+            {eerstvolgende.map((it, i) => {
+              const kleur = itemKleur(it.type);
+              const dagen = daagVerschil(it.datum_deadline, vandaag);
+              return (
+                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", cursor: it.virtueel || magBewerken ? "pointer" : "default" }} onClick={() => itemKlikken(it)}>
+                  <span style={{ width: 10, height: 10, borderRadius: 99, background: kleur.fg, flexShrink: 0 }} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 700, fontSize: 15 }}>{it.titel}</div>
+                    <div className="subtle" style={{ fontSize: 13 }}>{it.type}</div>
+                  </div>
+                  <span className="badge" style={{ background: kleur.bg, color: kleur.fg }}>{dagen === 0 ? "vandaag" : dagen === 1 ? "morgen" : `over ${dagen} dagen`}</span>
+                  {magBewerken && !it.virtueel && (
+                    <button className="btn-plain" onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} title="Verwijderen">🗑️</button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {!toonMaand ? (
+        <button onClick={() => setToonMaand(true)}>Maandoverzicht bekijken</button>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <button onClick={() => maandWisselen(-1)}>← Vorige</button>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>{MAAND_NAMEN[huidigeMaand.getMonth()]} {huidigeMaand.getFullYear()}</div>
+            <button onClick={() => maandWisselen(1)}>Volgende →</button>
+          </div>
+
+          <div className="table-wrap" style={{ overflowX: "auto" }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(120px, 1fr))", minWidth: 840 }}>
+              {DAG_NAMEN.map((d) => (
+                <div key={d} className="muted" style={{ padding: 8, fontSize: 11, fontWeight: 600, textAlign: "center", borderBottom: "1px solid var(--border)" }}>{d}</div>
+              ))}
+              {dagen.map((dag) => {
+                const key = toDatumString(dag);
+                const buitenMaand = dag.getMonth() !== huidigeMaand.getMonth();
+                const dagItems = itemsPerDag[key] || [];
+                return (
+                  <div
+                    key={key}
+                    style={{
+                      minHeight: 92, padding: 6, borderBottom: "1px solid var(--border)", borderRight: "1px solid var(--border)",
+                      background: buitenMaand ? "var(--surface-alt)" : key === vandaag ? "var(--primary-tint)" : "var(--surface)",
+                    }}
+                  >
+                    <div className={buitenMaand ? "subtle" : "muted"} style={{ fontSize: 11, fontWeight: key === vandaag ? 700 : 400, marginBottom: 4 }}>{dag.getDate()}</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                      {dagItems.map((it) => {
+                        const kleur = itemKleur(it.type);
+                        return (
+                          <div
+                            key={it.id}
+                            onClick={() => itemKlikken(it)}
+                            title={it.virtueel ? "Klik om te bekijken" : it.toegewezen_aan ? `Toegewezen aan: ${it.toegewezen_aan}` : it.type}
+                            style={{
+                              fontSize: 10, padding: "2px 5px", borderRadius: 5, cursor: it.virtueel || magBewerken ? "pointer" : "default",
+                              background: it.is_voltooid ? "var(--bg)" : kleur.bg,
+                              color: it.is_voltooid ? "var(--text-subtle)" : kleur.fg,
+                              textDecoration: it.is_voltooid ? "line-through" : "none",
+                              display: "flex", justifyContent: "space-between", gap: 4,
+                            }}
+                          >
+                            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{it.titel}</span>
+                            {magBewerken && !it.virtueel && (
+                              <span onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} style={{ flexShrink: 0 }}>✕</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
