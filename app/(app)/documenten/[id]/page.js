@@ -17,6 +17,13 @@ function euro(n) {
 
 const LEGE_REGEL = { omschrijving: "", bedrag: "", bestemming: "kamp", kampHoofdcategorie: "", evenementId: "", evenementHoofdcategorie: "", fvUserId: "", fvMaandId: "" };
 
+function bestemmingLabel(r) {
+  if (r.bestemming === "kamp") return `Kamp · ${r.kamp_hoofdcategorie || "-"}`;
+  if (r.bestemming === "evenement") return `${r.evenementen?.naam || "Evenement"} · ${r.evenement_hoofdcategorie || "-"}`;
+  if (r.bestemming === "fv") return `FV · ${r.users?.naam || "-"}`;
+  return "-";
+}
+
 export default function DocumentDetail({ params }) {
   const { id } = params;
   const { data: session } = useSession();
@@ -275,66 +282,66 @@ export default function DocumentDetail({ params }) {
 
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
-      <p className="subtle" style={{ fontSize: 12, marginBottom: 4 }}><Link href="/documenten">← Documenten</Link></p>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+      <Link href="/documenten" className="link" style={{ fontSize: 13, display: "inline-block", marginBottom: 8 }}>← Documenten</Link>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{document.titel}</h1>
-          <p className="muted" style={{ fontSize: 13 }}>
+          <h1 style={{ fontSize: 30, fontWeight: 800 }}>{document.titel}</h1>
+          <p className="muted" style={{ fontSize: 14, marginTop: 6 }}>
             {document.gekoppeld_aan === "evenement" ? document.evenementen?.naam : document.gekoppeld_aan === "kamp" ? "Kamp" : document.gekoppeld_aan === "fv" ? "Financieel Verslag" : "Niet gekoppeld"}
             {document.users?.naam && ` · geüpload door ${document.users.naam}`}
           </p>
         </div>
-        <span className={`badge ${isVerwerkt ? "badge-primary" : "badge-neutral"}`}>{document.status}</span>
+        <span className={`badge ${isVerwerkt ? "badge-success" : "badge-warning"}`}>{document.status}</span>
       </div>
 
       {signedUrl && (
         <div className="card" style={{ marginBottom: 20 }}>
           {document.bestand_type?.startsWith("image/") ? (
             <a href={signedUrl} target="_blank" rel="noreferrer">
-              <img src={signedUrl} alt={document.titel} style={{ maxWidth: "100%", maxHeight: 360, borderRadius: 8, display: "block" }} />
+              <img src={signedUrl} alt={document.titel} style={{ maxWidth: "100%", maxHeight: 360, borderRadius: "var(--radius-sm)", display: "block" }} />
             </a>
           ) : (
-            <a href={signedUrl} target="_blank" rel="noreferrer">📄 Bekijk document ↗</a>
+            <a href={signedUrl} target="_blank" rel="noreferrer" className="link">📄 Bekijk document ↗</a>
           )}
         </div>
       )}
 
       {magBewerken && !isVerwerkt && signedUrl && document.bestand_type?.startsWith("image/") && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Bonnetje scannen</div>
+          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Bonnetje scannen</div>
           {!scanKandidaten ? (
             <>
-              <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+              <p className="subtle" style={{ fontSize: 12, marginBottom: 10 }}>
                 Leest tekst van de foto (OCR, geen AI) en herkent regels met een product en een prijs. Controleer en vul aan voor je bevestigt.
               </p>
               <button className="btn-primary" disabled={scanBezig} onClick={scanStarten}>
-                {scanBezig ? "Bezig met scannen..." : "📷 Bonnetje scannen"}
+                {scanBezig ? "Bezig met scannen..." : "Bonnetje scannen"}
               </button>
             </>
           ) : (
             <>
-              <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+              <p className="subtle" style={{ fontSize: 12, marginBottom: 10 }}>
                 {scanKandidaten.length === 0
                   ? "Niets herkend — pas gerust handmatig aan via 'Regel toevoegen' hieronder."
                   : `${scanKandidaten.length} regel(s) herkend. Controleer omschrijving, bedrag en bestemming voor je bevestigt. Ontbreekt er iets? Corrigeer de ruwe OCR-tekst hieronder en parse opnieuw.`}
               </p>
               {scanRuweTekst !== null && (
-                <div style={{ marginBottom: 8 }}>
-                  <button onClick={() => setScanRuweTekstOpen(!scanRuweTekstOpen)} style={{ fontSize: 11 }}>
+                <div style={{ marginBottom: 10 }}>
+                  <button onClick={() => setScanRuweTekstOpen(!scanRuweTekstOpen)}>
                     {scanRuweTekstOpen ? "▾" : "▸"} Ruwe OCR-tekst bekijken/corrigeren
                   </button>
                   {scanRuweTekstOpen && (
                     <>
-                      <p className="subtle" style={{ fontSize: 11, marginTop: 6, marginBottom: 4 }}>
+                      <p className="subtle" style={{ fontSize: 12, marginTop: 8, marginBottom: 6 }}>
                         Herkende OCR iets verkeerd (een aantal, een prijs, een productnaam)? Corrigeer het hieronder en klik op "Opnieuw parsen" — dat leest de foto niet opnieuw, enkel deze tekst.
                       </p>
                       <textarea
                         value={scanRuweTekst}
                         onChange={(e) => setScanRuweTekst(e.target.value)}
                         rows={10}
-                        style={{ width: "100%", fontSize: 11, fontFamily: "monospace", marginBottom: 6 }}
+                        style={{ width: "100%", fontSize: 12, fontFamily: "monospace", marginBottom: 8 }}
                       />
-                      <button onClick={scanHerparsen} style={{ fontSize: 12 }}>🔁 Opnieuw parsen</button>
+                      <button onClick={scanHerparsen}>🔁 Opnieuw parsen</button>
                     </>
                   )}
                 </div>
@@ -344,30 +351,30 @@ export default function DocumentDetail({ params }) {
                 // hand liggende moment om te scannen, meteen na een aankoop)
                 // moest je bij een tabel opzij scrollen om de bestemming/
                 // hoofdcategorie of het verwijder-knopje nog te bereiken.
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 8 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 10 }}>
                   {scanKandidaten.map((r, i) => (
-                    <div key={i} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: 8 }}>
-                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 6 }}>
+                    <div key={i} className="card" style={{ padding: 12 }}>
+                      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", marginBottom: 8 }}>
                         <input
                           value={r.omschrijving}
                           onChange={(e) => scanRijWijzigen(i, "omschrijving", e.target.value)}
-                          style={{ fontSize: 12, flex: "1 1 140px", minWidth: 0 }}
+                          style={{ flex: "1 1 140px", minWidth: 0 }}
                         />
                         <input
                           type="number" step="0.01" value={r.bedrag}
                           onChange={(e) => scanRijWijzigen(i, "bedrag", e.target.value)}
-                          style={{ fontSize: 12, width: 80, textAlign: "right" }}
+                          style={{ width: 90, textAlign: "right" }}
                         />
-                        <button className="btn-danger" onClick={() => scanRijVerwijderen(i)} style={{ fontSize: 11 }}>🗑️</button>
+                        <button className="btn-danger" onClick={() => scanRijVerwijderen(i)}>🗑️</button>
                       </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
-                        <select value={r.bestemming} onChange={(e) => scanRijWijzigen(i, "bestemming", e.target.value)} style={{ fontSize: 12 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                        <select value={r.bestemming} onChange={(e) => scanRijWijzigen(i, "bestemming", e.target.value)}>
                           <option value="kamp">Kamp</option>
                           <option value="evenement">Evenement</option>
                           <option value="fv">FV (persoon)</option>
                         </select>
                         {r.bestemming === "kamp" && (
-                          <select value={r.kampHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "kampHoofdcategorie", e.target.value)} style={{ fontSize: 12 }}>
+                          <select value={r.kampHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "kampHoofdcategorie", e.target.value)}>
                             <option value="">Hoofdcategorie...</option>
                             <optgroup label="Afdeling">
                               {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -379,11 +386,11 @@ export default function DocumentDetail({ params }) {
                         )}
                         {r.bestemming === "evenement" && (
                           <>
-                            <select value={r.evenementId} onChange={(e) => scanRijWijzigen(i, "evenementId", e.target.value)} style={{ fontSize: 12 }}>
+                            <select value={r.evenementId} onChange={(e) => scanRijWijzigen(i, "evenementId", e.target.value)}>
                               <option value="">Evenement...</option>
                               {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
                             </select>
-                            <select value={r.evenementHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "evenementHoofdcategorie", e.target.value)} disabled={!r.evenementId} style={{ fontSize: 12 }}>
+                            <select value={r.evenementHoofdcategorie} onChange={(e) => scanRijWijzigen(i, "evenementHoofdcategorie", e.target.value)} disabled={!r.evenementId}>
                               <option value="">Hoofdcategorie...</option>
                               {(evenementCategorieenPerEvenement[r.evenementId] || []).map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
                             </select>
@@ -391,11 +398,11 @@ export default function DocumentDetail({ params }) {
                         )}
                         {r.bestemming === "fv" && (
                           <>
-                            <select value={r.fvUserId} onChange={(e) => scanRijWijzigen(i, "fvUserId", e.target.value)} style={{ fontSize: 12 }}>
+                            <select value={r.fvUserId} onChange={(e) => scanRijWijzigen(i, "fvUserId", e.target.value)}>
                               <option value="">Persoon...</option>
                               {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
                             </select>
-                            <select value={r.fvMaandId} onChange={(e) => scanRijWijzigen(i, "fvMaandId", e.target.value)} style={{ fontSize: 12 }}>
+                            <select value={r.fvMaandId} onChange={(e) => scanRijWijzigen(i, "fvMaandId", e.target.value)}>
                               <option value="">FV-maand...</option>
                               {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
                             </select>
@@ -421,103 +428,85 @@ export default function DocumentDetail({ params }) {
 
       <div className="grid-3" style={{ marginBottom: 20 }}>
         <div className="stat">
-          <div className="muted" style={{ fontSize: 12 }}>Totaalbedrag</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>{euro(document.totaalbedrag)}</div>
+          <div className="muted" style={{ fontSize: 13 }}>Totaalbedrag</div>
+          <div className="money" style={{ fontSize: 20, fontWeight: 700 }}>{euro(document.totaalbedrag)}</div>
         </div>
         <div className="stat">
-          <div className="muted" style={{ fontSize: 12 }}>Toegewezen</div>
-          <div style={{ fontSize: 20, fontWeight: 700 }}>{euro(toegewezen)}</div>
+          <div className="muted" style={{ fontSize: 13 }}>Toegewezen</div>
+          <div className="money" style={{ fontSize: 20, fontWeight: 700 }}>{euro(toegewezen)}</div>
         </div>
         <div className={volledigVerdeeld ? "stat-primary" : "stat"}>
-          <div style={{ fontSize: 12, opacity: volledigVerdeeld ? 0.75 : 1 }} className={!volledigVerdeeld ? "amount-neg" : ""}>Nog te verdelen</div>
-          <div className={!volledigVerdeeld ? "amount-neg" : ""} style={{ fontSize: 20, fontWeight: 700 }}>{euro(resterend)}</div>
+          <div style={{ fontSize: 13, opacity: volledigVerdeeld ? 0.75 : 1 }} className={!volledigVerdeeld ? "amount-neg" : ""}>Nog te verdelen</div>
+          <div className={`money ${!volledigVerdeeld ? "amount-neg" : ""}`} style={{ fontSize: 20, fontWeight: 700 }}>{euro(resterend)}</div>
         </div>
       </div>
 
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Regels</div>
-        <div className="table-wrap" style={{ marginBottom: magBewerken && !isVerwerkt ? 16 : 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Omschrijving</th>
-                <th>Bestemming</th>
-                <th style={{ textAlign: "right" }}>Bedrag</th>
-                {magBewerken && !isVerwerkt && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {regels.length === 0 && (
-                <tr><td colSpan={4} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen regels.</td></tr>
-              )}
-              {regels.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.omschrijving}</td>
-                  <td className="muted" style={{ fontSize: 12 }}>
-                    {r.bestemming === "kamp" && `Kamp · ${r.kamp_hoofdcategorie || "-"}`}
-                    {r.bestemming === "evenement" && `${r.evenementen?.naam || "Evenement"} · ${r.evenement_hoofdcategorie || "-"}`}
-                    {r.bestemming === "fv" && `FV · ${r.users?.naam || "-"}`}
-                  </td>
-                  <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(r.bedrag)}</td>
-                  {magBewerken && !isVerwerkt && (
-                    <td><button className="btn-danger" onClick={() => regelVerwijderen(r)}>🗑️</button></td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {magBewerken && !isVerwerkt && (
-          <>
-            <div className="grid-3" style={{ marginBottom: 8 }}>
-              <input placeholder="Omschrijving" value={nieuweRegel.omschrijving} onChange={(e) => setNieuweRegel({ ...nieuweRegel, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
-              <input type="number" step="0.01" placeholder="Bedrag" value={nieuweRegel.bedrag} onChange={(e) => setNieuweRegel({ ...nieuweRegel, bedrag: e.target.value })} />
-              <select value={nieuweRegel.bestemming} onChange={(e) => setNieuweRegel({ ...LEGE_REGEL, omschrijving: nieuweRegel.omschrijving, bedrag: nieuweRegel.bedrag, bestemming: e.target.value })}>
-                <option value="kamp">Kamp</option>
-                <option value="evenement">Evenement</option>
-                <option value="fv">Financieel Verslag (persoon)</option>
-              </select>
-              {nieuweRegel.bestemming === "kamp" && (
-                <select value={nieuweRegel.kampHoofdcategorie} onChange={(e) => setNieuweRegel({ ...nieuweRegel, kampHoofdcategorie: e.target.value })} style={{ gridColumn: "span 2" }}>
-                  <option value="">Hoofdcategorie...</option>
-                  <optgroup label="Afdeling (telt mee voor kampbudget)">
-                    {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
-                  </optgroup>
-                  <optgroup label="Algemeen">
-                    {kampCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
-                  </optgroup>
-                </select>
-              )}
-              {nieuweRegel.bestemming === "evenement" && (
-                <>
-                  <select value={nieuweRegel.evenementId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, evenementId: e.target.value, evenementHoofdcategorie: "" })}>
-                    <option value="">Evenement...</option>
-                    {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
-                  </select>
-                  <select value={nieuweRegel.evenementHoofdcategorie} onChange={(e) => setNieuweRegel({ ...nieuweRegel, evenementHoofdcategorie: e.target.value })} disabled={!nieuweRegel.evenementId}>
-                    <option value="">Hoofdcategorie...</option>
-                    {evenementCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
-                  </select>
-                </>
-              )}
-              {nieuweRegel.bestemming === "fv" && (
-                <>
-                  <select value={nieuweRegel.fvUserId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, fvUserId: e.target.value })}>
-                    <option value="">Persoon...</option>
-                    {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
-                  </select>
-                  <select value={nieuweRegel.fvMaandId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, fvMaandId: e.target.value })}>
-                    <option value="">FV-maand...</option>
-                    {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
-                  </select>
-                </>
-              )}
+      <div className="eyebrow" style={{ marginBottom: 10 }}>Regels</div>
+      <div className="card" style={{ padding: 0, marginBottom: magBewerken && !isVerwerkt ? 16 : 20 }}>
+        {regels.length === 0 && <p className="muted" style={{ padding: 24, textAlign: "center" }}>Nog geen regels.</p>}
+        {regels.map((r, i) => (
+          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{r.omschrijving}</div>
+              <div className="muted" style={{ fontSize: 12 }}>{bestemmingLabel(r)}</div>
             </div>
-            <button className="btn-primary" onClick={regelToevoegen}>+ Regel toevoegen</button>
-          </>
-        )}
+            <div className="money" style={{ fontWeight: 700, width: 90, textAlign: "right" }}>{euro(r.bedrag)}</div>
+            {magBewerken && !isVerwerkt && (
+              <button className="btn-danger" onClick={() => regelVerwijderen(r)}>🗑️</button>
+            )}
+          </div>
+        ))}
       </div>
+
+      {magBewerken && !isVerwerkt && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="grid-3" style={{ marginBottom: 10 }}>
+            <input placeholder="Omschrijving" value={nieuweRegel.omschrijving} onChange={(e) => setNieuweRegel({ ...nieuweRegel, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
+            <input type="number" step="0.01" placeholder="Bedrag" value={nieuweRegel.bedrag} onChange={(e) => setNieuweRegel({ ...nieuweRegel, bedrag: e.target.value })} />
+            <select value={nieuweRegel.bestemming} onChange={(e) => setNieuweRegel({ ...LEGE_REGEL, omschrijving: nieuweRegel.omschrijving, bedrag: nieuweRegel.bedrag, bestemming: e.target.value })}>
+              <option value="kamp">Kamp</option>
+              <option value="evenement">Evenement</option>
+              <option value="fv">Financieel Verslag (persoon)</option>
+            </select>
+            {nieuweRegel.bestemming === "kamp" && (
+              <select value={nieuweRegel.kampHoofdcategorie} onChange={(e) => setNieuweRegel({ ...nieuweRegel, kampHoofdcategorie: e.target.value })} style={{ gridColumn: "span 2" }}>
+                <option value="">Hoofdcategorie...</option>
+                <optgroup label="Afdeling (telt mee voor kampbudget)">
+                  {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
+                </optgroup>
+                <optgroup label="Algemeen">
+                  {kampCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                </optgroup>
+              </select>
+            )}
+            {nieuweRegel.bestemming === "evenement" && (
+              <>
+                <select value={nieuweRegel.evenementId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, evenementId: e.target.value, evenementHoofdcategorie: "" })}>
+                  <option value="">Evenement...</option>
+                  {evenementen.map((e) => <option key={e.id} value={e.id}>{e.naam}</option>)}
+                </select>
+                <select value={nieuweRegel.evenementHoofdcategorie} onChange={(e) => setNieuweRegel({ ...nieuweRegel, evenementHoofdcategorie: e.target.value })} disabled={!nieuweRegel.evenementId}>
+                  <option value="">Hoofdcategorie...</option>
+                  {evenementCategorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                </select>
+              </>
+            )}
+            {nieuweRegel.bestemming === "fv" && (
+              <>
+                <select value={nieuweRegel.fvUserId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, fvUserId: e.target.value })}>
+                  <option value="">Persoon...</option>
+                  {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                </select>
+                <select value={nieuweRegel.fvMaandId} onChange={(e) => setNieuweRegel({ ...nieuweRegel, fvMaandId: e.target.value })}>
+                  <option value="">FV-maand...</option>
+                  {fvMaanden.map((m) => <option key={m.id} value={m.id}>{m.maand}</option>)}
+                </select>
+              </>
+            )}
+          </div>
+          <button className="btn-primary" onClick={regelToevoegen}>+ Regel toevoegen</button>
+        </div>
+      )}
 
       {magBewerken && !isVerwerkt && (
         <button className="btn-primary" disabled={!volledigVerdeeld || regels.length === 0} onClick={verwerken}>
@@ -526,9 +515,9 @@ export default function DocumentDetail({ params }) {
       )}
 
       {magBewerken && (
-        <button className="btn-danger" onClick={documentVerwijderen} style={{ marginTop: 16, fontSize: 12 }}>
-          🗑️ Document verwijderen
-        </button>
+        <div style={{ marginTop: 16 }}>
+          <button className="btn-danger" onClick={documentVerwijderen}>🗑️ Document verwijderen</button>
+        </div>
       )}
     </div>
   );

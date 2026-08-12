@@ -51,7 +51,7 @@ export default function Documenten() {
 
   if (loading) {
     return (
-      <div style={{ padding: 32, maxWidth: 1000 }}>
+      <div style={{ padding: 32, maxWidth: 900 }}>
         <SkeletonTable rows={5} cols={5} />
       </div>
     );
@@ -111,35 +111,35 @@ export default function Documenten() {
     toast.success("Document verwijderd");
   };
 
+  const gekoppeldLabel = (d) => (d.gekoppeld_aan === "evenement" ? d.evenementen?.naam : d.gekoppeld_aan === "kamp" ? "Kamp" : d.gekoppeld_aan === "fv" ? "Financieel Verslag" : "Niet gekoppeld");
+
   return (
-    <div style={{ padding: 32, maxWidth: 1000 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Documenten</h1>
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Documenten</h1>
         {werkjaren.length > 0 && (
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
         )}
       </div>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
+      <p className="muted" style={{ fontSize: 15, marginBottom: 20 }}>
         Bonnetjes en facturen uploaden, koppelen aan kamp of een evenement, en opsplitsen in regels die automatisch doorstromen naar Kampkosten, Evenementkosten of het Financieel Verslag.
       </p>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-          <option value="">Alle statussen</option>
-          <option value="Nog te verwerken">Nog te verwerken</option>
-          <option value="Verwerkt">Verwerkt</option>
-        </select>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+        <button onClick={() => setStatusFilter("")} className={!statusFilter ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }}>Alle statussen</button>
+        <button onClick={() => setStatusFilter("Nog te verwerken")} className={statusFilter === "Nog te verwerken" ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }}>Nog te verwerken</button>
+        <button onClick={() => setStatusFilter("Verwerkt")} className={statusFilter === "Verwerkt" ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }}>Verwerkt</button>
         {magUploaden && (
-          <button className="btn-primary" onClick={() => setToonForm(!toonForm)}>{toonForm ? "Annuleren" : "+ Document uploaden"}</button>
+          <button className="btn-primary" onClick={() => setToonForm(!toonForm)} style={{ marginLeft: "auto" }}>{toonForm ? "Annuleren" : "+ Document uploaden"}</button>
         )}
       </div>
 
       {toonForm && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Nieuw document</div>
-          <div className="grid-3" style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuw document</div>
+          <div className="grid-3" style={{ marginBottom: 10 }}>
             <input type="file" accept="image/*,application/pdf" onChange={(e) => setBestand(e.target.files[0] || null)} style={{ gridColumn: "span 2" }} />
             <input type="number" step="0.01" placeholder="Totaalbedrag" value={upload.totaalbedrag} onChange={(e) => setUpload({ ...upload, totaalbedrag: e.target.value })} />
             <input placeholder="Titel, bv. Colruyt kamp 14/08" value={upload.titel} onChange={(e) => setUpload({ ...upload, titel: e.target.value })} style={{ gridColumn: "span 2" }} />
@@ -160,40 +160,21 @@ export default function Documenten() {
         </div>
       )}
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Titel</th>
-              <th>Gekoppeld aan</th>
-              <th style={{ textAlign: "right" }}>Totaalbedrag</th>
-              <th>Status</th>
-              <th>Datum</th>
-              {magUploaden && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {documenten.length === 0 && (
-              <tr><td colSpan={6} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen documenten.</td></tr>
+      <div className="card" style={{ padding: 0 }}>
+        {documenten.length === 0 && <p className="muted" style={{ padding: 24, textAlign: "center" }}>Nog geen documenten.</p>}
+        {documenten.map((d, i) => (
+          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Link href={`/documenten/${d.id}`} className="link" style={{ fontWeight: 700, fontSize: 15, textDecoration: "none" }}>{d.titel}</Link>
+              <div className="muted" style={{ fontSize: 12 }}>{gekoppeldLabel(d)} · {new Date(d.created_at).toLocaleDateString("nl-BE")}</div>
+            </div>
+            <span className={`badge ${d.status === "Verwerkt" ? "badge-success" : "badge-warning"}`}>{d.status}</span>
+            <div className="money" style={{ fontWeight: 700, width: 90, textAlign: "right" }}>{euro(d.totaalbedrag)}</div>
+            {magUploaden && (
+              <button className="btn-danger" onClick={() => documentVerwijderen(d)}>🗑️</button>
             )}
-            {documenten.map((d) => (
-              <tr key={d.id}>
-                <td>
-                  <Link href={`/documenten/${d.id}`} style={{ fontWeight: 600, color: "var(--primary)" }}>{d.titel}</Link>
-                </td>
-                <td className="muted" style={{ fontSize: 12 }}>
-                  {d.gekoppeld_aan === "evenement" ? d.evenementen?.naam : d.gekoppeld_aan === "kamp" ? "Kamp" : d.gekoppeld_aan === "fv" ? "Financieel Verslag" : "-"}
-                </td>
-                <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(d.totaalbedrag)}</td>
-                <td><span className={`badge ${d.status === "Verwerkt" ? "badge-primary" : "badge-neutral"}`}>{d.status}</span></td>
-                <td className="subtle" style={{ whiteSpace: "nowrap" }}>{new Date(d.created_at).toLocaleDateString("nl-BE")}</td>
-                {magUploaden && (
-                  <td><button className="btn-danger" onClick={() => documentVerwijderen(d)} style={{ fontSize: 11 }}>🗑️</button></td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
     </div>
   );
