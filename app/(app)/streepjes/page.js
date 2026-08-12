@@ -47,6 +47,8 @@ export default function Streepjes() {
   const [fvMaanden, setFvMaanden] = useState([]);
   const [fvMaandId, setFvMaandId] = useState(null);
   const [bezig, setBezig] = useState(false);
+  const [toonInstellingen, setToonInstellingen] = useState(false);
+  const [bewerkId, setBewerkId] = useState(null);
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
@@ -119,6 +121,7 @@ export default function Streepjes() {
     setBezig(false);
     if (data.error) return toast.error(data.error);
     toast.success(`${data.aantal} streepjes-regel(s) toegevoegd aan het FV, tellers staan terug op 0`);
+    setBewerkId(null);
     laden();
   };
 
@@ -168,32 +171,41 @@ export default function Streepjes() {
 
   const totaalFysiekBedrag = users.reduce((s, u) => s + (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje, 0);
   const totaalOnline = users.reduce((s, u) => s + (Number(u.online_streepjes_bedrag) || 0), 0);
+  const totaal = totaalFysiekBedrag + totaalOnline;
   const gebruikersMetSaldo = users.filter((u) => (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje + (Number(u.online_streepjes_bedrag) || 0) > 0);
+  const eigen = users.find((u) => u.id === session?.user?.userId);
+  const eigenBedrag = eigen ? (Number(eigen.fysieke_streepjes) || 0) * prijsPerStreepje + (Number(eigen.online_streepjes_bedrag) || 0) : 0;
 
   return (
-    <div style={{ padding: 32, maxWidth: 1000 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Streepjes &amp; online drank</h1>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Fysieke streepjes (op papier bijgehouden) vul je hier handmatig in. Online streepjes (via de Discord-bot) upload je als CSV.
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      <h1 style={{ fontSize: 30, fontWeight: 800 }}>Streepjes &amp; online drank</h1>
+      <p className="muted" style={{ fontSize: 15, marginTop: 6, marginBottom: 20 }}>
+        Streepjes op papier vul je hier in, online streepjes komen uit het logboek van de Discord-bot.
       </p>
 
-      {magBewerken && (
-        <div style={{ display: "flex", gap: 16, alignItems: "center", marginBottom: 20, flexWrap: "wrap" }}>
-          <label style={{ fontSize: 13 }}>
-            Prijs per streepje: €
-            <input type="number" step="0.01" value={prijsPerStreepje} onChange={(e) => updatePrijs(e.target.value)} style={{ width: 70, marginLeft: 6 }} />
-          </label>
-          <label className="btn-primary" style={{ padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, display: "inline-block" }}>
-            📄 Online streepjes CSV uploaden
-            <input type="file" accept=".csv" onChange={onCsv} style={{ display: "none" }} />
-          </label>
+      {eigen && (
+        <div className={`card card-lg ${eigenBedrag > 0 ? "card-danger" : ""}`} style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="muted" style={{ fontSize: 14 }}>Jouw streepjes</div>
+          <div className="money" style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: eigenBedrag > 0 ? "var(--danger-deep)" : undefined }}>{euro(eigenBedrag)}</div>
+          <div className="muted" style={{ fontSize: 14 }}>{eigen.fysieke_streepjes || 0} op papier · {euro(Number(eigen.online_streepjes_bedrag) || 0)} online. Dit komt op je volgende Financieel Verslag.</div>
         </div>
       )}
 
+      <div className="card" style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16 }}>
+        <div>
+          <div className="muted" style={{ fontSize: 14 }}>Alle leiding samen</div>
+          <div className="money" style={{ fontSize: 26, fontWeight: 700 }}>{euro(totaal)}</div>
+        </div>
+        <div className="muted" style={{ fontSize: 13, textAlign: "right" }}>
+          {gebruikersMetSaldo.length} van {users.length} hebben streepjes staan<br />
+          {euro(totaalFysiekBedrag)} papier, {euro(totaalOnline)} online
+        </div>
+      </div>
+
       {magBewerken && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Toevoegen aan Financieel Verslag</div>
-          <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+          <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>Toevoegen aan Financieel Verslag</div>
+          <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
             Kies de FV-maand en voeg de huidige streepjes-stand van iedereen (of van één persoon) daaraan toe. De tellers gaan daarna terug op 0.
           </p>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
@@ -217,70 +229,58 @@ export default function Streepjes() {
         </div>
       )}
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Naam</th>
-              <th>Fysieke streepjes</th>
-              <th style={{ textAlign: "right" }}>Bedrag fysiek</th>
-              <th style={{ textAlign: "right" }}>Bedrag online</th>
-              <th style={{ textAlign: "right" }}>Totaal</th>
-              {magBewerken && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const fysiekBedrag = (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje;
-              const online = Number(u.online_streepjes_bedrag) || 0;
-              const totaal = fysiekBedrag + online;
-              return (
-                <tr key={u.id}>
-                  <td>
-                    {u.naam}
-                    <div className="subtle" style={{ fontSize: 11 }}>@{u.discord_username}</div>
-                  </td>
-                  <td>
-                    {magBewerken ? (
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={u.fysieke_streepjes || 0}
-                        onChange={(e) => updateFysiek(u.id, e.target.value)}
-                        style={{ width: 70 }}
-                      />
-                    ) : (
-                      u.fysieke_streepjes || 0
-                    )}
-                  </td>
-                  <td style={{ textAlign: "right" }}>{euro(fysiekBedrag)}</td>
-                  <td style={{ textAlign: "right" }}>{euro(online)}</td>
-                  <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(totaal)}</td>
-                  {magBewerken && (
-                    <td style={{ textAlign: "right" }}>
-                      {totaal > 0 && (
-                        <button disabled={bezig || !fvMaandId} onClick={() => toevoegenAanFv([u.id])} style={{ fontSize: 11, padding: "4px 8px" }}>
-                          + FV
-                        </button>
-                      )}
-                    </td>
+      <div className="eyebrow" style={{ marginBottom: 10 }}>Per persoon</div>
+      <div className="card" style={{ padding: 0, marginBottom: 16 }}>
+        {users.map((u, i) => {
+          const fysiekBedrag = (Number(u.fysieke_streepjes) || 0) * prijsPerStreepje;
+          const online = Number(u.online_streepjes_bedrag) || 0;
+          const totaalP = fysiekBedrag + online;
+          const open = bewerkId === u.id;
+          return (
+            <div key={u.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px" }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{u.naam}</div>
+                  <div className="muted" style={{ fontSize: 12 }}>{u.fysieke_streepjes || 0} op papier · {euro(online)} online</div>
+                </div>
+                <div className="money" style={{ fontWeight: 700, fontSize: 16, width: 90, textAlign: "right", color: totaalP > 0 ? "var(--danger-deep)" : "var(--text-subtle)" }}>{euro(totaalP)}</div>
+                {magBewerken && (
+                  <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => setBewerkId(open ? null : u.id)}>{open ? "Klaar" : "Wijzig"}</button>
+                )}
+              </div>
+              {open && magBewerken && (
+                <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "0 18px 16px", flexWrap: "wrap" }}>
+                  <span className="muted" style={{ fontSize: 13, fontWeight: 600 }}>Streepjes op papier</span>
+                  <input type="number" step="1" min="0" value={u.fysieke_streepjes || 0} onChange={(e) => updateFysiek(u.id, e.target.value)} style={{ width: 84 }} />
+                  {totaalP > 0 && (
+                    <button disabled={bezig || !fvMaandId} onClick={() => toevoegenAanFv([u.id])}>Alleen deze doorzetten</button>
                   )}
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr style={{ fontWeight: 700 }}>
-              <td colSpan={2}>Totaal</td>
-              <td style={{ textAlign: "right" }}>{euro(totaalFysiekBedrag)}</td>
-              <td style={{ textAlign: "right" }}>{euro(totaalOnline)}</td>
-              <td style={{ textAlign: "right" }}>{euro(totaalFysiekBedrag + totaalOnline)}</td>
-              {magBewerken && <td></td>}
-            </tr>
-          </tfoot>
-        </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {magBewerken && (
+        toonInstellingen ? (
+          <div className="card">
+            <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                Prijs per streepje: €
+                <input type="number" step="0.01" value={prijsPerStreepje} onChange={(e) => updatePrijs(e.target.value)} style={{ width: 70, marginLeft: 6 }} />
+              </label>
+              <label className="btn-primary" style={{ cursor: "pointer" }}>
+                Online streepjes CSV uploaden
+                <input type="file" accept=".csv" onChange={onCsv} style={{ display: "none" }} />
+              </label>
+              <button onClick={() => setToonInstellingen(false)}>Sluiten</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setToonInstellingen(true)}>Prijs en online logboek</button>
+        )
+      )}
     </div>
   );
 }
