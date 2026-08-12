@@ -4,13 +4,21 @@ import { useEffect, useState } from "react";
 import { evenementMatchTag } from "@/lib/evenementMatch";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
-import { budgetKleurEmoji } from "@/lib/budgetKleur";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
+
+// Zelfde drempels als lib/budgetKleur.js (<80% groen, tot 100% oranje, erboven rood).
+function budgetVulling(uitgegeven, budget) {
+  if (!budget) return { pct: 0, kleur: "" };
+  const pct = (Number(uitgegeven) / Number(budget)) * 100;
+  return { pct: Math.min(100, pct), kleur: pct > 100 ? "danger" : pct >= 80 ? "warning" : "" };
+}
+
+const STATUS_BADGE = { Gepland: "badge-neutral", "Te vergoeden": "badge-warning", Betaald: "badge-success", Afgerond: "badge-neutral" };
 
 const BETAALMETHODES = ["Overschrijving", "Cash", "Bancontact/Kaart", "Factuur op termijn"];
 const STATUSSEN = ["Gepland", "Te vergoeden", "Betaald", "Afgerond"];
@@ -62,6 +70,7 @@ export default function EvenementDetail({ params }) {
   const [loading, setLoading] = useState(true);
   const [gebruikers, setGebruikers] = useState([]);
   const [nieuweKassa, setNieuweKassa] = useState({ naam: "", type: "cash", wisselgeldStart: "" });
+  const [toonNieuweKassa, setToonNieuweKassa] = useState(false);
   const [nieuweTransactie, setNieuweTransactie] = useState(LEGE_TRANSACTIE);
   const [toonTransactieForm, setToonTransactieForm] = useState(false);
   const [bewerkId, setBewerkId] = useState(null);
@@ -168,6 +177,7 @@ export default function EvenementDetail({ params }) {
     const data = await res.json();
     if (data.error) return toast.error(data.error);
     setNieuweKassa({ naam: "", type: "cash", wisselgeldStart: "" });
+    setToonNieuweKassa(false);
     laden();
     toast.success("Kassa toegevoegd");
   };
@@ -324,17 +334,17 @@ export default function EvenementDetail({ params }) {
     toast.success("Categorie verwijderd");
   };
 
-  const { evenement, kassas, kassaOmzetTotaal, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
+  const { evenement, kassas, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
 
   return (
-    <div style={{ padding: 32, maxWidth: 1100 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 20 }}>
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 22 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{evenement.naam}</h1>
-          <p className="muted" style={{ fontSize: 14 }}>{evenement.datum || "Geen datum ingesteld"}</p>
+          <h1 style={{ fontSize: 30, fontWeight: 800 }}>{evenement.naam}</h1>
+          <p className="muted" style={{ fontSize: 15, marginTop: 6 }}>{evenement.datum || "Geen datum ingesteld"}</p>
         </div>
         {magBewerken && (
-          <select value={evenement.status} onChange={(e) => statusWijzigen(e.target.value)}>
+          <select value={evenement.status} onChange={(e) => statusWijzigen(e.target.value)} style={{ fontWeight: 600 }}>
             {Object.entries(STATUS_LABEL).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         )}
@@ -343,382 +353,320 @@ export default function EvenementDetail({ params }) {
       {/* Balans */}
       <div className="grid-3" style={{ marginBottom: 24 }}>
         <div className="stat">
-          <div className="muted" style={{ fontSize: 12 }}>Totale inkomsten</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(balans.totaalInkomsten)}</div>
-          <div className="subtle" style={{ fontSize: 11 }}>Waarvan kassa-omzet: {euro(kassaOmzetTotaal)}</div>
+          <div className="muted" style={{ fontSize: 13 }}>Totale inkomsten</div>
+          <div className="money" style={{ fontSize: 24, fontWeight: 700 }}>{euro(balans.totaalInkomsten)}</div>
         </div>
         <div className="stat">
-          <div className="muted" style={{ fontSize: 12 }}>Totale uitgaven</div>
-          <div className="amount-neg" style={{ fontSize: 22, fontWeight: 700 }}>{euro(balans.totaalUitgaven)}</div>
-          <div className="subtle" style={{ fontSize: 11 }}>Kosten: {euro(balans.kostenTotaal)} · Investeringen: {euro(balans.investeringenTotaal)}</div>
+          <div className="muted" style={{ fontSize: 13 }}>Totale uitgaven</div>
+          <div className="money" style={{ fontSize: 24, fontWeight: 700, color: "var(--danger-deep)" }}>{euro(balans.totaalUitgaven)}</div>
         </div>
         <div className="stat-primary">
-          <div style={{ fontSize: 12, opacity: 0.75 }}>{balans.nettoWinst < 0 ? "Netto verlies" : "Netto winst"}</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{euro(Math.abs(balans.nettoWinst))}</div>
+          <div style={{ fontSize: 13, opacity: 0.75 }}>{balans.nettoWinst < 0 ? "Netto verlies" : "Netto winst"}</div>
+          <div className="money" style={{ fontSize: 24, fontWeight: 700 }}>{euro(Math.abs(balans.nettoWinst))}</div>
         </div>
       </div>
 
       {/* Gekoppelde kasboektransacties */}
       {gekoppeldeTransacties.length > 0 && (
         <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 600, marginBottom: 4, fontSize: 14 }}>Gekoppelde kasboektransacties</div>
-          <p className="muted" style={{ fontSize: 11, marginBottom: 10 }}>
-            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie (bv. om te zien wat er al effectief binnenkwam). Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt, zodat hetzelfde bedrag niet dubbel geteld wordt. Het kasboek zelf blijft de enige waarheid voor het Financieel dashboard.
+          <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Gekoppelde kasboektransacties</div>
+          <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie. Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt.
           </p>
-          <table>
-            <tbody>
-              {gekoppeldeTransacties.map((t) => (
-                <tr key={t.id}>
-                  <td className="subtle" style={{ border: "none", padding: "3px 0", whiteSpace: "nowrap" }}>{t.datum}</td>
-                  <td className="muted" style={{ border: "none", padding: "3px 0" }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</td>
-                  <td className={t.soort === "uitgave" ? "amount-neg" : ""} style={{ border: "none", padding: "3px 0", textAlign: "right", fontWeight: 600, width: 100 }}>
-                    {t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {gekoppeldeTransacties.map((t, i) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14 }}>
+              <div className="subtle money">{t.datum}</div>
+              <div className="muted" style={{ flex: 1 }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</div>
+              <div className={`money ${t.soort === "uitgave" ? "amount-neg" : ""}`} style={{ fontWeight: 700 }}>{t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}</div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Kassabeheer */}
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Kassabeheer</div>
+      <div style={{ marginBottom: 24 }}>
+        <div className="eyebrow" style={{ marginBottom: 10 }}>Kassabeheer</div>
         {kassasMetTekort.length > 0 && (
-          <div style={{ background: "var(--danger-tint)", border: "1px solid var(--danger)", borderRadius: 8, padding: "8px 12px", marginBottom: 12, fontSize: 13 }}>
+          <div className="card card-danger" style={{ marginBottom: 14, fontSize: 14 }}>
             ⚠️ Kassa-tekort gedetecteerd: {kassasMetTekort.map((k) => `${k.naam} (${euro(Math.abs(k.verschil))} te weinig)`).join(", ")}
           </div>
         )}
-        <div className="table-wrap" style={{ marginBottom: magBewerken ? 12 : 0 }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Naam</th>
-                <th>Type</th>
-                <th style={{ textAlign: "right" }}>Wisselgeld start</th>
-                <th style={{ textAlign: "right" }}>Inhoud na afloop</th>
-                <th style={{ textAlign: "right" }}>Omzet</th>
-                <th style={{ textAlign: "right" }}>Verwacht</th>
-                <th style={{ textAlign: "right" }}>Verschil</th>
-                {magBewerken && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {kassas.length === 0 && (
-                <tr><td colSpan={8} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen kassa's.</td></tr>
-              )}
-              {kassas.map((k) => (
-                <>
-                  <tr key={k.id}>
-                    <td style={{ fontWeight: 600 }}>{k.naam}</td>
-                    <td>{k.type === "cash" ? "Cash" : "Digitaal"}</td>
-                    <td style={{ textAlign: "right" }}>
-                      {magBewerken && k.type === "cash" ? (
-                        <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
-                          <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 80, textAlign: "right" }} />
-                          <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "wisselgeldStart")} style={{ padding: "4px 6px", fontSize: 12 }}>🧮</button>
-                        </div>
-                      ) : k.type === "cash" ? euro(k.wisselgeld_start) : "-"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>
-                      {magBewerken ? (
-                        <div style={{ display: "flex", gap: 4, justifyContent: "flex-end", alignItems: "center" }}>
-                          <input key={`${k.id}-ie-${k.inhoud_einde}`} type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 80, textAlign: "right" }} />
-                          {k.type === "cash" && (
-                            <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "inhoudEinde")} style={{ padding: "4px 6px", fontSize: 12 }}>🧮</button>
-                          )}
-                        </div>
-                      ) : k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}
-                    </td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(k.omzet)}</td>
-                    <td style={{ textAlign: "right" }}>
-                      {magBewerken ? (
-                        <input
-                          key={`${k.id}-vb-${k.verwacht_bedrag}`}
-                          type="number" step="0.01" defaultValue={k.verwacht_bedrag ?? ""} placeholder="optioneel"
-                          onBlur={(e) => kassaBijwerken(k.id, "verwachtBedrag", e.target.value)}
-                          style={{ width: 80, textAlign: "right" }}
-                        />
-                      ) : k.verwacht_bedrag !== null ? euro(k.verwacht_bedrag) : "-"}
-                    </td>
-                    <td style={{ textAlign: "right", fontWeight: 600, color: k.verschil === null ? undefined : k.heeftTekort ? "var(--danger)" : k.verschil > 0.01 ? "var(--success-text)" : undefined }}>
-                      {k.verschil === null ? "-" : `${k.verschil > 0 ? "+" : ""}${euro(k.verschil)}`}
-                    </td>
-                    {magBewerken && (
-                      <td><button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button></td>
-                    )}
-                  </tr>
-                  {tellerOpen?.kassaId === k.id && (
-                    <tr>
-                      <td colSpan={magBewerken ? 8 : 7} style={{ background: "var(--primary-tint)", padding: 12 }}>
-                        <div style={{ fontSize: 12, fontWeight: 600, marginBottom: 8 }}>
-                          {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
-                        </div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 10 }}>
-                          <div>
-                            <div className="subtle" style={{ fontSize: 10, marginBottom: 4 }}>BRIEFJES</div>
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              {BRIEFJES.map((d) => (
-                                <label key={d} style={{ fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                                  €{d}
-                                  <input
-                                    type="number" min="0" step="1" style={{ width: 50, textAlign: "center" }}
-                                    value={tellerAantallen[d] ?? ""}
-                                    onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))}
-                                  />
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                          <div>
-                            <div className="subtle" style={{ fontSize: 10, marginBottom: 4 }}>MUNTJES</div>
-                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              {MUNTEN.map((d) => (
-                                <label key={d} style={{ fontSize: 11, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                                  €{d}
-                                  <input
-                                    type="number" min="0" step="1" style={{ width: 50, textAlign: "center" }}
-                                    value={tellerAantallen[d] ?? ""}
-                                    onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))}
-                                  />
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <span style={{ fontWeight: 700 }}>Totaal: {euro(samenstellingTotaal(tellerAantallen))}</span>
-                          <button className="btn-primary" onClick={tellerToepassen}>Toepassen</button>
-                          <button onClick={() => setTellerOpen(null)}>Annuleren</button>
-                        </div>
-                      </td>
-                    </tr>
+        {kassas.length === 0 && <p className="muted" style={{ fontStyle: "italic", marginBottom: 14 }}>Nog geen kassa's.</p>}
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: magBewerken ? 14 : 0 }}>
+          {kassas.map((k) => (
+            <div key={k.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{k.naam}</div>
+                  <div className="subtle" style={{ fontSize: 13 }}>{k.type === "cash" ? "Cash" : "Digitaal"}</div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <div style={{ textAlign: "right" }}>
+                    <div className="muted" style={{ fontSize: 12 }}>Omzet</div>
+                    <div className="money" style={{ fontWeight: 700, fontSize: 18 }}>{euro(k.omzet)}</div>
+                  </div>
+                  {k.verschil !== null && (
+                    <span className={`badge ${k.heeftTekort ? "badge-danger" : "badge-success"}`}>{k.verschil > 0 ? "+" : ""}{euro(k.verschil)}</span>
                   )}
-                </>
-              ))}
-            </tbody>
-          </table>
+                  {magBewerken && <button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button>}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                {k.type === "cash" && (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                    Wisselgeld start
+                    {magBewerken ? (
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 90 }} />
+                        <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "wisselgeldStart")}>🧮</button>
+                      </div>
+                    ) : <span className="money" style={{ fontWeight: 600 }}>{euro(k.wisselgeld_start)}</span>}
+                  </label>
+                )}
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Inhoud na afloop
+                  {magBewerken ? (
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <input key={`${k.id}-ie-${k.inhoud_einde}`} type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 90 }} />
+                      {k.type === "cash" && <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k, "inhoudEinde")}>🧮</button>}
+                    </div>
+                  ) : <span className="money" style={{ fontWeight: 600 }}>{k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}</span>}
+                </label>
+                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                  Verwacht
+                  {magBewerken ? (
+                    <input key={`${k.id}-vb-${k.verwacht_bedrag}`} type="number" step="0.01" defaultValue={k.verwacht_bedrag ?? ""} placeholder="optioneel" onBlur={(e) => kassaBijwerken(k.id, "verwachtBedrag", e.target.value)} style={{ width: 90 }} />
+                  ) : <span className="money" style={{ fontWeight: 600 }}>{k.verwacht_bedrag !== null ? euro(k.verwacht_bedrag) : "-"}</span>}
+                </label>
+              </div>
+
+              {tellerOpen?.kassaId === k.id && (
+                <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                    {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
+                  </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
+                    <div>
+                      <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>BRIEFJES</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {BRIEFJES.map((d) => (
+                          <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                            €{d}
+                            <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={tellerAantallen[d] ?? ""} onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>MUNTJES</div>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                        {MUNTEN.map((d) => (
+                          <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                            €{d}
+                            <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={tellerAantallen[d] ?? ""} onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <span className="money" style={{ fontWeight: 700 }}>Totaal: {euro(samenstellingTotaal(tellerAantallen))}</span>
+                    <button className="btn-primary" onClick={tellerToepassen}>Toepassen</button>
+                    <button onClick={() => setTellerOpen(null)}>Annuleren</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
         {magBewerken && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input placeholder="Naam, bv. Kassa inkom" value={nieuweKassa.naam} onChange={(e) => setNieuweKassa({ ...nieuweKassa, naam: e.target.value })} style={{ flex: 1, minWidth: 140 }} />
-            <select value={nieuweKassa.type} onChange={(e) => setNieuweKassa({ ...nieuweKassa, type: e.target.value })}>
-              <option value="cash">Cash</option>
-              <option value="digitaal">Digitaal (SumUp/Payconiq)</option>
-            </select>
-            {nieuweKassa.type === "cash" && (
-              <input type="number" step="0.01" placeholder="Wisselgeld start" value={nieuweKassa.wisselgeldStart} onChange={(e) => setNieuweKassa({ ...nieuweKassa, wisselgeldStart: e.target.value })} style={{ width: 130 }} />
-            )}
-            <button onClick={kassaToevoegen}>+ Kassa toevoegen</button>
-          </div>
+          toonNieuweKassa ? (
+            <div className="card" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input placeholder="Naam, bv. Kassa inkom" value={nieuweKassa.naam} onChange={(e) => setNieuweKassa({ ...nieuweKassa, naam: e.target.value })} style={{ flex: 1, minWidth: 140 }} />
+              <select value={nieuweKassa.type} onChange={(e) => setNieuweKassa({ ...nieuweKassa, type: e.target.value })}>
+                <option value="cash">Cash</option>
+                <option value="digitaal">Digitaal (SumUp/Payconiq)</option>
+              </select>
+              {nieuweKassa.type === "cash" && (
+                <input type="number" step="0.01" placeholder="Wisselgeld start" value={nieuweKassa.wisselgeldStart} onChange={(e) => setNieuweKassa({ ...nieuweKassa, wisselgeldStart: e.target.value })} style={{ width: 130 }} />
+              )}
+              <button className="btn-primary" onClick={kassaToevoegen}>Toevoegen</button>
+              <button onClick={() => setToonNieuweKassa(false)}>Annuleren</button>
+            </div>
+          ) : (
+            <button onClick={() => setToonNieuweKassa(true)}>+ Kassa toevoegen</button>
+          )
         )}
       </div>
 
       {/* Budgetten */}
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Budget per hoofdcategorie</div>
-        <p className="muted" style={{ fontSize: 11, marginBottom: 10 }}>Optioneel — laat leeg voor categorieën zonder vast budget.</p>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th></th>
-                <th>Hoofdcategorie</th>
-                <th style={{ textAlign: "right" }}>Budget</th>
-                <th style={{ textAlign: "right" }}>Uitgegeven</th>
-                <th style={{ textAlign: "right" }}>Resterend</th>
-                {magBewerken && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {categorieen.length === 0 && (
-                <tr><td colSpan={6} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</td></tr>
-              )}
-              {categorieen.map((c) => {
-                const cat = c.naam;
-                const rij = budgetBurnRate.find((b) => b.hoofdcategorie === cat);
-                return (
-                  <tr key={c.id}>
-                    <td>{budgetKleurEmoji(rij?.uitgegeven || 0, rij?.budget)}</td>
-                    <td>{cat}</td>
-                    <td style={{ textAlign: "right" }}>
-                      {magBewerken ? (
-                        <input type="number" step="0.01" defaultValue={rij?.budget ?? ""} placeholder="geen limiet" onBlur={(e) => budgetBijwerken(cat, e.target.value)} style={{ width: 90, textAlign: "right" }} />
-                      ) : rij?.budget !== null && rij?.budget !== undefined ? euro(rij.budget) : "-"}
-                    </td>
-                    <td style={{ textAlign: "right" }}>{euro(rij?.uitgegeven || 0)}</td>
-                    <td className={rij?.resterend < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 600 }}>
-                      {rij?.resterend !== null && rij?.resterend !== undefined ? euro(rij.resterend) : "-"}
-                    </td>
-                    {magBewerken && (
-                      <td><button className="btn-danger" onClick={() => categorieVerwijderen(c.id)}>🗑️</button></td>
+      <div style={{ marginBottom: 24 }}>
+        <div className="eyebrow" style={{ marginBottom: 4 }}>Budget per hoofdcategorie</div>
+        <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>Optioneel — laat leeg voor categorieën zonder vast budget.</p>
+        {categorieen.length === 0 && (
+          <p className="muted" style={{ fontStyle: "italic" }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</p>
+        )}
+        <div className="card" style={{ padding: 0 }}>
+          {categorieen.map((c, i) => {
+            const cat = c.naam;
+            const rij = budgetBurnRate.find((b) => b.hoofdcategorie === cat);
+            const { pct, kleur } = budgetVulling(rij?.uitgegeven, rij?.budget);
+            return (
+              <div key={c.id} style={{ padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{cat}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    {magBewerken ? (
+                      <input type="number" step="0.01" defaultValue={rij?.budget ?? ""} placeholder="geen limiet" onBlur={(e) => budgetBijwerken(cat, e.target.value)} style={{ width: 90, textAlign: "right" }} />
+                    ) : (
+                      <span className="money muted" style={{ fontSize: 13 }}>{rij?.budget !== null && rij?.budget !== undefined ? euro(rij.budget) : "geen limiet"}</span>
                     )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    <span className="money" style={{ fontWeight: 700 }}>{euro(rij?.uitgegeven || 0)}</span>
+                    {magBewerken && <button className="btn-danger" onClick={() => categorieVerwijderen(c.id)}>🗑️</button>}
+                  </div>
+                </div>
+                {rij?.budget ? (
+                  <>
+                    <div className="progress-track"><div className={`progress-fill ${kleur}`} style={{ width: `${pct}%` }} /></div>
+                    <div className={`muted money ${rij.resterend < 0 ? "amount-neg" : ""}`} style={{ fontSize: 12 }}>
+                      {rij.resterend < 0 ? "over budget: " : "resterend: "}{euro(Math.abs(rij.resterend))}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* Nog terug te betalen */}
       {nogTerugTeBetalen.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
-          <div style={{ fontWeight: 600, marginBottom: 10, fontSize: 14 }}>Nog terug te betalen</div>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Wie</th>
-                  <th>Omschrijving</th>
-                  <th>IBAN</th>
-                  <th style={{ textAlign: "right" }}>Bedrag</th>
-                </tr>
-              </thead>
-              <tbody>
-                {nogTerugTeBetalen.map((r) => (
-                  <tr key={r.id}>
-                    <td style={{ fontWeight: 600 }}>{r.wie?.naam || "-"}</td>
-                    <td className="muted">{r.omschrijving}</td>
-                    <td className="subtle">{r.wie?.iban || "⚠️ onbekend"}</td>
-                    <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(r.bedrag)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        <div className="card card-warning" style={{ marginBottom: 24 }}>
+          <span className="badge badge-warning" style={{ marginBottom: 10, display: "inline-block" }}>Nog terug te betalen</span>
+          {nogTerugTeBetalen.map((r, i) => (
+            <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{r.wie?.naam || "-"}</div>
+                <div className="subtle" style={{ fontSize: 13 }}>{r.omschrijving} · {r.wie?.iban || "IBAN onbekend"}</div>
+              </div>
+              <div className="money" style={{ fontWeight: 700, fontSize: 17 }}>{euro(r.bedrag)}</div>
+            </div>
+          ))}
         </div>
       )}
 
       {/* Transacties */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Transacties</div>
-          {magBewerken && (
-            <button onClick={() => setToonTransactieForm(!toonTransactieForm)} style={{ fontSize: 12 }}>
-              {toonTransactieForm ? "Annuleren" : "+ Transactie toevoegen"}
-            </button>
-          )}
-        </div>
-
-        {toonTransactieForm && (
-          <div style={{ background: "var(--primary-tint)", borderRadius: 8, padding: 12, marginBottom: 12 }}>
-            <div className="grid-3" style={{ marginBottom: 8 }}>
-              <input type="date" value={nieuweTransactie.datum} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, datum: e.target.value })} />
-              <input placeholder="Omschrijving" value={nieuweTransactie.omschrijving} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
-              <select value={nieuweTransactie.typeGeldstroom} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeGeldstroom: e.target.value })}>
-                <option value="uitgave">Uitgave</option>
-                <option value="inkomst">Inkomst</option>
-              </select>
-              {nieuweTransactie.typeGeldstroom === "uitgave" && (
-                <select value={nieuweTransactie.typeKostenpost} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeKostenpost: e.target.value })}>
-                  <option value="kost">Kost (eenmalig)</option>
-                  <option value="investering">Investering (blijft mee)</option>
-                </select>
-              )}
-              <input type="number" step="0.01" placeholder="Bedrag" value={nieuweTransactie.bedrag} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedrag: e.target.value })} />
-              <div style={{ display: "flex", gap: 4 }}>
-                <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
-                  <option value="">Hoofdcategorie...</option>
-                  {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
-                </select>
-                <button type="button" onClick={() => categorieToevoegen((naam) => setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
-              </div>
-              <input placeholder="Waar gekocht/besteld (optioneel)" value={nieuweTransactie.waar} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, waar: e.target.value })} />
-              <input type="number" step="0.01" placeholder="Hoeveelheid (optioneel)" value={nieuweTransactie.hoeveelheid} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoeveelheid: e.target.value })} />
-            </div>
-            <button className="btn-primary" onClick={transactieToevoegen}>Toevoegen</button>
-          </div>
+      <div className="eyebrow" style={{ marginBottom: 10 }}>Transacties</div>
+      <div style={{ marginBottom: 12 }}>
+        {magBewerken && (
+          <button onClick={() => setToonTransactieForm(!toonTransactieForm)}>{toonTransactieForm ? "Annuleren" : "+ Transactie toevoegen"}</button>
         )}
+      </div>
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Code</th>
-                <th>Datum</th>
-                <th>Omschrijving</th>
-                <th>Categorie</th>
-                <th style={{ textAlign: "right" }}>Bedrag</th>
-                <th>Status</th>
-                {magBewerken && <th></th>}
-              </tr>
-            </thead>
-            <tbody>
-              {transacties.length === 0 && (
-                <tr><td colSpan={7} className="muted" style={{ textAlign: "center", border: "none", padding: 16 }}>Nog geen transacties.</td></tr>
-              )}
-              {transacties.map((t) => (
-                <>
-                  <tr key={t.id} onClick={() => rijOpenen(t)} style={{ cursor: magBewerken ? "pointer" : "default", background: bewerkId === t.id ? "var(--primary-tint)" : undefined }}>
-                    <td className="subtle" style={{ whiteSpace: "nowrap" }}>{t.transactie_code}</td>
-                    <td style={{ whiteSpace: "nowrap" }}>{t.datum}</td>
-                    <td>
-                      {t.omschrijving}
-                      {t.waar && <span className="subtle"> · {t.waar}</span>}
-                      {t.hoeveelheid ? <span className="subtle"> · {t.hoeveelheid}×</span> : ""}
-                      {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
-                    </td>
-                    <td className="muted" style={{ fontSize: 12 }}>{t.hoofdcategorie || "-"}</td>
-                    <td className={t.type_geldstroom === "uitgave" ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 700, whiteSpace: "nowrap" }}>
-                      {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
-                    </td>
-                    <td><span className="badge badge-neutral">{t.status}</span></td>
-                    {magBewerken && (
-                      <td><button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button></td>
-                    )}
-                  </tr>
-                  {bewerkId === t.id && bewerkVeld && (
-                    <tr>
-                      <td colSpan={magBewerken ? 7 : 6} style={{ background: "var(--primary-tint)", padding: 12 }}>
-                        <div className="grid-3" style={{ marginBottom: 8 }}>
-                          <input type="date" value={bewerkVeld.datum} onChange={(e) => setBewerkVeld({ ...bewerkVeld, datum: e.target.value })} />
-                          <input placeholder="Omschrijving" value={bewerkVeld.omschrijving} onChange={(e) => setBewerkVeld({ ...bewerkVeld, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
-                          <select value={bewerkVeld.typeGeldstroom} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeGeldstroom: e.target.value })}>
-                            <option value="uitgave">Uitgave</option>
-                            <option value="inkomst">Inkomst</option>
-                          </select>
-                          {bewerkVeld.typeGeldstroom === "uitgave" && (
-                            <select value={bewerkVeld.typeKostenpost} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeKostenpost: e.target.value })}>
-                              <option value="kost">Kost (eenmalig)</option>
-                              <option value="investering">Investering (blijft mee)</option>
-                            </select>
-                          )}
-                          <input type="number" step="0.01" placeholder="Bedrag" value={bewerkVeld.bedrag} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bedrag: e.target.value })} />
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <select value={bewerkVeld.hoofdcategorie} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
-                              <option value="">Hoofdcategorie...</option>
-                              {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
-                            </select>
-                            <button type="button" onClick={() => categorieToevoegen((naam) => setBewerkVeld((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie" style={{ padding: "0 10px" }}>+</button>
-                          </div>
-                          <input placeholder="Waar gekocht/besteld" value={bewerkVeld.waar} onChange={(e) => setBewerkVeld({ ...bewerkVeld, waar: e.target.value })} />
-                          <input type="number" step="0.01" placeholder="Hoeveelheid" value={bewerkVeld.hoeveelheid} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoeveelheid: e.target.value })} />
-                          <select value={bewerkVeld.betaalmethode} onChange={(e) => setBewerkVeld({ ...bewerkVeld, betaalmethode: e.target.value })}>
-                            <option value="">Betaalmethode...</option>
-                            {BETAALMETHODES.map((b) => <option key={b} value={b}>{b}</option>)}
-                          </select>
-                          <select value={bewerkVeld.status} onChange={(e) => setBewerkVeld({ ...bewerkVeld, status: e.target.value })}>
-                            {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
-                          </select>
-                          <select value={bewerkVeld.medewerkerUserId} onChange={(e) => setBewerkVeld({ ...bewerkVeld, medewerkerUserId: e.target.value })}>
-                            <option value="">Voorgeschoten door (optioneel)...</option>
-                            {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
-                          </select>
-                          <input placeholder="Link naar bonnetje/factuur" value={bewerkVeld.bewijsstukUrl} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bewijsstukUrl: e.target.value })} style={{ gridColumn: "span 2" }} />
-                        </div>
-                        <div style={{ display: "flex", gap: 8 }}>
-                          <button className="btn-primary" onClick={bewerkOpslaan}>Opslaan</button>
-                          <button onClick={() => { setBewerkId(null); setBewerkVeld(null); }}>Annuleren</button>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              ))}
-            </tbody>
-          </table>
+      {toonTransactieForm && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="grid-3" style={{ marginBottom: 8 }}>
+            <input type="date" value={nieuweTransactie.datum} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, datum: e.target.value })} />
+            <input placeholder="Omschrijving" value={nieuweTransactie.omschrijving} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
+            <select value={nieuweTransactie.typeGeldstroom} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeGeldstroom: e.target.value })}>
+              <option value="uitgave">Uitgave</option>
+              <option value="inkomst">Inkomst</option>
+            </select>
+            {nieuweTransactie.typeGeldstroom === "uitgave" && (
+              <select value={nieuweTransactie.typeKostenpost} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeKostenpost: e.target.value })}>
+                <option value="kost">Kost (eenmalig)</option>
+                <option value="investering">Investering (blijft mee)</option>
+              </select>
+            )}
+            <input type="number" step="0.01" placeholder="Bedrag" value={nieuweTransactie.bedrag} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedrag: e.target.value })} />
+            <div style={{ display: "flex", gap: 4 }}>
+              <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
+                <option value="">Hoofdcategorie...</option>
+                {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+              </select>
+              <button type="button" onClick={() => categorieToevoegen((naam) => setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie">+</button>
+            </div>
+            <input placeholder="Waar gekocht/besteld (optioneel)" value={nieuweTransactie.waar} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, waar: e.target.value })} />
+            <input type="number" step="0.01" placeholder="Hoeveelheid (optioneel)" value={nieuweTransactie.hoeveelheid} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoeveelheid: e.target.value })} />
+          </div>
+          <button className="btn-primary" onClick={transactieToevoegen}>Toevoegen</button>
         </div>
+      )}
+
+      <div className="card" style={{ padding: 0 }}>
+        {transacties.length === 0 && <p className="muted" style={{ padding: 24, textAlign: "center" }}>Nog geen transacties.</p>}
+        {transacties.map((t, i) => {
+          const open = bewerkId === t.id;
+          return (
+            <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default" }} onClick={() => rijOpenen(t)}>
+                <div className="money muted" style={{ width: 60, fontSize: 13, flexShrink: 0 }}>{t.datum}</div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>
+                    {t.omschrijving}
+                    {t.waar && <span className="subtle"> · {t.waar}</span>}
+                    {t.hoeveelheid ? <span className="subtle"> · {t.hoeveelheid}×</span> : ""}
+                  </div>
+                  <div className="muted" style={{ fontSize: 12 }}>
+                    {t.transactie_code}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}
+                    {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" className="link" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
+                  </div>
+                </div>
+                <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
+                <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ width: 90, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
+                  {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
+                </div>
+                {magBewerken && (
+                  <button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
+                )}
+              </div>
+              {open && bewerkVeld && (
+                <div style={{ padding: "0 18px 16px" }}>
+                  <div className="grid-3" style={{ marginBottom: 8 }}>
+                    <input type="date" value={bewerkVeld.datum} onChange={(e) => setBewerkVeld({ ...bewerkVeld, datum: e.target.value })} />
+                    <input placeholder="Omschrijving" value={bewerkVeld.omschrijving} onChange={(e) => setBewerkVeld({ ...bewerkVeld, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
+                    <select value={bewerkVeld.typeGeldstroom} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeGeldstroom: e.target.value })}>
+                      <option value="uitgave">Uitgave</option>
+                      <option value="inkomst">Inkomst</option>
+                    </select>
+                    {bewerkVeld.typeGeldstroom === "uitgave" && (
+                      <select value={bewerkVeld.typeKostenpost} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeKostenpost: e.target.value })}>
+                        <option value="kost">Kost (eenmalig)</option>
+                        <option value="investering">Investering (blijft mee)</option>
+                      </select>
+                    )}
+                    <input type="number" step="0.01" placeholder="Bedrag" value={bewerkVeld.bedrag} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bedrag: e.target.value })} />
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <select value={bewerkVeld.hoofdcategorie} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
+                        <option value="">Hoofdcategorie...</option>
+                        {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                      </select>
+                      <button type="button" onClick={() => categorieToevoegen((naam) => setBewerkVeld((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie">+</button>
+                    </div>
+                    <input placeholder="Waar gekocht/besteld" value={bewerkVeld.waar} onChange={(e) => setBewerkVeld({ ...bewerkVeld, waar: e.target.value })} />
+                    <input type="number" step="0.01" placeholder="Hoeveelheid" value={bewerkVeld.hoeveelheid} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoeveelheid: e.target.value })} />
+                    <select value={bewerkVeld.betaalmethode} onChange={(e) => setBewerkVeld({ ...bewerkVeld, betaalmethode: e.target.value })}>
+                      <option value="">Betaalmethode...</option>
+                      {BETAALMETHODES.map((b) => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                    <select value={bewerkVeld.status} onChange={(e) => setBewerkVeld({ ...bewerkVeld, status: e.target.value })}>
+                      {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                    <select value={bewerkVeld.medewerkerUserId} onChange={(e) => setBewerkVeld({ ...bewerkVeld, medewerkerUserId: e.target.value })}>
+                      <option value="">Voorgeschoten door (optioneel)...</option>
+                      {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                    </select>
+                    <input placeholder="Link naar bonnetje/factuur" value={bewerkVeld.bewijsstukUrl} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bewijsstukUrl: e.target.value })} style={{ gridColumn: "span 2" }} />
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn-primary" onClick={bewerkOpslaan}>Opslaan</button>
+                    <button onClick={() => { setBewerkId(null); setBewerkVeld(null); }}>Annuleren</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

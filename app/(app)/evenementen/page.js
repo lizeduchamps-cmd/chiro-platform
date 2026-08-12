@@ -11,6 +11,41 @@ function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
+function EvenementKaart({ e, magBewerken, onVerwijderen }) {
+  const afgerond = e.status === "afgerond";
+  const winst = e.nettoWinst >= 0;
+  const vulling = e.totaalInkomsten > 0 ? Math.min(100, Math.round((e.totaalUitgaven / e.totaalInkomsten) * 100)) : 0;
+
+  return (
+    <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div>
+          <Link href={`/evenementen/${e.id}`} style={{ fontSize: 18, fontWeight: 700, color: "var(--primary)", textDecoration: "none" }}>{e.naam}</Link>
+          <div className="subtle" style={{ fontSize: 13 }}>{e.datum || "Geen datum"}</div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <span className="badge badge-neutral">{STATUS_LABEL[e.status] || e.status}</span>
+          {magBewerken && <button className="btn-danger" onClick={() => onVerwijderen(e.id, e.naam)}>🗑️</button>}
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12 }}>
+        <div>
+          <div className="muted" style={{ fontSize: 14 }}>{afgerond ? (winst ? "Winst" : "Verlies") : "Voorlopig resultaat"}</div>
+          <div className="money" style={{ fontSize: 26, fontWeight: 700, color: winst ? "var(--success-text)" : "var(--danger-deep)" }}>{euro(Math.abs(e.nettoWinst))}</div>
+        </div>
+        <Link href={`/evenementen/${e.id}`} className="link" style={{ fontSize: 15, fontWeight: 700, textDecoration: "none" }}>Bekijken →</Link>
+      </div>
+
+      <div className="progress-track"><div className={`progress-fill ${winst ? "" : "danger"}`} style={{ width: `${vulling}%` }} /></div>
+      <div className="muted money" style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+        <div>In {euro(e.totaalInkomsten)}</div>
+        <div>Uit {euro(e.totaalUitgaven)}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function Evenementen() {
   const { data: session } = useSession();
   const toast = useToast();
@@ -19,6 +54,7 @@ export default function Evenementen() {
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [evenementen, setEvenementen] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [toonNieuw, setToonNieuw] = useState(false);
   const [nieuweNaam, setNieuweNaam] = useState("");
   const [nieuweDatum, setNieuweDatum] = useState("");
 
@@ -56,6 +92,7 @@ export default function Evenementen() {
     setEvenementen([data.evenement, ...evenementen]);
     setNieuweNaam("");
     setNieuweDatum("");
+    setToonNieuw(false);
     toast.success(`Evenement "${data.evenement.naam}" aangemaakt`);
   };
 
@@ -72,68 +109,65 @@ export default function Evenementen() {
     toast.success(`Evenement "${naam}" verwijderd`);
   };
 
+  const lopend = evenementen.filter((e) => e.status !== "afgerond");
+  const afgesloten = evenementen.filter((e) => e.status === "afgerond");
+
   return (
-    <div style={{ padding: 32, maxWidth: 900 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Evenementen</h1>
+    <div style={{ padding: 32, maxWidth: 800 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Evenementen</h1>
         {werkjaren.length > 0 && (
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
         )}
       </div>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
-        Kassabeheer en winst/verliesbalans per evenement (fuif, taartenslag, ...). Winst van afgeronde evenementen verschijnt automatisch op het Financieel dashboard.
+      <p className="muted" style={{ fontSize: 15, marginBottom: 24 }}>
+        Kassabeheer en winst/verliesbalans per evenement. Winst van afgeronde evenementen verschijnt automatisch op het Financieel dashboard.
       </p>
 
-      {magBewerken && (
-        <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Nieuw evenement</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input placeholder="Naam, bv. Fuif 2026" value={nieuweNaam} onChange={(e) => setNieuweNaam(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
-            <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} />
-            <button className="btn-primary" onClick={aanmaken}>+ Aanmaken</button>
+      {evenementen.length === 0 && (
+        <p className="muted" style={{ fontStyle: "italic", marginBottom: 20 }}>Nog geen evenementen dit werkjaar.</p>
+      )}
+
+      {lopend.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Loopt nu</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {lopend.map((e) => <EvenementKaart key={e.id} e={e} magBewerken={magBewerken} onVerwijderen={verwijderen} />)}
           </div>
         </div>
       )}
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Naam</th>
-              <th>Datum</th>
-              <th>Status</th>
-              <th style={{ textAlign: "right" }}>Inkomsten</th>
-              <th style={{ textAlign: "right" }}>Uitgaven</th>
-              <th style={{ textAlign: "right" }}>Winst/verlies</th>
-              {magBewerken && <th></th>}
-            </tr>
-          </thead>
-          <tbody>
-            {evenementen.length === 0 && (
-              <tr><td colSpan={7} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen evenementen dit werkjaar.</td></tr>
-            )}
-            {evenementen.map((e) => (
-              <tr key={e.id}>
-                <td>
-                  <Link href={`/evenementen/${e.id}`} style={{ fontWeight: 600, color: "var(--primary)" }}>{e.naam}</Link>
-                </td>
-                <td>{e.datum || "-"}</td>
-                <td><span className="badge badge-neutral">{STATUS_LABEL[e.status] || e.status}</span></td>
-                <td style={{ textAlign: "right" }}>{euro(e.totaalInkomsten)}</td>
-                <td className="amount-neg" style={{ textAlign: "right" }}>{euro(e.totaalUitgaven)}</td>
-                <td className={e.nettoWinst < 0 ? "amount-neg" : ""} style={{ textAlign: "right", fontWeight: 600 }}>{euro(e.nettoWinst)}</td>
-                {magBewerken && (
-                  <td>
-                    <button className="btn-danger" onClick={() => verwijderen(e.id, e.naam)}>🗑️</button>
-                  </td>
-                )}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {afgesloten.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Afgesloten</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {afgesloten.map((e) => <EvenementKaart key={e.id} e={e} magBewerken={magBewerken} onVerwijderen={verwijderen} />)}
+          </div>
+        </div>
+      )}
+
+      {magBewerken && (
+        toonNieuw ? (
+          <div className="card">
+            <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>Nieuw evenement</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <input placeholder="Naam, bv. Fuif 2026" value={nieuweNaam} onChange={(e) => setNieuweNaam(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+              <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} />
+              <button className="btn-primary" onClick={aanmaken}>Aanmaken</button>
+              <button onClick={() => setToonNieuw(false)}>Annuleren</button>
+            </div>
+          </div>
+        ) : (
+          <button
+            onClick={() => setToonNieuw(true)}
+            style={{ width: "100%", background: "var(--surface)", border: "1.5px dashed var(--border-strong)", borderRadius: 18, padding: 16, textAlign: "center", fontSize: 15, fontWeight: 700, color: "var(--primary)" }}
+          >
+            + Nieuw evenement
+          </button>
+        )
+      )}
     </div>
   );
 }
