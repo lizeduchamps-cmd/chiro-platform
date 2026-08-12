@@ -11,6 +11,8 @@ const RECHTEN = [
   { value: "financieel_verantwoordelijke", label: "Financieel verantwoordelijke" },
   { value: "lid", label: "Lid (enkel eigen fv)" },
 ];
+const RECHT_BADGE = { admin: "badge-primary", financieel_verantwoordelijke: "badge-primary", lid: "badge-neutral" };
+const RECHT_KORT = { admin: "Admin", financieel_verantwoordelijke: "Financiën", lid: "Lid" };
 
 // Compacte multi-select i.p.v. een rij aangevinkte checkboxes per gebruiker:
 // toegewezen verantwoordelijkheden tonen als chips, een "+ toewijzen"-knopje
@@ -54,6 +56,8 @@ export default function GebruikersBeheer() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [openPicker, setOpenPicker] = useState(null);
+  const [bewerkId, setBewerkId] = useState(null);
+  const [toonVerantwoordelijkheden, setToonVerantwoordelijkheden] = useState(false);
 
   useEffect(() => {
     if (!openPicker) return;
@@ -181,128 +185,105 @@ export default function GebruikersBeheer() {
     toast.success(`${u.naam} verwijderd`);
   };
 
+  const zonderIban = users.filter((u) => !u.iban);
+
   return (
-    <div style={{ padding: 32 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Gebruikers &amp; rollen</h1>
-        <button className="btn-primary" onClick={nieuweGebruiker}>
-          + Gebruiker toevoegen
-        </button>
+    <div style={{ padding: 32, maxWidth: 900 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Gebruikers &amp; rollen</h1>
+        <button className="btn-primary" onClick={nieuweGebruiker}>+ Gebruiker toevoegen</button>
       </div>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 24 }}>
-        Wijs hier per persoon het type, de groep, verantwoordelijkheden en platformrecht toe.
-        Wijzigingen worden meteen opgeslagen.
+      <p className="muted" style={{ fontSize: 15, marginBottom: 20 }}>
+        Type, afdeling, verantwoordelijkheden en rechten per persoon. Alles wat je wijzigt, is meteen opgeslagen.
       </p>
 
-      <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>Verantwoordelijkheden</div>
-          <button onClick={nieuweVerantwoordelijkheid} style={{ fontSize: 12 }}>+ Nieuwe verantwoordelijkheid</button>
+      <div className="card" style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+        <div>
+          <div className="muted" style={{ fontSize: 14 }}>Leiding op het platform</div>
+          <div className="money" style={{ fontSize: 26, fontWeight: 700 }}>{users.length}</div>
         </div>
-        {verantwoordelijkheden.length === 0 ? (
-          <p className="muted" style={{ fontStyle: "italic", fontSize: 13 }}>Nog geen verantwoordelijkheden aangemaakt.</p>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Naam</th>
-                  <th>Hoofdverantwoordelijke</th>
-                  <th>Medeverantwoordelijken</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {verantwoordelijkheden.map((v) => (
-                  <tr key={v.id}>
-                    <td style={{ fontWeight: 600 }}>{v.naam}</td>
-                    <td>
-                      <select value={v.hoofdverantwoordelijke?.id || ""} onChange={(e) => hoofdverantwoordelijkeInstellen(v.id, e.target.value)} style={{ fontSize: 12 }}>
-                        <option value="">- niemand -</option>
-                        {users.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
-                      </select>
-                    </td>
-                    <td className="muted" style={{ fontSize: 12 }}>
-                      {v.medeverantwoordelijken.length > 0 ? v.medeverantwoordelijken.map((m) => m.naam).join(", ") : "-"}
-                    </td>
-                    <td><button className="btn-danger" onClick={() => verantwoordelijkheidVerwijderen(v)}>🗑️</button></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+        {zonderIban.length > 0 && (
+          <div className="muted" style={{ fontSize: 13, textAlign: "right" }}>{zonderIban.length} zonder IBAN: {zonderIban.map((u) => u.naam).join(", ")}</div>
         )}
       </div>
 
-      <div className="table-wrap" style={{ overflowX: "auto" }}>
-        <table>
-          <thead>
-            <tr>
-              <th>Naam</th>
-              <th>Type</th>
-              <th>Groep</th>
-              <th>Verantwoordelijkheden</th>
-              <th>Platformrecht</th>
-              <th>IBAN</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td>
-                  {u.naam}
-                  <div className="subtle" style={{ fontSize: 11 }}>@{u.discord_username}</div>
-                </td>
-                <td>
+      <div className="eyebrow" style={{ marginBottom: 10 }}>Iedereen</div>
+      <div className="card" style={{ padding: 0, marginBottom: 20 }}>
+        {users.map((u, i) => {
+          const open = bewerkId === u.id;
+          return (
+            <div key={u.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15 }}>{u.naam}</div>
+                  <div className="subtle" style={{ fontSize: 13 }}>@{u.discord_username} · {u.type || "-"}{u.groep ? ` · ${u.groep}` : ""}</div>
+                </div>
+                <span className={`badge ${RECHT_BADGE[u.platform_recht] || "badge-neutral"}`}>{RECHT_KORT[u.platform_recht] || "Lid"}</span>
+                <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => setBewerkId(open ? null : u.id)}>{open ? "Klaar" : "Wijzig"}</button>
+              </div>
+
+              <VerantwoordelijkhedenCel
+                user={u}
+                alle={verantwoordelijkheden}
+                open={openPicker === u.id}
+                onToggleOpen={(id) => setOpenPicker((prev) => (prev === id ? null : id))}
+                onToggle={toggleVerantwoordelijkheid}
+              />
+
+              {open && (
+                <div className="grid-3" style={{ paddingTop: 4 }}>
                   <select value={u.type || ""} onChange={(e) => updateUser(u.id, { type: e.target.value })}>
-                    {TYPES.map((t) => (
-                      <option key={t} value={t}>{t}</option>
-                    ))}
+                    {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
-                </td>
-                <td>
                   <select value={u.groep || ""} onChange={(e) => updateUser(u.id, { groep: e.target.value })}>
-                    <option value="">-</option>
-                    {GROEPEN.map((g) => (
-                      <option key={g} value={g}>{g}</option>
-                    ))}
+                    <option value="">Groep...</option>
+                    {GROEPEN.map((g) => <option key={g} value={g}>{g}</option>)}
                   </select>
-                </td>
-                <td>
-                  <VerantwoordelijkhedenCel
-                    user={u}
-                    alle={verantwoordelijkheden}
-                    open={openPicker === u.id}
-                    onToggleOpen={(id) => setOpenPicker((prev) => (prev === id ? null : id))}
-                    onToggle={toggleVerantwoordelijkheid}
-                  />
-                </td>
-                <td>
                   <select value={u.platform_recht || "lid"} onChange={(e) => updateUser(u.id, { platform_recht: e.target.value })}>
-                    {RECHTEN.map((r) => (
-                      <option key={r.value} value={r.value}>{r.label}</option>
-                    ))}
+                    {RECHTEN.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
-                </td>
-                <td>
                   <input
                     defaultValue={u.iban || ""}
-                    placeholder="BE.."
+                    placeholder="IBAN, bv. BE68 ..."
                     onBlur={(e) => { if (e.target.value !== (u.iban || "")) updateUser(u.id, { iban: e.target.value.trim() }); }}
-                    style={{ width: 160, fontSize: 12 }}
+                    style={{ gridColumn: "span 2" }}
                   />
-                </td>
-                <td>
-                  <button className="btn-danger" onClick={() => verwijderGebruiker(u)} title="Verwijderen">
-                    🗑️
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+                  <button className="btn-danger-solid" onClick={() => verwijderGebruiker(u)}>Verwijderen</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
+
+      {toonVerantwoordelijkheden ? (
+        <div className="card">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Verantwoordelijkheden</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={nieuweVerantwoordelijkheid}>+ Nieuwe</button>
+              <button onClick={() => setToonVerantwoordelijkheden(false)}>Sluiten</button>
+            </div>
+          </div>
+          {verantwoordelijkheden.length === 0 ? (
+            <p className="muted" style={{ fontStyle: "italic", fontSize: 13 }}>Nog geen verantwoordelijkheden aangemaakt.</p>
+          ) : (
+            verantwoordelijkheden.map((v, i) => (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{v.naam}</div>
+                <select value={v.hoofdverantwoordelijke?.id || ""} onChange={(e) => hoofdverantwoordelijkeInstellen(v.id, e.target.value)}>
+                  <option value="">- niemand -</option>
+                  {users.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
+                </select>
+                <span className="muted" style={{ fontSize: 12, minWidth: 120 }}>{v.medeverantwoordelijken.length > 0 ? v.medeverantwoordelijken.map((m) => m.naam).join(", ") : "geen mede"}</span>
+                <button className="btn-danger" onClick={() => verantwoordelijkheidVerwijderen(v)}>🗑️</button>
+              </div>
+            ))
+          )}
+        </div>
+      ) : (
+        <button onClick={() => setToonVerantwoordelijkheden(true)}>Verantwoordelijkheden beheren</button>
+      )}
     </div>
   );
 }
