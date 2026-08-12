@@ -10,8 +10,35 @@ function euro(n) {
 
 const AFDELINGEN = ["Sloebers", "Speelclub", "Rakwi", "Tito", "Keti", "Aspi", "Algemeen/Keuken"];
 const STATUS_VOLGORDE = ["Aangevraagd", "Goedgekeurd", "Klaargezet", "Opgehaald"];
+const STATUS_BADGE = { Aangevraagd: "badge-warning", Goedgekeurd: "badge-primary", Klaargezet: "badge-primary", Opgehaald: "badge-success" };
 
 const LEGE_AANVRAAG = { afdeling: "", datumNodig: "", bedragGevraagd: "", samenstellingCash: "", doelActiviteit: "" };
+
+function AanvraagKaart({ a, magActie, volgende, onStatusVooruit, onVerwijderen }) {
+  return (
+    <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{a.afdeling}</div>
+          <div className="muted" style={{ fontSize: 14 }}>{a.doel_activiteit || "Geen doel opgegeven"} · nodig op {a.datum_nodig}</div>
+        </div>
+        <span className={`badge ${STATUS_BADGE[a.status] || "badge-neutral"}`}>{a.status}</span>
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+        <div>
+          <div className="muted" style={{ fontSize: 14 }}>Gevraagd</div>
+          <div className="money" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>{euro(a.bedrag_gevraagd)}</div>
+          {a.samenstelling_cash && <div className="subtle" style={{ fontSize: 13 }}>{a.samenstelling_cash}</div>}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span className="subtle" style={{ fontSize: 13 }}>{a.aanvraag_code}</span>
+          {magActie && volgende && <button className="btn-primary" onClick={() => onStatusVooruit(a)}>{volgende} →</button>}
+          {magActie && <button className="btn-danger" onClick={() => onVerwijderen(a)}>🗑️</button>}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function Wisselgeld() {
   const { data: session } = useSession();
@@ -105,34 +132,45 @@ export default function Wisselgeld() {
 
   const magActieOp = (aanvraag) => isFinancien || (eigenAfdeling && eigenAfdeling === aanvraag.afdeling);
 
+  const teRegelen = aanvragen.filter((a) => a.status !== "Opgehaald");
+  const opgehaald = aanvragen.filter((a) => a.status === "Opgehaald");
+  const nogTeRegelen = teRegelen.reduce((s, a) => s + Number(a.bedrag_gevraagd || 0), 0);
+
   return (
-    <div style={{ padding: 32, maxWidth: 1000 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 600 }}>Wisselgeld-aanvragen</h1>
+    <div style={{ padding: 32, maxWidth: 800 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
+        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Wisselgeld</h1>
         {werkjaren.length > 0 && (
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
         )}
       </div>
-      <p className="muted" style={{ fontSize: 14, marginBottom: 20 }}>
+      <p className="muted" style={{ fontSize: 15, marginBottom: 20 }}>
         Vraag cash wisselgeld aan voor een activiteit of weekend. Financiën ziet nieuwe aanvragen meteen op het Financieel dashboard en op de Kalender.
       </p>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 16, flexWrap: "wrap" }}>
-        <select value={filterAfdeling} onChange={(e) => setFilterAfdeling(e.target.value)}>
-          <option value="">Alle afdelingen</option>
-          {AFDELINGEN.map((a) => <option key={a} value={a}>{a}</option>)}
-        </select>
-        {afdelingenKeuze.length > 0 && (
+      {teRegelen.length > 0 && (
+        <div className="card card-lg card-warning" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div className="muted" style={{ fontSize: 14 }}>Nog te regelen</div>
+          <div className="money" style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em" }}>{euro(nogTeRegelen)}</div>
+          <div className="muted" style={{ fontSize: 14 }}>{teRegelen.length} aanvra{teRegelen.length > 1 ? "gen" : "ag"} onderweg.</div>
+          {afdelingenKeuze.length > 0 && (
+            <button className="btn-primary" onClick={() => setToonForm(!toonForm)} style={{ alignSelf: "flex-start" }}>{toonForm ? "Annuleren" : "+ Nieuwe aanvraag"}</button>
+          )}
+        </div>
+      )}
+
+      {teRegelen.length === 0 && afdelingenKeuze.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
           <button className="btn-primary" onClick={() => setToonForm(!toonForm)}>{toonForm ? "Annuleren" : "+ Nieuwe aanvraag"}</button>
-        )}
-      </div>
+        </div>
+      )}
 
       {toonForm && (
         <div className="card" style={{ marginBottom: 20 }}>
-          <div style={{ fontWeight: 600, marginBottom: 8, fontSize: 14 }}>Nieuwe aanvraag</div>
-          <div className="grid-3" style={{ marginBottom: 8 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuwe aanvraag</div>
+          <div className="grid-3" style={{ marginBottom: 10 }}>
             <select value={nieuweAanvraag.afdeling} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, afdeling: e.target.value })} disabled={afdelingenKeuze.length === 1}>
               <option value="">Afdeling...</option>
               {afdelingenKeuze.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -146,42 +184,36 @@ export default function Wisselgeld() {
         </div>
       )}
 
-      <div className="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Afdeling</th>
-              <th>Datum nodig</th>
-              <th>Doel</th>
-              <th style={{ textAlign: "right" }}>Bedrag</th>
-              <th>Status</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {aanvragen.length === 0 && (
-              <tr><td colSpan={7} className="muted" style={{ textAlign: "center", border: "none", padding: 24 }}>Nog geen aanvragen.</td></tr>
-            )}
-            {aanvragen.map((a) => (
-              <tr key={a.id}>
-                <td className="subtle">{a.aanvraag_code}</td>
-                <td style={{ fontWeight: 600 }}>{a.afdeling}</td>
-                <td style={{ whiteSpace: "nowrap" }}>{a.datum_nodig}</td>
-                <td className="muted">{a.doel_activiteit || "-"}{a.samenstelling_cash && <div className="subtle" style={{ fontSize: 11 }}>{a.samenstelling_cash}</div>}</td>
-                <td style={{ textAlign: "right", fontWeight: 700 }}>{euro(a.bedrag_gevraagd)}</td>
-                <td><span className={`badge ${a.status === "Opgehaald" ? "badge-primary" : "badge-neutral"}`}>{a.status}</span></td>
-                <td style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                  {magActieOp(a) && volgendeStatus(a.status) && (isFinancien || a.status === "Klaargezet") && (
-                    <button onClick={() => statusVooruit(a)} style={{ fontSize: 11 }}>→ {volgendeStatus(a.status)}</button>
-                  )}
-                  {magActieOp(a) && <button className="btn-danger" onClick={() => aanvraagVerwijderen(a)} style={{ fontSize: 11 }}>🗑️</button>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+        <button onClick={() => setFilterAfdeling("")} className={!filterAfdeling ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }}>Alle afdelingen</button>
+        {AFDELINGEN.map((a) => (
+          <button key={a} onClick={() => setFilterAfdeling(a)} className={filterAfdeling === a ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }}>{a}</button>
+        ))}
       </div>
+
+      {aanvragen.length === 0 && <p className="muted" style={{ fontStyle: "italic" }}>Nog geen aanvragen.</p>}
+
+      {teRegelen.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Te regelen</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {teRegelen.map((a) => (
+              <AanvraagKaart key={a.id} a={a} magActie={magActieOp(a) && (isFinancien || a.status === "Klaargezet")} volgende={volgendeStatus(a.status)} onStatusVooruit={statusVooruit} onVerwijderen={aanvraagVerwijderen} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {opgehaald.length > 0 && (
+        <div>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Opgehaald</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {opgehaald.map((a) => (
+              <AanvraagKaart key={a.id} a={a} magActie={magActieOp(a)} volgende={null} onStatusVooruit={statusVooruit} onVerwijderen={aanvraagVerwijderen} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
