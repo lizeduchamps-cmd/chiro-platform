@@ -50,6 +50,7 @@ export async function POST(req) {
         omschrijving: t.omschrijving || null,
         bedrag: Math.abs(Number(t.bedrag)),
         categorie_id: naarId(t.categorie),
+        categorie_zekerheid: t.zekerheid || null,
         evenement_id: evenementVoorCategorie(t.categorie),
         bron: "kbc_csv",
       },

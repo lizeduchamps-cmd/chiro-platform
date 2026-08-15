@@ -16,6 +16,22 @@ function groepIsActief(g, pathname) {
 // Eén eenvoudige set lijniconen voor de 7 hoofditems — gebruikt in zowel de
 // zijbalk (desktop) als de onderste tabbalk (mobiel), zodat beide navigaties
 // visueel bij elkaar horen.
+// Klein rood bolletje met aantal — bv. hoeveel kasboektransacties nog niet
+// helemaal zeker gecategoriseerd zijn, zichtbaar zonder de pagina te openen.
+function NavBolletje({ aantal }) {
+  return (
+    <span
+      style={{
+        position: "absolute", top: -4, right: -5, background: "var(--danger)", color: "white",
+        fontSize: 9, fontWeight: 800, borderRadius: 999, minWidth: 14, height: 14, lineHeight: "14px",
+        textAlign: "center", padding: "0 3px",
+      }}
+    >
+      {aantal > 9 ? "9+" : aantal}
+    </span>
+  );
+}
+
 function NavIcon({ naam, color }) {
   const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
   switch (naam) {
@@ -38,17 +54,23 @@ function NavIcon({ naam, color }) {
   }
 }
 
-function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle }) {
+function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle, meldingen }) {
   const heeftKinderen = node.children?.length > 0;
   const actief = isActief(node.href, pathname);
   const kindActief = heeftKinderen && (node.children || []).some((c) => isActief(c.href, pathname));
   const uitgeklapt = actief || kindActief || manueelOpen.has(node.key);
+  const melding = meldingen?.[node.key];
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center" }}>
         <Link href={node.href} className="nav-link" style={{ ...linkStyle(actief, depth), flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
-          {depth === 0 && <NavIcon naam={node.key} color={actief ? "var(--accent)" : "#B9C2D1"} />}
+          {depth === 0 && (
+            <span style={{ position: "relative", display: "flex" }}>
+              <NavIcon naam={node.key} color={actief ? "var(--accent)" : "#B9C2D1"} />
+              {melding > 0 && <NavBolletje aantal={melding} />}
+            </span>
+          )}
           {node.label}
         </Link>
         {heeftKinderen && (
@@ -65,7 +87,7 @@ function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle 
       {uitgeklapt && heeftKinderen && (
         <div style={{ marginLeft: 12, borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: 8, marginTop: 2, display: "flex", flexDirection: "column", gap: 2 }}>
           {node.children.map((c) => (
-            <NavNode key={c.key} node={c} depth={depth + 1} pathname={pathname} manueelOpen={manueelOpen} toggleManueel={toggleManueel} linkStyle={linkStyle} />
+            <NavNode key={c.key} node={c} depth={depth + 1} pathname={pathname} manueelOpen={manueelOpen} toggleManueel={toggleManueel} linkStyle={linkStyle} meldingen={meldingen} />
           ))}
         </div>
       )}
@@ -77,14 +99,21 @@ export default function Layout({ session, children }) {
   const pathname = usePathname();
   const [manueelOpen, setManueelOpen] = useState(new Set());
   const [evenementen, setEvenementen] = useState([]);
+  const [nietZekerCount, setNietZekerCount] = useState(0);
 
   // Evenementen komen uit de database (huidig werkjaar) i.p.v. vaste namen in de
   // code, zodat nieuwe/verwijderde evenementen meteen in het menu kloppen.
+  // Meteen ook tellen hoeveel kasboektransacties nog niet helemaal zeker
+  // gecategoriseerd zijn, voor het bolletje op het Kasboek-tabblad.
   useEffect(() => {
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
       const werkjaarId = d.werkjaren?.[0]?.id;
       if (!werkjaarId) return;
       fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((ed) => setEvenementen(ed.evenementen || []));
+      fetch(`/api/transacties?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((td) => {
+        const aantal = (td.transacties || []).filter((t) => t.categorie_zekerheid === "waarschijnlijk" || t.categorie_zekerheid === "onzeker").length;
+        setNietZekerCount(aantal);
+      });
     });
   }, []);
 
@@ -161,7 +190,7 @@ export default function Layout({ session, children }) {
         </div>
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
           {groups.map((g) => (
-            <NavNode key={g.key} node={g} depth={0} pathname={pathname} manueelOpen={manueelOpen} toggleManueel={toggleManueel} linkStyle={linkStyle} />
+            <NavNode key={g.key} node={g} depth={0} pathname={pathname} manueelOpen={manueelOpen} toggleManueel={toggleManueel} linkStyle={linkStyle} meldingen={{ kasboek: nietZekerCount }} />
           ))}
         </nav>
         <div style={{ paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.15)", fontSize: 11, color: "#9FAAC2" }}>
@@ -195,7 +224,10 @@ export default function Layout({ session, children }) {
             const actief = groepIsActief(g, pathname);
             return (
               <Link key={g.key} href={g.href} className={`mobile-tab${actief ? " active" : ""}`}>
-                <NavIcon naam={g.key} color={actief ? "var(--accent)" : "var(--text-subtle)"} />
+                <span style={{ position: "relative", display: "flex" }}>
+                  <NavIcon naam={g.key} color={actief ? "var(--accent)" : "var(--text-subtle)"} />
+                  {g.key === "kasboek" && nietZekerCount > 0 && <NavBolletje aantal={nietZekerCount} />}
+                </span>
                 <span>{g.kort}</span>
               </Link>
             );

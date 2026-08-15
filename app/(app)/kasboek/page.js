@@ -36,6 +36,7 @@ export default function Kasboek() {
   const [zoekterm, setZoekterm] = useState("");
   const [filterCat, setFilterCat] = useState("");
   const [alleenOngecategoriseerd, setAlleenOngecategoriseerd] = useState(false);
+  const [alleenNietZeker, setAlleenNietZeker] = useState(false);
   const [geselecteerd, setGeselecteerd] = useState(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -80,7 +81,7 @@ export default function Kasboek() {
   // per ongeluk een verborgen (niet meer zichtbare) transactie meeverwijdert.
   useEffect(() => {
     setGeselecteerd(new Set());
-  }, [werkjaarId, zoekterm, filterCat, alleenOngecategoriseerd]);
+  }, [werkjaarId, zoekterm, filterCat, alleenOngecategoriseerd, alleenNietZeker]);
 
   if (loading) {
     return (
@@ -261,8 +262,10 @@ export default function Kasboek() {
   };
 
   const ongecategoriseerd = transacties.filter((t) => !t.categorie_id);
+  const nietZeker = transacties.filter((t) => t.categorie_zekerheid === "waarschijnlijk" || t.categorie_zekerheid === "onzeker");
 
-  const gefilterd = (alleenOngecategoriseerd ? ongecategoriseerd : transacties).filter((t) => {
+  const basislijst = alleenOngecategoriseerd ? ongecategoriseerd : alleenNietZeker ? nietZeker : transacties;
+  const gefilterd = basislijst.filter((t) => {
     const term = zoekterm.toLowerCase();
     const matchZoek =
       !term ||
@@ -343,6 +346,17 @@ export default function Kasboek() {
         </div>
       )}
 
+      {nietZeker.length > 0 && (
+        <div className="card card-warning" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+          <span className="badge badge-warning" style={{ alignSelf: "flex-start" }}>Niet helemaal zeker</span>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>{nietZeker.length} transactie{nietZeker.length > 1 ? "s zijn" : " is"} niet helemaal zeker gecategoriseerd</div>
+          <p className="muted" style={{ fontSize: 13 }}>Automatisch toegewezen op basis van een zwakke of gedeeltelijke match — controleer of de categorie klopt.</p>
+          <button onClick={() => setAlleenNietZeker((v) => !v)} style={{ alignSelf: "flex-start" }}>
+            {alleenNietZeker ? "✕ Toon alle regels" : "Toon enkel deze regels"}
+          </button>
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
         <input
           placeholder="Zoek op naam, mededeling, bedrag, datum..."
@@ -413,7 +427,7 @@ export default function Kasboek() {
       )}
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-        <div className="eyebrow">Alle regels · {gefilterd.length}</div>
+        <div className="eyebrow">{alleenOngecategoriseerd ? "Nog aan te duiden" : alleenNietZeker ? "Niet helemaal zeker" : "Alle regels"} · {gefilterd.length}</div>
         {magBewerken && gefilterd.length > 0 && (
           <button className="btn-plain" onClick={toggleSelectieAlles} style={{ fontSize: 13, fontWeight: 600, color: "var(--text)" }}>
             {geselecteerd.size === gefilterd.length ? "☑" : "☐"} Alles selecteren
@@ -448,7 +462,11 @@ export default function Kasboek() {
                 {!t.categorie_id ? (
                   <span className="badge badge-warning" style={{ whiteSpace: "nowrap" }}>Nog aanduiden</span>
                 ) : (
-                  <span className="badge badge-neutral" style={{ whiteSpace: "nowrap" }}>{t.categorieen?.naam || "-"}</span>
+                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span className="badge badge-neutral" style={{ whiteSpace: "nowrap" }}>{t.categorieen?.naam || "-"}</span>
+                    {t.categorie_zekerheid === "waarschijnlijk" && <span className="badge badge-warning" style={{ whiteSpace: "nowrap" }}>Waarschijnlijk</span>}
+                    {t.categorie_zekerheid === "onzeker" && <span className="badge badge-danger" style={{ whiteSpace: "nowrap" }}>Onzeker</span>}
+                  </span>
                 )}
                 <div className={`money ${teken < 0 ? "amount-neg" : ""}`} style={{ width: 100, textAlign: "right", fontWeight: 700, fontSize: 15, color: teken > 0 ? "var(--success-text)" : undefined }}>
                   {teken === 0 ? "" : teken > 0 ? "+" : "-"}{euro(t.bedrag)}

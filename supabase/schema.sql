@@ -176,6 +176,9 @@ create table if not exists transacties (
   bedrag numeric(10,2) not null,           -- altijd positief; 'soort' bepaalt de richting
   categorie_id uuid references categorieen(id),
   categorie_handmatig_aangepast boolean default false,  -- override: nooit terug automatisch overschrijven
+  -- Hoe zeker de automatische categorisering was bij het importeren (null =
+  -- handmatig ingevoerd/gekozen, dus geen inschatting nodig).
+  categorie_zekerheid text check (categorie_zekerheid in ('zeker', 'waarschijnlijk', 'onzeker') or categorie_zekerheid is null),
   interne_bestemming_rekening text check (interne_bestemming_rekening in ('zicht', 'spaar') or interne_bestemming_rekening is null),
   bron text default 'handmatig' check (bron in ('handmatig', 'kbc_csv')),
   -- Koppeling met Evenementen: als deze bank-transactie hoort bij een

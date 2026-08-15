@@ -11,6 +11,7 @@ const ONBEKEND = "Onduidelijk/Nog in te vullen";
 
 // Patroonherkenning: transacties met hetzelfde bedrag binnen dezelfde maand
 // krijgen automatisch dezelfde categorie als er al één bekend is in die groep.
+// Dit is een indirecte gok (geen eigen tekst-match), dus altijd "onzeker".
 function slimmePatroonherkenning(lijst) {
   const groepen = {};
   lijst.forEach((t) => {
@@ -25,6 +26,7 @@ function slimmePatroonherkenning(lijst) {
       groep.forEach((t) => {
         if (t.categorie === ONBEKEND) {
           t.categorie = bekend.categorie;
+          t.zekerheid = "onzeker";
           aantal++;
         }
       });
@@ -46,13 +48,20 @@ function parseKbcCsv(text, regels) {
   const nameIdx = idx("Naam tegenpartij", 14);
   const memoIdx = idx("Vrije mededeling", 17);
 
+  // Zekerheid van de automatische match: een lang/specifiek trefwoord (bv.
+  // "leidingsweekend") is een veel sterkere aanwijzing dan een kort/generiek
+  // woordje (bv. "fin") — vandaar de knip op tekstlengte.
   const categoriseer = (rawMemo, rawDesc, tegenpartij, bedrag) => {
     const tekst = `${rawMemo} ${rawDesc} ${tegenpartij}`.toLowerCase();
-    if (bedrag > 0 && bedrag % 60 === 0 && (rawMemo.trim() || rawDesc.trim())) return "Lidgeld";
-    for (const regel of regels) {
-      if (tekst.includes(regel.bevat_tekst)) return regel.categorieen?.naam || ONBEKEND;
+    if (bedrag > 0 && bedrag % 60 === 0 && (rawMemo.trim() || rawDesc.trim())) {
+      return { categorie: "Lidgeld", zekerheid: "zeker" };
     }
-    return ONBEKEND;
+    for (const regel of regels) {
+      if (tekst.includes(regel.bevat_tekst)) {
+        return { categorie: regel.categorieen?.naam || ONBEKEND, zekerheid: regel.bevat_tekst.length >= 6 ? "zeker" : "waarschijnlijk" };
+      }
+    }
+    return { categorie: ONBEKEND, zekerheid: null };
   };
 
   const resultaat = [];
@@ -73,13 +82,15 @@ function parseKbcCsv(text, regels) {
     const tegenpartij = cols[nameIdx] || "KBC Transactie";
     const vrijeMededeling = cols[memoIdx] || "";
     const omschrijving = cols[descIdx] || "";
+    const { categorie, zekerheid } = categoriseer(vrijeMededeling, omschrijving, tegenpartij, bedrag);
 
     resultaat.push({
       id: `${Date.now()}_${Math.random()}`,
       datum, tegenpartij, vrijeMededeling, omschrijving,
       iban: cols[ibanIdx] || "",
       bedrag,
-      categorie: categoriseer(vrijeMededeling, omschrijving, tegenpartij, bedrag),
+      categorie,
+      zekerheid,
     });
   }
   return resultaat;
@@ -189,7 +200,7 @@ export default function CsvUpload() {
     else toast.info("Geen nieuwe patronen gevonden.");
   };
 
-  const updateCat = (id, cat) => setPending((prev) => prev.map((t) => (t.id === id ? { ...t, categorie: cat } : t)));
+  const updateCat = (id, cat) => setPending((prev) => prev.map((t) => (t.id === id ? { ...t, categorie: cat, zekerheid: null } : t)));
   const verwijder = (t) => {
     setPending((prev) => prev.filter((x) => x.id !== t.id));
     setGeselecteerd((prev) => prev.filter((x) => x !== t.id));
@@ -200,7 +211,7 @@ export default function CsvUpload() {
     setGeselecteerd((prev) => (ids.every((id) => prev.includes(id)) ? prev.filter((id) => !ids.includes(id)) : Array.from(new Set([...prev, ...ids]))));
   const bulkToepassen = () => {
     if (!bulkCat) return;
-    setPending((prev) => prev.map((t) => (geselecteerd.includes(t.id) ? { ...t, categorie: bulkCat } : t)));
+    setPending((prev) => prev.map((t) => (geselecteerd.includes(t.id) ? { ...t, categorie: bulkCat, zekerheid: null } : t)));
     setGeselecteerd([]);
   };
 

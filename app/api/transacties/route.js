@@ -15,7 +15,7 @@ export async function GET(req) {
   const { data, error } = await supabaseAdmin
     .from("transacties")
     .select(
-      "id, datum, soort, tegenpartij, iban_tegenpartij, vrije_mededeling, omschrijving, bedrag, rekening_type, interne_bestemming_rekening, categorie_id, categorieen(naam), evenement_id, evenementen(naam)"
+      "id, datum, soort, tegenpartij, iban_tegenpartij, vrije_mededeling, omschrijving, bedrag, rekening_type, interne_bestemming_rekening, categorie_id, categorie_zekerheid, categorieen(naam), evenement_id, evenementen(naam)"
     )
     .eq("werkjaar_id", werkjaarId)
     .order("datum", { ascending: false });
@@ -97,6 +97,8 @@ export async function PATCH(req) {
   if (categorieId !== undefined) {
     updateFields.categorie_id = categorieId || null;
     updateFields.categorie_handmatig_aangepast = true;
+    // Iemand koos dit bewust — geen "waarschijnlijk/onzeker"-label meer nodig.
+    updateFields.categorie_zekerheid = null;
   }
   if (evenementId !== undefined) {
     updateFields.evenement_id = evenementId || null;
