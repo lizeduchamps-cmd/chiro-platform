@@ -367,6 +367,28 @@ create table if not exists evenement_transacties (
 
 create index if not exists idx_evenement_transacties_evenement on evenement_transacties(evenement_id);
 
+-- Optionele module 'ticketverkoop' (zie evenementen.heeft_ticketverkoop) —
+-- ticket-omzet telt automatisch mee in de winst/verliesbalans van het evenement.
+create table if not exists evenement_tickets (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  naam text not null,                          -- bv. 'Vroegboek', 'Aan de deur'
+  prijs numeric(10,2) not null,
+  aantal_verkocht integer not null default 0,
+  created_at timestamptz default now()
+);
+
+-- Optionele module 'sponsoring' (zie evenementen.heeft_sponsoring) — telt
+-- automatisch mee als inkomst in de winst/verliesbalans van het evenement.
+create table if not exists evenement_sponsors (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  naam text not null,
+  bedrag numeric(10,2) not null,
+  opmerking text,
+  created_at timestamptz default now()
+);
+
 -- ============ FASE 4: KAMPBUDGETTEN, WISSELGELD & KALENDER ============
 
 -- Tarieven zijn gedeeld over de afdelingen (jong = Sloebers/Speelclub/Rakwi,
@@ -533,6 +555,8 @@ alter table evenement_kassas enable row level security;
 alter table evenement_categorieen enable row level security;
 alter table evenement_budgetten enable row level security;
 alter table evenement_transacties enable row level security;
+alter table evenement_tickets enable row level security;
+alter table evenement_sponsors enable row level security;
 alter table kamp_tarieven enable row level security;
 alter table groepsbudgetten enable row level security;
 alter table wisselgeld_aanvragen enable row level security;

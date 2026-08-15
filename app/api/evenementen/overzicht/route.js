@@ -16,7 +16,7 @@ export async function GET(req) {
 
   const { data: evenement, error: evenementError } = await supabaseAdmin
     .from("evenementen")
-    .select("id, naam, datum, status")
+    .select("id, naam, datum, status, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
     .eq("id", evenementId)
     .maybeSingle();
   if (evenementError) return NextResponse.json({ error: evenementError.message }, { status: 500 });
@@ -28,6 +28,8 @@ export async function GET(req) {
     { data: categorieen, error: categorieenError },
     { data: transacties, error: transactiesError },
     { data: gekoppeldeTransacties, error: gekoppeldeError },
+    { data: tickets, error: ticketsError },
+    { data: sponsors, error: sponsorsError },
   ] = await Promise.all([
     supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling, verwacht_bedrag").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_budgetten").select("id, hoofdcategorie, budget_toegewezen").eq("evenement_id", evenementId),
@@ -47,12 +49,19 @@ export async function GET(req) {
       .select("id, datum, soort, tegenpartij, vrije_mededeling, omschrijving, bedrag, categorieen(naam)")
       .eq("evenement_id", evenementId)
       .order("datum", { ascending: false }),
+    supabaseAdmin.from("evenement_tickets").select("id, naam, prijs, aantal_verkocht").eq("evenement_id", evenementId).order("created_at"),
+    supabaseAdmin.from("evenement_sponsors").select("id, naam, bedrag, opmerking").eq("evenement_id", evenementId).order("created_at"),
   ]);
   if (kassasError) return NextResponse.json({ error: kassasError.message }, { status: 500 });
   if (budgettenError) return NextResponse.json({ error: budgettenError.message }, { status: 500 });
   if (categorieenError) return NextResponse.json({ error: categorieenError.message }, { status: 500 });
   if (transactiesError) return NextResponse.json({ error: transactiesError.message }, { status: 500 });
   if (gekoppeldeError) return NextResponse.json({ error: gekoppeldeError.message }, { status: 500 });
+  if (ticketsError) return NextResponse.json({ error: ticketsError.message }, { status: 500 });
+  if (sponsorsError) return NextResponse.json({ error: sponsorsError.message }, { status: 500 });
+
+  const ticketOmzet = (tickets || []).reduce((s, t) => s + Number(t.prijs) * Number(t.aantal_verkocht), 0);
+  const sponsorBedrag = (sponsors || []).reduce((s, sp) => s + Number(sp.bedrag), 0);
 
   // Kassa-omzet: cash = geteld eindbedrag - klaargezet wisselgeld; digitaal = volledig eindbedrag.
   // Tekort/overschot: enkel bepaald als er een verwacht_bedrag is ingevuld (de
@@ -82,7 +91,7 @@ export async function GET(req) {
   // die blijft puur wat de groep zelf via kassa's/transacties bijhoudt. Zo
   // niet zou eenzelfde bedrag dubbel meetellen zodra je (bv. na de
   // bankstorting) de kasboektransactie aan het evenement koppelt.
-  const totaalInkomsten = kassaOmzetTotaal + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+  const totaalInkomsten = kassaOmzetTotaal + ticketOmzet + sponsorBedrag + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
   const totaalUitgaven = uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
 
   const kostenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost !== "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
@@ -119,6 +128,10 @@ export async function GET(req) {
     categorieen,
     transacties,
     gekoppeldeTransacties: gekoppeldeTransacties || [],
+    tickets: tickets || [],
+    ticketOmzet: Math.round(ticketOmzet * 100) / 100,
+    sponsors: sponsors || [],
+    sponsorBedrag: Math.round(sponsorBedrag * 100) / 100,
     budgetBurnRate,
     nogTerugTeBetalen,
     balans: {

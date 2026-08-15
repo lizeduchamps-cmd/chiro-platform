@@ -77,6 +77,8 @@ export default function EvenementDetail({ params }) {
   const [bewerkVeld, setBewerkVeld] = useState(null);
   const [tellerOpen, setTellerOpen] = useState(null);
   const [tellerAantallen, setTellerAantallen] = useState({});
+  const [nieuwTicket, setNieuwTicket] = useState({ naam: "", prijs: "", aantalVerkocht: "" });
+  const [nieuweSponsor, setNieuweSponsor] = useState({ naam: "", bedrag: "", opmerking: "" });
 
   // Vaste namen in de zijbalk (bv. "Lazarus") wijzen rechtstreeks naar dit pad
   // i.p.v. naar een evenement-id, want dat verandert elk werkjaar. Is het al
@@ -164,6 +166,51 @@ export default function EvenementDetail({ params }) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id: evenementId, status }),
     });
+    laden();
+  };
+
+  const ticketToevoegen = async () => {
+    if (!nieuwTicket.naam.trim() || nieuwTicket.prijs === "") return toast.error("Vul naam en prijs in.");
+    const res = await fetch("/api/evenementen/tickets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evenementId, ...nieuwTicket }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setNieuwTicket({ naam: "", prijs: "", aantalVerkocht: "" });
+    laden();
+  };
+
+  const ticketBijwerken = async (id, veld, waarde) => {
+    await fetch("/api/evenementen/tickets", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, evenementId, [veld]: waarde }),
+    });
+    laden();
+  };
+
+  const ticketVerwijderen = async (id) => {
+    await fetch(`/api/evenementen/tickets?id=${id}&evenementId=${evenementId}`, { method: "DELETE" });
+    laden();
+  };
+
+  const sponsorToevoegen = async () => {
+    if (!nieuweSponsor.naam.trim() || nieuweSponsor.bedrag === "") return toast.error("Vul naam en bedrag in.");
+    const res = await fetch("/api/evenementen/sponsors", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ evenementId, ...nieuweSponsor }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setNieuweSponsor({ naam: "", bedrag: "", opmerking: "" });
+    laden();
+  };
+
+  const sponsorVerwijderen = async (id) => {
+    await fetch(`/api/evenementen/sponsors?id=${id}&evenementId=${evenementId}`, { method: "DELETE" });
     laden();
   };
 
@@ -334,7 +381,7 @@ export default function EvenementDetail({ params }) {
     toast.success("Categorie verwijderd");
   };
 
-  const { evenement, kassas, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
+  const { evenement, kassas, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, tickets, ticketOmzet, sponsors, sponsorBedrag, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
 
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
@@ -365,6 +412,70 @@ export default function EvenementDetail({ params }) {
           <div className="money" style={{ fontSize: 24, fontWeight: 700 }}>{euro(Math.abs(balans.nettoWinst))}</div>
         </div>
       </div>
+
+      {/* Ticketverkoop (optionele module) */}
+      {evenement.heeft_ticketverkoop && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Ticketverkoop</div>
+            <div className="money" style={{ fontWeight: 700 }}>{euro(ticketOmzet)}</div>
+          </div>
+          {tickets.length === 0 && <p className="muted" style={{ fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>Nog geen ticket-types.</p>}
+          {tickets.map((t, i) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap" }}>
+              <div style={{ flex: 1, minWidth: 120, fontWeight: 600, fontSize: 14 }}>{t.naam}</div>
+              {magBewerken ? (
+                <>
+                  <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                    €<input type="number" step="0.01" defaultValue={t.prijs} onBlur={(e) => ticketBijwerken(t.id, "prijs", Number(e.target.value))} style={{ width: 70 }} />
+                  </label>
+                  <label style={{ fontSize: 12, display: "flex", alignItems: "center", gap: 4 }}>
+                    ×<input type="number" step="1" defaultValue={t.aantal_verkocht} onBlur={(e) => ticketBijwerken(t.id, "aantalVerkocht", Number(e.target.value))} style={{ width: 60 }} />
+                  </label>
+                </>
+              ) : (
+                <span className="subtle" style={{ fontSize: 13 }}>{euro(t.prijs)} × {t.aantal_verkocht}</span>
+              )}
+              <div className="money" style={{ fontWeight: 700, minWidth: 80, textAlign: "right" }}>{euro(Number(t.prijs) * Number(t.aantal_verkocht))}</div>
+              {magBewerken && <button className="btn-danger" onClick={() => ticketVerwijderen(t.id)}>🗑️</button>}
+            </div>
+          ))}
+          {magBewerken && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <input placeholder="Type, bv. Vroegboek" value={nieuwTicket.naam} onChange={(e) => setNieuwTicket({ ...nieuwTicket, naam: e.target.value })} style={{ flex: 1, minWidth: 120 }} />
+              <input type="number" step="0.01" placeholder="Prijs" value={nieuwTicket.prijs} onChange={(e) => setNieuwTicket({ ...nieuwTicket, prijs: e.target.value })} style={{ width: 80 }} />
+              <input type="number" step="1" placeholder="Aantal" value={nieuwTicket.aantalVerkocht} onChange={(e) => setNieuwTicket({ ...nieuwTicket, aantalVerkocht: e.target.value })} style={{ width: 80 }} />
+              <button className="btn-primary" onClick={ticketToevoegen}>+ Type</button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Sponsoring (optionele module) */}
+      {evenement.heeft_sponsoring && (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>Sponsoring</div>
+            <div className="money" style={{ fontWeight: 700 }}>{euro(sponsorBedrag)}</div>
+          </div>
+          {sponsors.length === 0 && <p className="muted" style={{ fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>Nog geen sponsors.</p>}
+          {sponsors.map((s, i) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{s.naam}{s.opmerking && <span className="muted" style={{ fontWeight: 400 }}> — {s.opmerking}</span>}</div>
+              <div className="money" style={{ fontWeight: 700 }}>{euro(s.bedrag)}</div>
+              {magBewerken && <button className="btn-danger" onClick={() => sponsorVerwijderen(s.id)}>🗑️</button>}
+            </div>
+          ))}
+          {magBewerken && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <input placeholder="Sponsor" value={nieuweSponsor.naam} onChange={(e) => setNieuweSponsor({ ...nieuweSponsor, naam: e.target.value })} style={{ flex: 1, minWidth: 120 }} />
+              <input type="number" step="0.01" placeholder="Bedrag" value={nieuweSponsor.bedrag} onChange={(e) => setNieuweSponsor({ ...nieuweSponsor, bedrag: e.target.value })} style={{ width: 90 }} />
+              <input placeholder="Opmerking (optioneel)" value={nieuweSponsor.opmerking} onChange={(e) => setNieuweSponsor({ ...nieuweSponsor, opmerking: e.target.value })} style={{ width: 160 }} />
+              <button className="btn-primary" onClick={sponsorToevoegen}>+ Sponsor</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Gekoppelde kasboektransacties */}
       {gekoppeldeTransacties.length > 0 && (
