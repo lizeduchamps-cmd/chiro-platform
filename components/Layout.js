@@ -4,47 +4,59 @@ import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
-function padVan(href) {
-  return href || null;
+function isActief(href, pathname) {
+  return !!href && (pathname === href || pathname.startsWith(href + "/"));
 }
 
-function heeftActiefKind(node, pathname) {
-  return (node.children || []).some((c) => {
-    const pad = padVan(c.href);
-    const actief = pad && (pathname === pad || pathname.startsWith(pad + "/"));
-    return actief || heeftActiefKind(c, pathname);
-  });
+function groepIsActief(g, pathname) {
+  if (isActief(g.href, pathname)) return true;
+  return (g.children || []).some((c) => isActief(c.href, pathname));
+}
+
+// Eén eenvoudige set lijniconen voor de 7 hoofditems — gebruikt in zowel de
+// zijbalk (desktop) als de onderste tabbalk (mobiel), zodat beide navigaties
+// visueel bij elkaar horen.
+function NavIcon({ naam, color }) {
+  const common = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 1.8, strokeLinecap: "round", strokeLinejoin: "round" };
+  switch (naam) {
+    case "dashboard":
+      return <svg {...common}><path d="M4 11l8-7 8 7" /><path d="M6 10v9h12v-9" /></svg>;
+    case "kasboek":
+      return <svg {...common}><path d="M5.5 4.5a2 2 0 012-2h10a1 1 0 011 1v17l-2.5-1.5-2.5 1.5-2.5-1.5L8.5 20l-2.5-1.5v-14z" /><path d="M9 8.5h6M9 12h6" /></svg>;
+    case "fv":
+      return <svg {...common}><rect x="6" y="4" width="12" height="16" rx="3" /><path d="M9 9h6M9 12.5h6M9 16h3.5" /></svg>;
+    case "evenementen":
+      return <svg {...common}><path d="M12 21s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" /><circle cx="12" cy="9" r="2.4" /></svg>;
+    case "wisselgeld":
+      return <svg {...common}><circle cx="9" cy="10" r="6" /><path d="M13.5 15.5A6 6 0 109 4" /></svg>;
+    case "kalender":
+      return <svg {...common}><rect x="4" y="5" width="16" height="15" rx="2.5" /><path d="M4 10h16M8 3v4M16 3v4" /></svg>;
+    case "gebruikers":
+      return <svg {...common}><circle cx="9" cy="8.5" r="3" /><path d="M4 19c0-3 2.3-5 5-5s5 2 5 5" /><circle cx="17" cy="9.5" r="2.3" /><path d="M15.3 19c.2-2 1.6-3.5 3.3-3.9" /></svg>;
+    default:
+      return null;
+  }
 }
 
 function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle }) {
   const heeftKinderen = node.children?.length > 0;
-  const pad = padVan(node.href);
-  const actief = !!pad && (pathname === pad || pathname.startsWith(pad + "/"));
-  const kindActief = heeftKinderen && heeftActiefKind(node, pathname);
+  const actief = isActief(node.href, pathname);
+  const kindActief = heeftKinderen && (node.children || []).some((c) => isActief(c.href, pathname));
   const uitgeklapt = actief || kindActief || manueelOpen.has(node.key);
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center" }}>
-        {node.href ? (
-          <Link href={node.href} className="nav-link" style={{ ...linkStyle(actief, depth), flex: 1 }}>
-            {node.label}
-          </Link>
-        ) : (
-          <span
-            className="nav-link"
-            onClick={() => toggleManueel(node.key)}
-            style={{ ...linkStyle(false, depth), flex: 1, cursor: "pointer", opacity: 0.85 }}
-          >
-            {node.label}
-          </span>
-        )}
+        <Link href={node.href} className="nav-link" style={{ ...linkStyle(actief, depth), flex: 1, display: "flex", alignItems: "center", gap: 10 }}>
+          {depth === 0 && <NavIcon naam={node.key} color={actief ? "var(--accent)" : "#B9C2D1"} />}
+          {node.label}
+        </Link>
         {heeftKinderen && (
           <button
             className="btn-plain"
             onClick={() => toggleManueel(node.key)}
             aria-label={uitgeklapt ? "Inklappen" : "Uitklappen"}
-            style={{ padding: "8px 10px", color: "#D6DEEA", cursor: "pointer" }}
+            style={{ padding: "8px 10px", color: "#B9C2D1", cursor: "pointer" }}
           >
             <span style={{ display: "inline-block", fontSize: 10, opacity: 0.7, transform: uitgeklapt ? "rotate(90deg)" : "none", transition: "transform 0.12s" }}>▸</span>
           </button>
@@ -63,14 +75,8 @@ function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle 
 
 export default function Layout({ session, children }) {
   const pathname = usePathname();
-  const recht = session?.user?.platformRecht;
   const [manueelOpen, setManueelOpen] = useState(new Set());
-  const [mobielOpen, setMobielOpen] = useState(false);
   const [evenementen, setEvenementen] = useState([]);
-
-  // Zijbalk dichtklappen bij het navigeren op mobiel, anders blijft het paneel
-  // openstaan boven de nieuwe pagina.
-  useEffect(() => setMobielOpen(false), [pathname]);
 
   // Evenementen komen uit de database (huidig werkjaar) i.p.v. vaste namen in de
   // code, zodat nieuwe/verwijderde evenementen meteen in het menu kloppen.
@@ -82,20 +88,26 @@ export default function Layout({ session, children }) {
     });
   }, []);
 
+  // 7 vaste hoofditems, voor iedereen in dezelfde volgorde (ook Gebruikers &
+  // rollen — niet-admins zien het tabblad, de pagina zelf toont voor hen enkel
+  // een melding dat ze geen toegang hebben). Kampbudgetten/Kampkosten/
+  // Documenten staan voorlopig nog als aparte kinderen onder Evenementen &
+  // uitstappen — dat is hun toekomstige plek zodra Kamp een echt evenement
+  // wordt (latere fase), maar zo blijven ze intussen gewoon bereikbaar.
   const groups = [
-    { key: "dashboard", href: "/", label: "Financieel dashboard", children: [] },
+    { key: "dashboard", href: "/", kort: "Overzicht", label: "Overzicht", children: [] },
     {
       key: "kasboek",
       href: "/kasboek",
+      kort: "Kasboek",
       label: "Kasboek",
-      children: [
-        { key: "csv", href: "/kasboek/upload", label: "CSV Upload" },
-      ],
+      children: [{ key: "csv", href: "/kasboek/upload", label: "CSV Upload" }],
     },
     {
       key: "fv",
       href: "/fv",
-      label: "Financieel Verslag",
+      kort: "FV",
+      label: "Financieel verslag",
       children: [
         { key: "streepjes", href: "/streepjes", label: "Streepjes" },
         { key: "bestellingen", href: "/bestellingen", label: "Bestellingen" },
@@ -104,25 +116,21 @@ export default function Layout({ session, children }) {
     {
       key: "evenementen",
       href: "/evenementen",
+      kort: "Uitstappen",
       label: "Evenementen & uitstappen",
-      children: evenementen.map((e) => ({ key: `evenement-${e.id}`, href: `/evenementen/${e.id}`, label: e.naam })),
-    },
-    {
-      key: "kamp",
-      href: "/kamp",
-      label: "Kamp",
       children: [
+        ...evenementen.map((e) => ({ key: `evenement-${e.id}`, href: `/evenementen/${e.id}`, label: e.naam })),
         { key: "kampbudgetten", href: "/kampbudgetten", label: "Kampbudgetten" },
         { key: "kampkosten", href: "/kampkosten", label: "Kampkosten" },
+        { key: "documenten", href: "/documenten", label: "Documenten" },
       ],
     },
-    { key: "documenten", href: "/documenten", label: "Documenten", children: [] },
-    { key: "wisselgeld", href: "/wisselgeld", label: "Wisselgeld", children: [] },
-    { key: "kalender", href: "/kalender", label: "Kalender", children: [] },
+    { key: "wisselgeld", href: "/wisselgeld", kort: "Wisselgeld", label: "Wisselgeld", children: [] },
+    { key: "kalender", href: "/kalender", kort: "Kalender", label: "Kalender", children: [] },
+    { key: "gebruikers", href: "/beheer/gebruikers", kort: "Gebruikers", label: "Gebruikers & rollen", children: [] },
   ];
-  if (recht === "admin") {
-    groups.push({ key: "gebruikers", href: "/beheer/gebruikers", label: "Gebruikers & rollen", children: [] });
-  }
+
+  const actieveGroep = groups.find((g) => groepIsActief(g, pathname));
 
   const linkStyle = (actief, depth = 0) => ({
     display: "block",
@@ -130,9 +138,9 @@ export default function Layout({ session, children }) {
     borderRadius: 8,
     fontSize: depth > 1 ? 12 : 13,
     textDecoration: "none",
-    color: actief ? "#1b315c" : "#D6DEEA",
-    background: actief ? "#F9F9FA" : undefined,
-    fontWeight: actief ? 600 : 400,
+    color: actief ? "var(--primary)" : "#D6DEEA",
+    background: actief ? "#F4F1E8" : undefined,
+    fontWeight: actief ? 700 : 400,
   });
 
   const toggleManueel = (key) => {
@@ -146,39 +154,54 @@ export default function Layout({ session, children }) {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <div className="no-print mobile-topbar">
-        <button className="btn-plain" onClick={() => setMobielOpen(true)} aria-label="Menu openen" style={{ fontSize: 20, color: "#1b315c" }}>☰</button>
-        <span style={{ fontWeight: 600, fontSize: 14 }}>Chiro Hoepertingen</span>
-      </div>
-
-      {mobielOpen && <div className="no-print sidebar-overlay" onClick={() => setMobielOpen(false)} />}
-
-      <div className={`no-print app-sidebar${mobielOpen ? " open" : ""}`} style={{ width: 220, flexShrink: 0, background: "#1b315c", color: "#F9F9FA", padding: 16, display: "flex", flexDirection: "column" }}>
-        <div style={{ marginBottom: 24, padding: "0 8px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "white" }}>Chiro Hoepertingen</div>
-            <div style={{ fontSize: 11, color: "#A9B7CE" }}>Financiënplatform</div>
-          </div>
-          <button className="sidebar-close-btn btn-plain" onClick={() => setMobielOpen(false)} aria-label="Menu sluiten" style={{ color: "#D6DEEA", fontSize: 18 }}>✕</button>
+      <div className="no-print app-sidebar" style={{ width: 220, flexShrink: 0, background: "var(--primary)", color: "#F4F1E8", padding: 16, flexDirection: "column" }}>
+        <div style={{ marginBottom: 24, padding: "0 8px" }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: "white" }}>Chiro Hoepertingen</div>
+          <div style={{ fontSize: 11, color: "#9FAAC2" }}>Financiënplatform</div>
         </div>
         <nav style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, overflowY: "auto" }}>
           {groups.map((g) => (
             <NavNode key={g.key} node={g} depth={0} pathname={pathname} manueelOpen={manueelOpen} toggleManueel={toggleManueel} linkStyle={linkStyle} />
           ))}
         </nav>
-        <div style={{ paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.15)", fontSize: 11, color: "#A9B7CE", padding: "16px 8px 0" }}>
+        <div style={{ paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.15)", fontSize: 11, color: "#9FAAC2" }}>
           Ingelogd als
-          <div style={{ color: "#F9F9FA", fontWeight: 600 }}>{session?.user?.name}</div>
+          <div style={{ color: "white", fontWeight: 700 }}>{session?.user?.name}</div>
           <button
             className="sidebar-signout-btn"
             onClick={() => signOut()}
-            style={{ marginTop: 10, border: "1px solid rgba(255,255,255,0.25)", color: "#D6DEEA", borderRadius: 6, padding: "4px 8px", fontSize: 11 }}
+            style={{ marginTop: 10, border: "1px solid rgba(255,255,255,0.25)", color: "#E7E2D4", borderRadius: 6, padding: "4px 8px", fontSize: 11 }}
           >
             Uitloggen
           </button>
         </div>
       </div>
-      <div style={{ flex: 1, minHeight: "100vh", minWidth: 0 }}>{children}</div>
+
+      <div className="app-content" style={{ flex: 1, minHeight: "100vh", minWidth: 0, display: "flex", flexDirection: "column" }}>
+        {actieveGroep?.children?.length > 0 && (
+          <div className="no-print mobile-subnav">
+            {actieveGroep.children.map((c) => (
+              <Link key={c.key} href={c.href} className={`mobile-subnav-pill${isActief(c.href, pathname) ? " active" : ""}`}>
+                {c.label}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        <div className="app-content-inner" style={{ flex: 1 }}>{children}</div>
+
+        <div className="no-print mobile-tabbar">
+          {groups.map((g) => {
+            const actief = groepIsActief(g, pathname);
+            return (
+              <Link key={g.key} href={g.href} className={`mobile-tab${actief ? " active" : ""}`}>
+                <NavIcon naam={g.key} color={actief ? "var(--accent)" : "var(--text-subtle)"} />
+                <span>{g.kort}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
