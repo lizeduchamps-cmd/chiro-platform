@@ -132,16 +132,7 @@ export default function Layout({ session, children }) {
       label: "Kasboek",
       children: [{ key: "csv", href: "/kasboek/upload", label: "CSV Upload" }],
     },
-    {
-      key: "fv",
-      href: "/fv",
-      kort: "FV",
-      label: "Financieel verslag",
-      children: [
-        { key: "streepjes", href: "/streepjes", label: "Streepjes" },
-        { key: "bestellingen", href: "/bestellingen", label: "Bestellingen" },
-      ],
-    },
+    { key: "fv", href: "/fv", kort: "FV", label: "Financieel verslag", children: [] },
     {
       key: "evenementen",
       href: "/evenementen",

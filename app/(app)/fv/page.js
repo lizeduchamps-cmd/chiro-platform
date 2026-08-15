@@ -1,6 +1,7 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { parseNaamRegels, vindGebruiker, haalKmEruit } from "@/lib/smartPaste";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
@@ -31,12 +32,29 @@ function fvGroep(user) {
   return "Leiding";
 }
 
-// Eén persoonskaart: regels ingeklapt achter "Details (N)", enkel wie mag
-// bewerken ziet daarbinnen ook de invoervelden en de verwijderknop.
-function PersoonKaart({ p, jezelf, magBewerken, open, onToggleOpen, nieuweRegel, setNieuweRegel, nieuweKm, setNieuweKm, onRegelToevoegen, onKmToevoegen, onRegelVerwijderen, onStatusToggle, groot }) {
+// De 4 soorten regels — vaste volgorde, elk met een eigen sneltoevoegknop.
+const SOORTEN = [
+  { bron: "bestelling", label: "Bestellingen", knop: "+ Bestelling" },
+  { bron: "kilometers", label: "Kilometers", knop: "+ Kilometers" },
+  { bron: "streepjes_bot", label: "Streepjes", knop: "+ Streepjes" },
+  { bron: "handmatig", label: "Handmatig", knop: "+ Handmatig" },
+];
+
+// Eén persoonskaart: regels ingeklapt achter "Details (N)", gegroepeerd per
+// soort. Enkel wie mag bewerken ziet de 4 sneltoevoegknoppen.
+function PersoonKaart({
+  p, jezelf, magBewerken, open, onToggleOpen, groot,
+  veldOpen, onVeldOpen,
+  nieuweRegel, setNieuweRegel, onRegelToevoegen,
+  nieuweKm, setNieuweKm, onKmToevoegen,
+  streepjesInfo, streepjesBewerk, setStreepjesBewerk, onStreepjesToevoegen,
+  onRegelVerwijderen, onStatusToggle,
+}) {
   const terugTeKrijgen = p.totaal < 0;
   const klaar = p.status === "betaald";
   const kleur = klaar ? "success" : terugTeKrijgen ? "success" : "danger";
+  const perSoort = SOORTEN.map((s) => ({ ...s, regels: p.regels.filter((r) => r.bron === s.bron) })).filter((s) => s.regels.length > 0);
+  const open4 = veldOpen === "bestelling" ? "bestelling" : veldOpen;
 
   return (
     <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -80,49 +98,115 @@ function PersoonKaart({ p, jezelf, magBewerken, open, onToggleOpen, nieuweRegel,
             {p.regels.length === 0 && (
               <p className="muted" style={{ padding: "10px 0", fontStyle: "italic", fontSize: 14 }}>Nog geen regels.</p>
             )}
-            {p.regels.map((r) => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: "1px solid var(--border-soft)", fontSize: 15 }}>
-                <div className="muted">{r.omschrijving}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div className="money" style={{ fontWeight: 700, color: r.bedrag < 0 ? "var(--success-text)" : undefined }}>
-                    {r.bedrag < 0 ? "−" : ""}{euro(Math.abs(r.bedrag))}
+            {perSoort.map((s) => (
+              <div key={s.bron} style={{ paddingTop: 10 }}>
+                <div className="subtle" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>{s.label}</div>
+                {s.regels.map((r) => (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderTop: "1px solid var(--border-soft)", fontSize: 15 }}>
+                    <div className="muted">{r.omschrijving}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div className="money" style={{ fontWeight: 700, color: r.bedrag < 0 ? "var(--success-text)" : undefined }}>
+                        {r.bedrag < 0 ? "−" : ""}{euro(Math.abs(r.bedrag))}
+                      </div>
+                      {magBewerken && (
+                        <button className="no-print btn-danger" onClick={() => onRegelVerwijderen(p.user.id, r)} title="Verwijderen">🗑️</button>
+                      )}
+                    </div>
                   </div>
-                  {magBewerken && (
-                    <button className="no-print btn-danger" onClick={() => onRegelVerwijderen(p.user.id, r)} title="Verwijderen">🗑️</button>
-                  )}
-                </div>
+                ))}
               </div>
             ))}
           </div>
 
           {magBewerken && (
-            <div className="no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", borderTop: "1px solid var(--border)", paddingTop: 12 }}>
-              <input
-                placeholder="Omschrijving, bv. Frituur 16/05"
-                value={nieuweRegel[p.user.id]?.omschrijving || ""}
-                onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
-                style={{ flex: 1, minWidth: 160 }}
-              />
-              <input
-                type="number" step="0.01" placeholder="Bedrag"
-                value={nieuweRegel[p.user.id]?.bedrag || ""}
-                onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
-                style={{ width: 100 }}
-              />
-              <button onClick={() => onRegelToevoegen(p.user.id)}>+ Regel</button>
-              <input
-                type="number" step="1" placeholder="Km gereden"
-                value={nieuweKm[p.user.id]?.km || ""}
-                onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], km: e.target.value } }))}
-                style={{ width: 100 }}
-              />
-              <input
-                placeholder="Waarvoor? bv. Weekend"
-                value={nieuweKm[p.user.id]?.reden || ""}
-                onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], reden: e.target.value } }))}
-                style={{ width: 140 }}
-              />
-              <button onClick={() => onKmToevoegen(p.user.id)}>+ Km-vergoeding</button>
+            <div className="no-print" style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {SOORTEN.map((s) => (
+                  <button key={s.bron} onClick={() => onVeldOpen(p.user.id, veldOpen === s.bron ? null : s.bron)} style={veldOpen === s.bron ? { borderColor: "var(--accent)", color: "var(--text)" } : undefined}>
+                    {s.knop}
+                  </button>
+                ))}
+              </div>
+
+              {veldOpen === "handmatig" && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    placeholder="Omschrijving, bv. Vergoeding materiaal"
+                    value={nieuweRegel[p.user.id]?.omschrijving || ""}
+                    onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
+                    style={{ flex: 1, minWidth: 160 }}
+                  />
+                  <input
+                    type="number" step="0.01" placeholder="Bedrag"
+                    value={nieuweRegel[p.user.id]?.bedrag || ""}
+                    onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
+                    style={{ width: 100 }}
+                  />
+                  <button className="btn-primary" onClick={() => onRegelToevoegen(p.user.id, "handmatig")}>Toevoegen</button>
+                </div>
+              )}
+
+              {open4 === "bestelling" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                    <input
+                      placeholder="Wat, bv. Frituur 16/05 — mini + cola"
+                      value={nieuweRegel[p.user.id]?.omschrijving || ""}
+                      onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
+                      style={{ flex: 1, minWidth: 160 }}
+                    />
+                    <input
+                      type="number" step="0.01" placeholder="Bedrag"
+                      value={nieuweRegel[p.user.id]?.bedrag || ""}
+                      onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
+                      style={{ width: 100 }}
+                    />
+                    <button className="btn-primary" onClick={() => onRegelToevoegen(p.user.id, "bestelling")}>Toevoegen</button>
+                  </div>
+                  <p className="subtle" style={{ fontSize: 12 }}>
+                    Voor een bestelling met meerdere producten/personen tegelijk: <Link href="/bestellingen" className="link">volledige bestellingen-tool →</Link>
+                  </p>
+                </div>
+              )}
+
+              {veldOpen === "kilometers" && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="number" step="1" placeholder="Km gereden"
+                    value={nieuweKm[p.user.id]?.km || ""}
+                    onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], km: e.target.value } }))}
+                    style={{ width: 100 }}
+                  />
+                  <input
+                    placeholder="Waarvoor? bv. Weekend"
+                    value={nieuweKm[p.user.id]?.reden || ""}
+                    onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], reden: e.target.value } }))}
+                    style={{ width: 140 }}
+                  />
+                  <button className="btn-primary" onClick={() => onKmToevoegen(p.user.id)}>Toevoegen</button>
+                </div>
+              )}
+
+              {veldOpen === "streepjes_bot" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                      Fysieke streepjes
+                      <input
+                        type="number" step="1"
+                        value={streepjesBewerk[p.user.id] ?? String(streepjesInfo?.fysieke_streepjes ?? 0)}
+                        onChange={(e) => setStreepjesBewerk((prev) => ({ ...prev, [p.user.id]: e.target.value }))}
+                        style={{ width: 70 }}
+                      />
+                    </label>
+                    <span className="subtle" style={{ fontSize: 12 }}>+ €{euro(streepjesInfo?.online_streepjes_bedrag || 0)} online</span>
+                    <button className="btn-primary" onClick={() => onStreepjesToevoegen(p.user.id)}>Toevoegen aan dit verslag</button>
+                  </div>
+                  <p className="subtle" style={{ fontSize: 12 }}>
+                    Online-bedrag komt uit de Discord-bot-CSV: <Link href="/streepjes" className="link">CSV uploaden →</Link>
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </>
@@ -151,12 +235,16 @@ export default function FinancieelVerslag() {
   const [kmBewerk, setKmBewerk] = useState({ dieselprijs: "", verbruik: "7" });
   const [nieuweRegel, setNieuweRegel] = useState({});
   const [nieuweKm, setNieuweKm] = useState({});
+  const [streepjesData, setStreepjesData] = useState({});
+  const [streepjesBewerk, setStreepjesBewerk] = useState({});
   const [plakOpen, setPlakOpen] = useState(false);
   const [plakTekst, setPlakTekst] = useState("");
   const [plakReden, setPlakReden] = useState("");
   const [plakPreview, setPlakPreview] = useState(null);
   const [plakBezig, setPlakBezig] = useState(false);
   const [openKaarten, setOpenKaarten] = useState(new Set());
+  const [veldOpenPerPersoon, setVeldOpenPerPersoon] = useState({});
+  const [alleenOpenstaand, setAlleenOpenstaand] = useState(false);
 
   const magBewerken = session?.user?.platformRecht === "admin" || session?.user?.platformRecht === "financieel_verantwoordelijke";
 
@@ -180,6 +268,11 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   }, [fvMaandId]);
 
+  useEffect(() => {
+    if (!magBewerken) return;
+    streepjesLaden();
+  }, [magBewerken]);
+
   if (loading) {
     return (
       <div style={{ padding: 32, maxWidth: 1100 }}>
@@ -192,6 +285,14 @@ export default function FinancieelVerslag() {
     fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => setOverzicht(d));
   };
 
+  const streepjesLaden = () => {
+    fetch("/api/streepjes").then((r) => r.json()).then((d) => {
+      const map = {};
+      (d.users || []).forEach((u) => { map[u.id] = u; });
+      setStreepjesData(map);
+    });
+  };
+
   const toggleKaart = (userId) => {
     setOpenKaarten((prev) => {
       const next = new Set(prev);
@@ -200,6 +301,8 @@ export default function FinancieelVerslag() {
       return next;
     });
   };
+
+  const veldOpenZetten = (userId, veld) => setVeldOpenPerPersoon((prev) => ({ ...prev, [userId]: veld }));
 
   // Eén gedeeld km-tarief voor iedereen: dieselprijs (€/L) x verbruik (L/100km) / 100.
   const berekendKmTarief = () => {
@@ -262,17 +365,18 @@ export default function FinancieelVerslag() {
     toast.success(`Km-vergoeding bijgewerkt naar €${tarief}/km`);
   };
 
-  const regelToevoegen = async (userId) => {
+  const regelToevoegen = async (userId, bron) => {
     const regel = nieuweRegel[userId];
     if (!regel?.omschrijving || !regel?.bedrag) return toast.error("Vul zowel een omschrijving als een bedrag in.");
     const res = await fetch("/api/fv/regels", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fvMaandId, userId, omschrijving: regel.omschrijving, bedrag: regel.bedrag }),
+      body: JSON.stringify({ fvMaandId, userId, omschrijving: regel.omschrijving, bedrag: regel.bedrag, bron }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
     setNieuweRegel((prev) => ({ ...prev, [userId]: { omschrijving: "", bedrag: "" } }));
+    veldOpenZetten(userId, null);
     ladenOverzicht(fvMaandId);
   };
 
@@ -288,7 +392,35 @@ export default function FinancieelVerslag() {
     const data = await res.json();
     if (data.error) return toast.error(data.error);
     setNieuweKm((prev) => ({ ...prev, [userId]: { km: "", reden: "" } }));
+    veldOpenZetten(userId, null);
     ladenOverzicht(fvMaandId);
+  };
+
+  // Bumpt eventueel eerst de fysieke telling, en zet dan de volledige
+  // streepjes-stand (fysiek + online) van deze ene persoon om in een fv_regel
+  // — zelfde onderliggende actie als "Alleen deze doorzetten" op /streepjes.
+  const streepjesToevoegen = async (userId) => {
+    const huidig = streepjesData[userId];
+    const nieuweWaarde = streepjesBewerk[userId];
+    if (nieuweWaarde !== undefined && Number(nieuweWaarde) !== Number(huidig?.fysieke_streepjes || 0)) {
+      await fetch("/api/streepjes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, fysiekeStreepjes: Number(nieuweWaarde) || 0 }),
+      });
+    }
+    const res = await fetch("/api/fv/streepjes-toevoegen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fvMaandId, userIds: [userId] }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setStreepjesBewerk((prev) => { const next = { ...prev }; delete next[userId]; return next; });
+    veldOpenZetten(userId, null);
+    streepjesLaden();
+    ladenOverzicht(fvMaandId);
+    toast.success(data.aantal > 0 ? "Streepjes toegevoegd" : "Geen streepjes om toe te voegen");
   };
 
   // Zet geplakte tekst ("Naam: NNNkm" per regel) om in een bewerkbare preview
@@ -368,6 +500,7 @@ export default function FinancieelVerslag() {
   };
 
   const eigenPersoon = overzicht?.personen.find((p) => p.user.id === session?.user?.userId);
+  const totaalNogNietBetaald = overzicht?.personen.filter((p) => p.status !== "betaald").length || 0;
 
   return (
     <div style={{ padding: 32, maxWidth: 1000 }}>
@@ -396,7 +529,7 @@ export default function FinancieelVerslag() {
         <div className="no-print card" style={{ marginBottom: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Nieuwe FV-maand</div>
           <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-            Iedereen krijgt meteen een lege plaats op dit FV. Streepjes voeg je bewust toe vanaf de Streepjes-pagina.
+            Iedereen krijgt meteen een lege plaats op dit FV. Streepjes voeg je bewust toe via de "+ Streepjes"-knop bij elke persoon.
           </p>
           <div className="grid-2" style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 600 }}>
@@ -443,12 +576,18 @@ export default function FinancieelVerslag() {
               magBewerken={false}
               open={openKaarten.has(eigenPersoon.user.id)}
               onToggleOpen={() => toggleKaart(eigenPersoon.user.id)}
+              veldOpen={veldOpenPerPersoon[eigenPersoon.user.id] || null}
+              onVeldOpen={veldOpenZetten}
               nieuweRegel={nieuweRegel}
               setNieuweRegel={setNieuweRegel}
+              onRegelToevoegen={regelToevoegen}
               nieuweKm={nieuweKm}
               setNieuweKm={setNieuweKm}
-              onRegelToevoegen={regelToevoegen}
               onKmToevoegen={kmToevoegen}
+              streepjesInfo={streepjesData[eigenPersoon.user.id]}
+              streepjesBewerk={streepjesBewerk}
+              setStreepjesBewerk={setStreepjesBewerk}
+              onStreepjesToevoegen={streepjesToevoegen}
               onRegelVerwijderen={regelVerwijderen}
               onStatusToggle={statusToggle}
             />
@@ -497,6 +636,16 @@ export default function FinancieelVerslag() {
 
           {overzicht.personen.length === 0 && (
             <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
+          )}
+
+          {totaalNogNietBetaald > 0 && (
+            <div className="no-print card card-warning" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+              <span className="badge badge-warning" style={{ alignSelf: "flex-start" }}>Nog na te kijken</span>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{totaalNogNietBetaald} perso{totaalNogNietBetaald > 1 ? "nen hebben" : "on heeft"} nog niet betaald</div>
+              <button onClick={() => setAlleenOpenstaand((v) => !v)} style={{ alignSelf: "flex-start" }}>
+                {alleenOpenstaand ? "✕ Toon iedereen" : "Toon enkel wie nog niet betaalde"}
+              </button>
+            </div>
           )}
 
           {magBewerken && (
@@ -557,7 +706,8 @@ export default function FinancieelVerslag() {
           )}
 
           {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((groep) => {
-            const personenInGroep = overzicht.personen.filter((p) => fvGroep(p.user) === groep);
+            const personenInGroep = overzicht.personen.filter((p) => fvGroep(p.user) === groep && (!alleenOpenstaand || p.status !== "betaald"));
+            if (personenInGroep.length === 0) return null;
             const subtotaal = personenInGroep.reduce((s, p) => s + p.totaal, 0);
             const nogNietBetaald = personenInGroep.filter((p) => p.status !== "betaald").length;
             return (
@@ -580,12 +730,18 @@ export default function FinancieelVerslag() {
                       magBewerken={magBewerken}
                       open={openKaarten.has(p.user.id)}
                       onToggleOpen={() => toggleKaart(p.user.id)}
+                      veldOpen={veldOpenPerPersoon[p.user.id] || null}
+                      onVeldOpen={veldOpenZetten}
                       nieuweRegel={nieuweRegel}
                       setNieuweRegel={setNieuweRegel}
+                      onRegelToevoegen={regelToevoegen}
                       nieuweKm={nieuweKm}
                       setNieuweKm={setNieuweKm}
-                      onRegelToevoegen={regelToevoegen}
                       onKmToevoegen={kmToevoegen}
+                      streepjesInfo={streepjesData[p.user.id]}
+                      streepjesBewerk={streepjesBewerk}
+                      setStreepjesBewerk={setStreepjesBewerk}
+                      onStreepjesToevoegen={streepjesToevoegen}
                       onRegelVerwijderen={regelVerwijderen}
                       onStatusToggle={statusToggle}
                     />

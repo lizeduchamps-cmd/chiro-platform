@@ -10,10 +10,14 @@ export async function POST(req) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  const { fvMaandId, userId, omschrijving, bedrag, opmerking } = await req.json();
+  const { fvMaandId, userId, omschrijving, bedrag, opmerking, bron } = await req.json();
   if (!fvMaandId || !userId || !omschrijving || bedrag === undefined || bedrag === "") {
     return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
   }
+  // Enkel 'handmatig' en 'bestelling' gaan via deze algemene weg — kilometers
+  // en streepjes hebben elk hun eigen route (met eigen berekeningslogica).
+  const toegestaneBronnen = ["handmatig", "bestelling"];
+  const gekozenBron = toegestaneBronnen.includes(bron) ? bron : "handmatig";
 
   // Zorg dat de persoon zichtbaar is op het overzicht, ook als er nog geen
   // fv_status-rij voor hen bestond (bv. pas nadien toegevoegde gebruiker).
@@ -29,7 +33,7 @@ export async function POST(req) {
       omschrijving,
       bedrag: Number(bedrag),
       opmerking: opmerking || null,
-      bron: "handmatig",
+      bron: gekozenBron,
     })
     .select("id, user_id, omschrijving, bedrag, opmerking, bron")
     .single();
