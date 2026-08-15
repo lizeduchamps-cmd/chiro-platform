@@ -57,6 +57,7 @@ export default function Evenementen() {
   const [toonNieuw, setToonNieuw] = useState(false);
   const [nieuweNaam, setNieuweNaam] = useState("");
   const [nieuweDatum, setNieuweDatum] = useState("");
+  const [tab, setTab] = useState("lopend");
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
 
@@ -69,7 +70,16 @@ export default function Evenementen() {
 
   useEffect(() => {
     if (!werkjaarId) return;
-    fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => { setEvenementen(d.evenementen || []); setLoading(false); });
+    fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => {
+      const lijst = d.evenementen || [];
+      setEvenementen(lijst);
+      // Open standaard op het tabblad waar iets te zien is: eerst 'Lopend', anders
+      // 'Komend', anders 'Afgerond' — zodat je nooit op een lege tab terechtkomt.
+      if (lijst.some((e) => e.status === "lopend")) setTab("lopend");
+      else if (lijst.some((e) => e.status === "gepland")) setTab("gepland");
+      else if (lijst.length > 0) setTab("afgerond");
+      setLoading(false);
+    });
   }, [werkjaarId]);
 
   if (loading) {
@@ -109,8 +119,12 @@ export default function Evenementen() {
     toast.success(`Evenement "${naam}" verwijderd`);
   };
 
-  const lopend = evenementen.filter((e) => e.status !== "afgerond");
-  const afgesloten = evenementen.filter((e) => e.status === "afgerond");
+  const TABS = [
+    { key: "gepland", label: "Komend" },
+    { key: "lopend", label: "Lopend" },
+    { key: "afgerond", label: "Afgerond" },
+  ];
+  const zichtbaar = evenementen.filter((e) => e.status === tab);
 
   return (
     <div style={{ padding: 32, maxWidth: 800 }}>
@@ -130,22 +144,32 @@ export default function Evenementen() {
         <p className="muted" style={{ fontStyle: "italic", marginBottom: 20 }}>Nog geen evenementen dit werkjaar.</p>
       )}
 
-      {lopend.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>Loopt nu</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {lopend.map((e) => <EvenementKaart key={e.id} e={e} magBewerken={magBewerken} onVerwijderen={verwijderen} />)}
+      {evenementen.length > 0 && (
+        <>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+            {TABS.map((t) => {
+              const aantal = evenementen.filter((e) => e.status === t.key).length;
+              return (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={tab === t.key ? "btn-primary" : ""}
+                  style={{ borderRadius: "var(--radius-pill)" }}
+                >
+                  {t.label}{aantal > 0 ? ` · ${aantal}` : ""}
+                </button>
+              );
+            })}
           </div>
-        </div>
-      )}
 
-      {afgesloten.length > 0 && (
-        <div style={{ marginBottom: 24 }}>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>Afgesloten</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            {afgesloten.map((e) => <EvenementKaart key={e.id} e={e} magBewerken={magBewerken} onVerwijderen={verwijderen} />)}
-          </div>
-        </div>
+          {zichtbaar.length === 0 ? (
+            <p className="muted" style={{ fontStyle: "italic", marginBottom: 20 }}>Niets in dit tabblad.</p>
+          ) : (
+            <div style={{ marginBottom: 24, display: "flex", flexDirection: "column", gap: 14 }}>
+              {zichtbaar.map((e) => <EvenementKaart key={e.id} e={e} magBewerken={magBewerken} onVerwijderen={verwijderen} />)}
+            </div>
+          )}
+        </>
       )}
 
       {magBewerken && (
