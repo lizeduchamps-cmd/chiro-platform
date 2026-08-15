@@ -57,6 +57,8 @@ export default function Evenementen() {
   const [toonNieuw, setToonNieuw] = useState(false);
   const [nieuweNaam, setNieuweNaam] = useState("");
   const [nieuweDatum, setNieuweDatum] = useState("");
+  const [nieuweModules, setNieuweModules] = useState({ ticketverkoop: false, sponsoring: false, groepsbudgetten: false, rekeningScan: false });
+  const [modulesHandmatig, setModulesHandmatig] = useState(false);
   const [tab, setTab] = useState("lopend");
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
@@ -90,18 +92,40 @@ export default function Evenementen() {
     );
   }
 
+  // Suggereert welke optionele modules aan te vinken op basis van de naam
+  // (bv. "Kamp 2026" -> groepsbudgetten + rekening scannen), zolang iemand
+  // de vinkjes zelf nog niet handmatig heeft aangepast.
+  const naamGewijzigd = (waarde) => {
+    setNieuweNaam(waarde);
+    if (modulesHandmatig) return;
+    const laag = waarde.toLowerCase();
+    const isKamp = laag.includes("kamp");
+    const isFuif = /lazarus|fuif|bal|vlaamse dag/.test(laag);
+    setNieuweModules({ ticketverkoop: isFuif, sponsoring: isFuif, groepsbudgetten: isKamp, rekeningScan: isKamp });
+  };
+
   const aanmaken = async () => {
     if (!nieuweNaam.trim()) return toast.error("Vul een naam in, bv. 'Fuif 2026'.");
     const res = await fetch("/api/evenementen", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ naam: nieuweNaam.trim(), datum: nieuweDatum || null, werkjaarId }),
+      body: JSON.stringify({
+        naam: nieuweNaam.trim(),
+        datum: nieuweDatum || null,
+        werkjaarId,
+        heeftTicketverkoop: nieuweModules.ticketverkoop,
+        heeftSponsoring: nieuweModules.sponsoring,
+        heeftGroepsbudgetten: nieuweModules.groepsbudgetten,
+        heeftRekeningScan: nieuweModules.rekeningScan,
+      }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
     setEvenementen([data.evenement, ...evenementen]);
     setNieuweNaam("");
     setNieuweDatum("");
+    setNieuweModules({ ticketverkoop: false, sponsoring: false, groepsbudgetten: false, rekeningScan: false });
+    setModulesHandmatig(false);
     setToonNieuw(false);
     toast.success(`Evenement "${data.evenement.naam}" aangemaakt`);
   };
@@ -176,9 +200,28 @@ export default function Evenementen() {
         toonNieuw ? (
           <div className="card">
             <div style={{ fontWeight: 700, marginBottom: 8, fontSize: 15 }}>Nieuw evenement</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input placeholder="Naam, bv. Fuif 2026" value={nieuweNaam} onChange={(e) => setNieuweNaam(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              <input placeholder="Naam, bv. Fuif 2026" value={nieuweNaam} onChange={(e) => naamGewijzigd(e.target.value)} style={{ flex: 1, minWidth: 180 }} />
               <input type="date" value={nieuweDatum} onChange={(e) => setNieuweDatum(e.target.value)} />
+            </div>
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 12 }}>
+              {[
+                { key: "ticketverkoop", label: "Ticketverkoop" },
+                { key: "sponsoring", label: "Sponsoring" },
+                { key: "groepsbudgetten", label: "Groepsbudgetten (Kamp)" },
+                { key: "rekeningScan", label: "Rekening scannen (Kamp)" },
+              ].map((m) => (
+                <label key={m.key} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+                  <input
+                    type="checkbox"
+                    checked={nieuweModules[m.key]}
+                    onChange={(e) => { setModulesHandmatig(true); setNieuweModules((prev) => ({ ...prev, [m.key]: e.target.checked })); }}
+                  />
+                  {m.label}
+                </label>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
               <button className="btn-primary" onClick={aanmaken}>Aanmaken</button>
               <button onClick={() => setToonNieuw(false)}>Annuleren</button>
             </div>

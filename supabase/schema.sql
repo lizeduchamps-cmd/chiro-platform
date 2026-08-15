@@ -81,6 +81,14 @@ create table if not exists evenementen (
   naam text not null,                        -- bv. 'Fuif 2026'
   datum date,
   status text not null default 'gepland' check (status in ('gepland', 'lopend', 'afgerond')),
+  -- Optionele modules — elk evenement/uitstap deelt hetzelfde basis-kosten-
+  -- overzicht, deze vinkjes tonen er per evenement extra onderdelen bovenop
+  -- (bv. Kamp krijgt groepsbudgetten + rekening scannen, Lazarus-achtige
+  -- fuiven krijgen ticketverkoop + sponsoring).
+  heeft_ticketverkoop boolean not null default false,
+  heeft_sponsoring boolean not null default false,
+  heeft_groepsbudgetten boolean not null default false,
+  heeft_rekening_scan boolean not null default false,
   created_at timestamptz default now()
 );
 

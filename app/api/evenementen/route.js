@@ -11,7 +11,10 @@ export async function GET(req) {
 
   const werkjaarId = new URL(req.url).searchParams.get("werkjaarId");
 
-  let query = supabaseAdmin.from("evenementen").select("id, naam, datum, status, werkjaar_id").order("datum", { ascending: false, nullsFirst: false });
+  let query = supabaseAdmin
+    .from("evenementen")
+    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
+    .order("datum", { ascending: false, nullsFirst: false });
   if (werkjaarId) query = query.eq("werkjaar_id", werkjaarId);
 
   const { data, error } = await query;
@@ -60,13 +63,21 @@ export async function POST(req) {
     return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
   }
 
-  const { naam, datum, werkjaarId } = await req.json();
+  const { naam, datum, werkjaarId, heeftTicketverkoop, heeftSponsoring, heeftGroepsbudgetten, heeftRekeningScan } = await req.json();
   if (!naam) return NextResponse.json({ error: "Naam is verplicht" }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
     .from("evenementen")
-    .insert({ naam, datum: datum || null, werkjaar_id: werkjaarId || null })
-    .select("id, naam, datum, status, werkjaar_id")
+    .insert({
+      naam,
+      datum: datum || null,
+      werkjaar_id: werkjaarId || null,
+      heeft_ticketverkoop: !!heeftTicketverkoop,
+      heeft_sponsoring: !!heeftSponsoring,
+      heeft_groepsbudgetten: !!heeftGroepsbudgetten,
+      heeft_rekening_scan: !!heeftRekeningScan,
+    })
+    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -75,7 +86,7 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  const { id, naam, datum, status } = await req.json();
+  const { id, naam, datum, status, heeftTicketverkoop, heeftSponsoring, heeftGroepsbudgetten, heeftRekeningScan } = await req.json();
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
 
   if (!(await magEvenementBewerken(session, id))) {
@@ -86,6 +97,10 @@ export async function PATCH(req) {
   if (naam !== undefined) updateFields.naam = naam;
   if (datum !== undefined) updateFields.datum = datum || null;
   if (status !== undefined) updateFields.status = status;
+  if (heeftTicketverkoop !== undefined) updateFields.heeft_ticketverkoop = !!heeftTicketverkoop;
+  if (heeftSponsoring !== undefined) updateFields.heeft_sponsoring = !!heeftSponsoring;
+  if (heeftGroepsbudgetten !== undefined) updateFields.heeft_groepsbudgetten = !!heeftGroepsbudgetten;
+  if (heeftRekeningScan !== undefined) updateFields.heeft_rekening_scan = !!heeftRekeningScan;
 
   const { error } = await supabaseAdmin.from("evenementen").update(updateFields).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
