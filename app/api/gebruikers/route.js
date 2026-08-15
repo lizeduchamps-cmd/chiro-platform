@@ -47,21 +47,26 @@ export async function POST(req) {
   }
 
   const { discordUsername, naam } = await req.json();
-  if (!discordUsername) return NextResponse.json({ error: "Discordnaam is verplicht" }, { status: 400 });
+  // Discordnaam is enkel verplicht voor iemand die ooit gaat inloggen. Een
+  // "Naam (geen login)" — puur om te kunnen kiezen bij FV/streepjes — heeft
+  // geen Discord-account en dus geen discordUsername nodig.
+  if (!discordUsername && !naam) return NextResponse.json({ error: "Naam is verplicht" }, { status: 400 });
 
-  const { data: bestaat } = await supabaseAdmin
-    .from("users")
-    .select("id")
-    .ilike("discord_username", discordUsername)
-    .maybeSingle();
-  if (bestaat) return NextResponse.json({ error: "Er bestaat al een gebruiker met deze Discordnaam" }, { status: 400 });
+  if (discordUsername) {
+    const { data: bestaat } = await supabaseAdmin
+      .from("users")
+      .select("id")
+      .ilike("discord_username", discordUsername)
+      .maybeSingle();
+    if (bestaat) return NextResponse.json({ error: "Er bestaat al een gebruiker met deze Discordnaam" }, { status: 400 });
+  }
 
   const placeholderId = `handmatig_${crypto.randomUUID()}`;
   const { data, error } = await supabaseAdmin
     .from("users")
     .insert({
       discord_id: placeholderId,
-      discord_username: discordUsername,
+      discord_username: discordUsername || null,
       naam: naam || discordUsername,
     })
     .select("id, naam, discord_username, type, groep, platform_recht, iban")

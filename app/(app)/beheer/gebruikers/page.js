@@ -58,6 +58,8 @@ export default function GebruikersBeheer() {
   const [openPicker, setOpenPicker] = useState(null);
   const [bewerkId, setBewerkId] = useState(null);
   const [toonVerantwoordelijkheden, setToonVerantwoordelijkheden] = useState(false);
+  const [toonNieuwePersoon, setToonNieuwePersoon] = useState(false);
+  const [nieuwePersoon, setNieuwePersoon] = useState({ soort: "gebruiker", discordUsername: "", naam: "" });
 
   useEffect(() => {
     if (!openPicker) return;
@@ -156,17 +158,19 @@ export default function GebruikersBeheer() {
   };
 
   const nieuweGebruiker = async () => {
-    const discordUsername = prompt("Discord-gebruikersnaam (exact, zoals in Discord):");
-    if (!discordUsername) return;
-    const naam = prompt("Naam om te tonen (optioneel):", discordUsername);
+    const { soort, discordUsername, naam } = nieuwePersoon;
+    if (soort === "gebruiker" && !discordUsername.trim()) return toast.error("Vul de Discord-gebruikersnaam in.");
+    if (soort === "naam" && !naam.trim()) return toast.error("Vul een naam in.");
     const res = await fetch("/api/gebruikers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ discordUsername, naam }),
+      body: JSON.stringify({ discordUsername: soort === "gebruiker" ? discordUsername.trim() : "", naam: naam.trim() }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
     setUsers((prev) => [...prev, data.user].sort((a, b) => a.naam.localeCompare(b.naam)));
+    setNieuwePersoon({ soort: "gebruiker", discordUsername: "", naam: "" });
+    setToonNieuwePersoon(false);
     toast.success(`${data.user.naam} toegevoegd`);
   };
 
@@ -191,11 +195,43 @@ export default function GebruikersBeheer() {
     <div style={{ padding: 32, maxWidth: 900 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
         <h1 style={{ fontSize: 30, fontWeight: 800 }}>Gebruikers &amp; rollen</h1>
-        <button className="btn-primary" onClick={nieuweGebruiker}>+ Gebruiker toevoegen</button>
+        <button className="btn-primary" onClick={() => setToonNieuwePersoon(!toonNieuwePersoon)}>{toonNieuwePersoon ? "Annuleren" : "+ Persoon toevoegen"}</button>
       </div>
       <p className="muted" style={{ fontSize: 15, marginBottom: 20 }}>
         Type, afdeling, verantwoordelijkheden en rechten per persoon. Alles wat je wijzigt, is meteen opgeslagen.
       </p>
+
+      {toonNieuwePersoon && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuwe persoon</div>
+          <div style={{ display: "flex", gap: 20, marginBottom: 12, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+              <input type="radio" checked={nieuwePersoon.soort === "gebruiker"} onChange={() => setNieuwePersoon({ ...nieuwePersoon, soort: "gebruiker" })} />
+              Gebruiker — kan inloggen via Discord
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 14 }}>
+              <input type="radio" checked={nieuwePersoon.soort === "naam"} onChange={() => setNieuwePersoon({ ...nieuwePersoon, soort: "naam" })} />
+              Naam — geen login, enkel om te kiezen bij FV/streepjes
+            </label>
+          </div>
+          <div className="grid-2" style={{ marginBottom: 10 }}>
+            {nieuwePersoon.soort === "gebruiker" && (
+              <input
+                placeholder="Discord-gebruikersnaam (exact, zoals in Discord)"
+                value={nieuwePersoon.discordUsername}
+                onChange={(e) => setNieuwePersoon({ ...nieuwePersoon, discordUsername: e.target.value })}
+              />
+            )}
+            <input
+              placeholder="Naam om te tonen"
+              value={nieuwePersoon.naam}
+              onChange={(e) => setNieuwePersoon({ ...nieuwePersoon, naam: e.target.value })}
+              style={nieuwePersoon.soort === "naam" ? { gridColumn: "span 2" } : undefined}
+            />
+          </div>
+          <button className="btn-primary" onClick={nieuweGebruiker}>Toevoegen</button>
+        </div>
+      )}
 
       <div className="card" style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
         <div>
@@ -216,7 +252,7 @@ export default function GebruikersBeheer() {
               <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
                 <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontWeight: 700, fontSize: 15 }}>{u.naam}</div>
-                  <div className="subtle" style={{ fontSize: 13 }}>@{u.discord_username} · {u.type || "-"}{u.groep ? ` · ${u.groep}` : ""}</div>
+                  <div className="subtle" style={{ fontSize: 13 }}>{u.discord_username ? `@${u.discord_username}` : "Naam (geen login)"} · {u.type || "-"}{u.groep ? ` · ${u.groep}` : ""}</div>
                 </div>
                 <span className={`badge ${RECHT_BADGE[u.platform_recht] || "badge-neutral"}`}>{RECHT_KORT[u.platform_recht] || "Lid"}</span>
                 <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => setBewerkId(open ? null : u.id)}>{open ? "Klaar" : "Wijzig"}</button>
