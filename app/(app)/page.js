@@ -212,20 +212,22 @@ export default function Jaaroverzicht() {
             </div>
           )}
 
-          <div className="grid-3" style={{ marginBottom: 24 }}>
-            <div className="stat">
-              <div className="muted" style={{ fontSize: 13 }}>Totale inkomsten</div>
-              <div className="money" style={{ fontSize: 28, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>
-              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
+          <div className="card" style={{ marginBottom: 24 }}>
+            <div className="stat-hero">
+              <div className="stat-label">Netto resultaat dit werkjaar</div>
+              <div className="money stat-value">{euro(data.netto)}</div>
             </div>
-            <div className="stat">
-              <div className="muted" style={{ fontSize: 13 }}>Totale uitgaven</div>
-              <div className="money" style={{ fontSize: 28, fontWeight: 700, color: "var(--danger-deep)" }}>{euro(data.totaalUitgaven)}</div>
-              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
-            </div>
-            <div className="stat-primary">
-              <div style={{ fontSize: 13, opacity: 0.75 }}>Netto resultaat</div>
-              <div className="money" style={{ fontSize: 28, fontWeight: 700 }}>{euro(data.netto)}</div>
+            <div className="grid-2" style={{ marginTop: 16 }}>
+              <div className="stat">
+                <div className="muted" style={{ fontSize: 13 }}>Inkomsten</div>
+                <div className="money" style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>
+                {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
+              </div>
+              <div className="stat">
+                <div className="muted" style={{ fontSize: 13 }}>Uitgaven</div>
+                <div className="money" style={{ fontSize: 22, fontWeight: 700, color: "var(--danger-deep)" }}>{euro(data.totaalUitgaven)}</div>
+                {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
+              </div>
             </div>
           </div>
 
