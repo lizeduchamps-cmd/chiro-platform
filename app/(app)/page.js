@@ -3,6 +3,8 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
+import { isFinancieel } from "@/lib/permissies";
+import { evenementMatchTag } from "@/lib/evenementMatch";
 
 function maandLabel(maand) {
   const namen = ["jan", "feb", "mrt", "apr", "mei", "jun", "jul", "aug", "sep", "okt", "nov", "dec"];
@@ -11,9 +13,23 @@ function maandLabel(maand) {
 }
 
 const ONBEKENDE_CATEGORIE = "Onduidelijk/Nog in te vullen";
+const BRON_LABEL = { streepjes_bot: "Streepjes", bestelling: "Bestellingen", kilometers: "Kilometers", handmatig: "Handmatig" };
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
+}
+
+function daagVerschil(datum) {
+  const ms = new Date(datum + "T00:00:00") - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00");
+  return Math.round(ms / 86400000);
+}
+
+function PijlIcoon({ richting }) {
+  return richting === "in" ? (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 19V5M6 11l6-6 6 6" /></svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5v14M6 13l6 6 6-6" /></svg>
+  );
 }
 
 // Icoontje per aandachtspunt: rode stip = actie/fout, oranje = vraagt aandacht
@@ -41,43 +57,50 @@ function AandachtRij({ href, kleur, titel, subtitel }) {
   );
 }
 
-function daagVerschil(datum) {
-  const ms = new Date(datum + "T00:00:00") - new Date(new Date().toISOString().slice(0, 10) + "T00:00:00");
-  return Math.round(ms / 86400000);
-}
-
-function MaandGrafiek({ perMaand }) {
-  const maanden = Object.keys(perMaand).sort();
-  if (maanden.length === 0) return <p className="subtle" style={{ fontStyle: "italic" }}>Nog geen transacties dit werkjaar.</p>;
-
-  const max = Math.max(1, ...maanden.map((m) => Math.max(perMaand[m].inkomsten, perMaand[m].uitgaven)));
-
+function ChecklistKaart({ eerstvolgende }) {
+  if (eerstvolgende.length === 0) return null;
   return (
-    <div style={{ display: "flex", gap: 16, alignItems: "flex-end", height: 180, padding: "12px 4px", overflowX: "auto" }}>
-      {maanden.map((m) => (
-        <div key={m} style={{ display: "flex", flexDirection: "column", alignItems: "center", minWidth: 56 }}>
-          <div style={{ display: "flex", gap: 4, alignItems: "flex-end", height: 130 }}>
-            <div title={`Inkomsten: ${euro(perMaand[m].inkomsten)}`} style={{ width: 16, background: "var(--primary)", height: `${(perMaand[m].inkomsten / max) * 130}px`, borderRadius: 4 }} />
-            <div title={`Uitgaven: ${euro(perMaand[m].uitgaven)}`} style={{ width: 16, background: "var(--danger)", height: `${(perMaand[m].uitgaven / max) * 130}px`, borderRadius: 4 }} />
+    <div className="checklist-card" style={{ marginBottom: 24 }}>
+      <h3>Eerstvolgend op de kalender</h3>
+      {eerstvolgende.map((it) => {
+        const dagen = daagVerschil(it.datum_deadline);
+        return (
+          <div key={it.id} className="check-item">
+            <div className="check-tick" />
+            <div style={{ flex: 1 }}>{it.titel}</div>
+            <span style={{ fontSize: 12, opacity: 0.8 }}>{dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : `over ${dagen}d`}</span>
           </div>
-          <div className="subtle" style={{ fontSize: 10, marginTop: 6 }}>{m.slice(5)}/{m.slice(2, 4)}</div>
-        </div>
-      ))}
+        );
+      })}
+      <Link href="/kalender" style={{ display: "block", marginTop: 8, fontSize: 12, fontWeight: 700, color: "var(--accent)", textDecoration: "none" }}>
+        Volledige kalender →
+      </Link>
     </div>
   );
 }
 
-export default function Jaaroverzicht() {
+const SNELKOPPELINGEN = [
+  { href: "/kasboek", label: "Kasboek toevoegen", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg> },
+  { href: "/fv", label: "FV posten", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="16" rx="3" /><path d="M9 9h6M9 12.5h6M9 16h3.5" /></svg> },
+  { href: "/streepjes", label: "Streepjes", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M7 6v12M11 6v12M15 6v12" /><path d="M5 8l14 6" /></svg> },
+  { href: "/kampbudgetten", label: "Kampbudget", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5l7 14H5z" /><path d="M12 5v14" /></svg> },
+];
+
+export default function Overzicht() {
   const { data: session } = useSession();
   const [werkjaren, setWerkjaren] = useState([]);
   const [werkjaarId, setWerkjaarId] = useState(null);
   const [data, setData] = useState(null);
-  const [evenementenWinst, setEvenementenWinst] = useState([]);
   const [kalenderItems, setKalenderItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [aandacht, setAandacht] = useState(null);
+  const [recenteTransacties, setRecenteTransacties] = useState([]);
+  const [eigenFv, setEigenFv] = useState(undefined);
+  const [eigenEvenementen, setEigenEvenementen] = useState([]);
+  const [eigenWisselgeld, setEigenWisselgeld] = useState([]);
 
-  const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
+  const financieel = isFinancieel(session);
+  const userId = session?.user?.userId;
 
   useEffect(() => {
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
@@ -89,15 +112,13 @@ export default function Jaaroverzicht() {
   useEffect(() => {
     if (!werkjaarId) return;
     fetch(`/api/jaaroverzicht?werkjaarId=${werkjaarId}`).then((r) => r.json()).then(setData);
-    fetch(`/api/evenementen/afgerond?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setEvenementenWinst(d.evenementen || []));
     fetch(`/api/kalender?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => setKalenderItems(d.kalenderItems || []));
   }, [werkjaarId]);
 
-  // Aandachtspunten: een korte samenvatting van wat nog actie vraagt, zodat
-  // je niet elke pagina apart moet afgaan om te zien wat er nog moet gebeuren.
-  // Enkel voor wie mag bewerken — dit is geen info die een gewoon lid nodig heeft.
+  // Financieel verantwoordelijke: aandachtspunten + recente kasboekactiviteit —
+  // details die een gewoon lid niet nodig heeft.
   useEffect(() => {
-    if (!werkjaarId || !magBewerken) { setAandacht(null); return; }
+    if (!werkjaarId || !financieel) { setAandacht(null); setRecenteTransacties([]); return; }
     let actief = true;
     (async () => {
       const [fvMaandenData, evenementenData, transactiesData, groepsbudgettenData, wisselgeldData, kampkostenData] = await Promise.all([
@@ -108,6 +129,9 @@ export default function Jaaroverzicht() {
         fetch(`/api/wisselgeld?werkjaarId=${werkjaarId}`).then((r) => r.json()),
         fetch(`/api/kampkosten?werkjaarId=${werkjaarId}`).then((r) => r.json()),
       ]);
+      if (!actief) return;
+
+      setRecenteTransacties((transactiesData.transacties || []).filter((t) => t.soort !== "interne_transactie").slice(0, 4));
 
       let fvOpenstaand = 0;
       let fvMaandLabel = "";
@@ -135,7 +159,34 @@ export default function Jaaroverzicht() {
       if (actief) setAandacht({ fvOpenstaand, fvMaandLabel, evenementenTeVergoeden, kasboekOngecategoriseerd, budgettenOverschreden, wisselgeldNogKlaarzetten, kampkostenTeVergoeden });
     })();
     return () => { actief = false; };
-  }, [werkjaarId, magBewerken]);
+  }, [werkjaarId, financieel]);
+
+  // Andere leiding: hun eigen FV-saldo, hun evenementen/uitstappen, hun wisselgeld.
+  useEffect(() => {
+    if (!werkjaarId || financieel || !userId) return;
+    let actief = true;
+    (async () => {
+      const [fvMaandenData, evenementenData, wisselgeldData] = await Promise.all([
+        fetch(`/api/fv/maanden?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+        fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+        fetch(`/api/wisselgeld?werkjaarId=${werkjaarId}`).then((r) => r.json()),
+      ]);
+      if (!actief) return;
+
+      const laatsteMaand = fvMaandenData.fvMaanden?.[0];
+      if (laatsteMaand) {
+        const fvOverzicht = await fetch(`/api/fv/overzicht?fvMaandId=${laatsteMaand.id}`).then((r) => r.json());
+        const eigen = (fvOverzicht.personen || []).find((p) => p.user.id === userId);
+        if (actief) setEigenFv(eigen ? { ...eigen, maandLabel: maandLabel(laatsteMaand.maand) } : null);
+      } else if (actief) setEigenFv(null);
+
+      const tags = session?.user?.verantwoordelijkheden || [];
+      setEigenEvenementen((evenementenData.evenementen || []).filter((e) => evenementMatchTag(tags, e.naam)));
+
+      setEigenWisselgeld((wisselgeldData.wisselgeldAanvragen || []).filter((w) => w.aanvrager_user_id === userId));
+    })();
+    return () => { actief = false; };
+  }, [werkjaarId, financieel, userId, session]);
 
   if (loading) {
     return (
@@ -157,29 +208,33 @@ export default function Jaaroverzicht() {
 
   const vandaag = new Date().toISOString().slice(0, 10);
   const eerstvolgende = kalenderItems.filter((it) => !it.is_voltooid && it.datum_deadline >= vandaag).slice(0, 5);
+  const huidigeMaand = vandaag.slice(0, 7);
+  const dezeMaand = data?.perMaand?.[huidigeMaand] || { inkomsten: 0, uitgaven: 0 };
+  const grootsteCategorieen = data ? Object.entries(data.perCategorie).map(([naam, v]) => ({ naam, totaal: v.inkomsten + v.uitgaven })).sort((a, b) => b.totaal - a.totaal).slice(0, 4) : [];
+  const maxCategorie = Math.max(1, ...grootsteCategorieen.map((c) => c.totaal));
 
   return (
-    <div style={{ padding: 32, maxWidth: 1100 }}>
+    <div style={{ padding: 32, maxWidth: 700 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
-        <h1 style={{ fontSize: 30, fontWeight: 800 }}>Financieel dashboard</h1>
+        <div>
+          <div className="muted" style={{ fontSize: 14, fontWeight: 600 }}>Hallo {session?.user?.name?.split(" ")[0]} 👋</div>
+          <h1 style={{ fontSize: 28, fontWeight: 800 }}>Overzicht</h1>
+        </div>
         {werkjaren.length > 0 && (
           <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
             {werkjaren.map((w) => <option key={w.id} value={w.id}>{w.naam}</option>)}
           </select>
         )}
       </div>
-      <p className="muted" style={{ fontSize: 15, marginBottom: 24 }}>
-        Welkom, {session?.user?.name}. Voor de details kan je naar Kasboek of CSV Upload in de zijbalk.
-      </p>
 
       {werkjaren.length === 0 ? (
-        <p>Er is nog geen werkjaar aangemaakt — ga naar Kasboek om er één te starten.</p>
+        <p className="muted" style={{ marginTop: 12 }}>Er is nog geen werkjaar aangemaakt — ga naar Kasboek om er één te starten.</p>
       ) : !data ? (
         <SkeletonStatRow count={3} />
-      ) : (
+      ) : financieel ? (
         <>
           {aandachtRijen.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
+            <div style={{ marginTop: 20, marginBottom: 20 }}>
               <div className="eyebrow" style={{ marginBottom: 10 }}>Vraagt jouw aandacht</div>
               <div className="card" style={{ padding: "4px 16px" }}>
                 {aandachtRijen.map((r, i) => (
@@ -191,93 +246,129 @@ export default function Jaaroverzicht() {
             </div>
           )}
 
-          {eerstvolgende.length > 0 && (
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
-                <div className="eyebrow">Eerstvolgend op de kalender</div>
-                <Link href="/kalender" className="link" style={{ fontSize: 13 }}>Volledige kalender →</Link>
-              </div>
-              <div className="card" style={{ padding: "4px 16px" }}>
-                {eerstvolgende.map((it, i) => {
-                  const dagen = daagVerschil(it.datum_deadline);
-                  return (
-                    <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                      <span style={{ width: 10, height: 10, borderRadius: 99, background: "var(--primary)", flexShrink: 0 }} />
-                      <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{it.titel}</div>
-                      <span className="badge badge-primary money">{dagen <= 0 ? "vandaag" : dagen === 1 ? "morgen" : `over ${dagen} dagen`}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div className="card" style={{ marginBottom: 24 }}>
+          <div className="card" style={{ marginTop: 20, marginBottom: 20 }}>
             <div className="stat-hero">
               <div className="stat-label">Netto resultaat dit werkjaar</div>
               <div className="money stat-value">{euro(data.netto)}</div>
+              {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten - data.vorigJaarTotalen.uitgaven)}</div>}
             </div>
-            <div className="grid-2" style={{ marginTop: 16 }}>
-              <div className="stat">
-                <div className="muted" style={{ fontSize: 13 }}>Inkomsten</div>
-                <div className="money" style={{ fontSize: 22, fontWeight: 700 }}>{euro(data.totaalInkomsten)}</div>
-                {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.inkomsten)}</div>}
+            <div className="flow-row" style={{ marginTop: 16 }}>
+              <div className="flow-pill in">
+                <div className="flow-label">Inkomsten {maandLabel(huidigeMaand)}</div>
+                <div className="money flow-value">+ {euro(dezeMaand.inkomsten)}</div>
               </div>
-              <div className="stat">
-                <div className="muted" style={{ fontSize: 13 }}>Uitgaven</div>
-                <div className="money" style={{ fontSize: 22, fontWeight: 700, color: "var(--danger-deep)" }}>{euro(data.totaalUitgaven)}</div>
-                {data.vorigJaarTotalen && <div className="subtle" style={{ fontSize: 12, marginTop: 4 }}>Vorig jaar ({data.vorigJaarTotalen.naam}): {euro(data.vorigJaarTotalen.uitgaven)}</div>}
+              <div className="flow-pill out">
+                <div className="flow-label">Uitgaven {maandLabel(huidigeMaand)}</div>
+                <div className="money flow-value">− {euro(dezeMaand.uitgaven)}</div>
               </div>
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 24 }}>
-            <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Inkomsten &amp; uitgaven per maand</div>
-            <div className="muted" style={{ display: "flex", gap: 16, fontSize: 12, marginBottom: 4 }}>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--primary)", borderRadius: 3, marginRight: 4 }}></span>Inkomsten</span>
-              <span><span style={{ display: "inline-block", width: 10, height: 10, background: "var(--danger)", borderRadius: 3, marginRight: 4 }}></span>Uitgaven</span>
-            </div>
-            <MaandGrafiek perMaand={data.perMaand} />
+          <div className="quick-actions" style={{ marginBottom: 24 }}>
+            {SNELKOPPELINGEN.map((a) => (
+              <Link key={a.href} href={a.href} className="quick-action">
+                <span className="quick-action-icon">{a.icoon}</span>
+                <span className="quick-action-label">{a.label}</span>
+              </Link>
+            ))}
           </div>
 
-          {evenementenWinst.length > 0 && (
-            <div className="card" style={{ marginBottom: 24 }}>
-              <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Afgeronde evenementen</div>
-              <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-                Kassa-omzet en kosten/inkomsten die nog niet als kasboektransactie geboekt staan. Zodra dat wel zo is (bv. de bank-uitbetaling geïmporteerd en aan het evenement gekoppeld), zit dat al vervat in de totalen hierboven — dit kaartje telt dan niet nog eens mee.
-              </p>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {evenementenWinst.map((e, i) => (
-                  <div key={e.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "9px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                    <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{e.naam}</div>
-                    <div className="subtle" style={{ fontSize: 12 }}>{e.datum || ""}</div>
-                    <div className={`money ${e.nettoWinst < 0 ? "amount-neg" : ""}`} style={{ fontWeight: 700, minWidth: 90, textAlign: "right" }}>
-                      {euro(e.nettoWinst)}
+          {grootsteCategorieen.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <div className="eyebrow">Grootste categorieën</div>
+                <Link href="/kasboek" className="link" style={{ fontSize: 12 }}>alles →</Link>
+              </div>
+              <div className="card">
+                {grootsteCategorieen.map((c) => (
+                  <div key={c.naam} style={{ marginBottom: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 5 }}>
+                      <span style={{ fontWeight: 700 }}>{c.naam}</span>
+                      <span className="money muted">{euro(c.totaal)}</span>
                     </div>
+                    <div className="progress-track"><div className="progress-fill accent" style={{ width: `${Math.round((c.totaal / maxCategorie) * 100)}%` }} /></div>
                   </div>
                 ))}
-                <div style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "10px 0 0", borderTop: "1px solid var(--border)", fontWeight: 700 }}>
-                  <div style={{ flex: 1 }}>Totaal</div>
-                  <div className="money" style={{ minWidth: 90, textAlign: "right" }}>{euro(evenementenWinst.reduce((s, e) => s + e.nettoWinst, 0))}</div>
-                </div>
               </div>
             </div>
           )}
 
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginBottom: 10 }}>
-            <div className="eyebrow" style={{ flex: 1 }}>Per categorie</div>
-            <div className="eyebrow" style={{ minWidth: 90, textAlign: "right" }}>Inkomsten</div>
-            <div className="eyebrow" style={{ minWidth: 90, textAlign: "right" }}>Uitgaven</div>
-          </div>
-          <div className="card" style={{ padding: "4px 16px" }}>
-            {Object.entries(data.perCategorie).sort((a, b) => (b[1].uitgaven + b[1].inkomsten) - (a[1].uitgaven + a[1].inkomsten)).map(([naam, v], i) => (
-              <div key={naam} style={{ display: "flex", alignItems: "baseline", gap: 12, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                <div style={{ flex: 1, fontSize: 14, fontWeight: 600 }}>{naam}</div>
-                <div className="money" style={{ minWidth: 90, textAlign: "right", fontSize: 13 }}>{v.inkomsten ? euro(v.inkomsten) : "-"}</div>
-                <div className="money amount-neg" style={{ minWidth: 90, textAlign: "right", fontSize: 13 }}>{v.uitgaven ? euro(v.uitgaven) : "-"}</div>
+          {recenteTransacties.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+                <div className="eyebrow">Recente activiteit</div>
+                <Link href="/kasboek" className="link" style={{ fontSize: 12 }}>kasboek →</Link>
               </div>
-            ))}
+              <div className="card" style={{ padding: "4px 16px" }}>
+                {recenteTransacties.map((t, i) => (
+                  <div key={t.id} className="txn-row" style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                    <span className={`txn-dot ${t.soort === "inkomst" ? "in" : "out"}`}><PijlIcoon richting={t.soort === "inkomst" ? "in" : "out"} /></span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13.5 }}>{t.omschrijving || t.tegenpartij || "Transactie"}</div>
+                      <div className="subtle" style={{ fontSize: 11.5 }}>{new Date(t.datum).toLocaleDateString("nl-BE")} · {t.categorieen?.naam || "Onduidelijk"}</div>
+                    </div>
+                    <div className={`money ${t.soort === "inkomst" ? "" : "amount-neg"}`} style={{ fontSize: 13.5, fontWeight: 700 }}>
+                      {t.soort === "inkomst" ? "+ " : "− "}{euro(t.bedrag)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <ChecklistKaart eerstvolgende={eerstvolgende} />
+        </>
+      ) : (
+        <>
+          <div className="card" style={{ marginTop: 20, marginBottom: 20 }}>
+            <div className="stat-hero">
+              <div className="stat-label">{eigenFv ? `Jouw Financieel Verslag — ${eigenFv.maandLabel}` : "Jouw Financieel Verslag"}</div>
+              <div className="money stat-value">{euro(eigenFv?.totaal || 0)}</div>
+              {eigenFv && <span className={`badge ${eigenFv.status === "betaald" ? "badge-success" : "badge-warning"}`} style={{ marginTop: 8, display: "inline-block" }}>{eigenFv.status === "betaald" ? "Betaald" : "Openstaand"}</span>}
+            </div>
+            {eigenFv?.regels?.length > 0 && (
+              <div className="grid-2" style={{ marginTop: 16 }}>
+                {Object.entries(eigenFv.regels.reduce((acc, r) => { const k = BRON_LABEL[r.bron] || "Handmatig"; acc[k] = (acc[k] || 0) + Number(r.bedrag); return acc; }, {})).map(([soort, bedrag]) => (
+                  <div key={soort} className="stat">
+                    <div className="muted" style={{ fontSize: 13 }}>{soort}</div>
+                    <div className="money" style={{ fontSize: 18, fontWeight: 700 }}>{euro(bedrag)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {eigenFv === null && <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Nog geen Financieel Verslag deze maand.</p>}
+            <Link href="/fv" className="link" style={{ display: "block", marginTop: 14, fontSize: 13, fontWeight: 700 }}>Volledig verslag →</Link>
           </div>
+
+          {eigenEvenementen.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div className="eyebrow" style={{ marginBottom: 10 }}>Jouw evenementen &amp; uitstappen</div>
+              <div className="card" style={{ padding: "4px 16px" }}>
+                {eigenEvenementen.map((e, i) => (
+                  <Link key={e.id} href={`/evenementen/${e.id}`} className="nav-row" style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 4px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", textDecoration: "none", color: "inherit" }}>
+                    <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{e.naam}</div>
+                    <div className={`money ${e.nettoWinst < 0 ? "amount-neg" : ""}`} style={{ fontWeight: 700, fontSize: 13 }}>{euro(e.nettoWinst)}</div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {eigenWisselgeld.length > 0 && (
+            <div style={{ marginBottom: 24 }}>
+              <div className="eyebrow" style={{ marginBottom: 10 }}>Jouw wisselgeldaanvragen</div>
+              <div className="card" style={{ padding: "4px 16px" }}>
+                {eigenWisselgeld.map((w, i) => (
+                  <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 4px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                    <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{w.doel_activiteit || w.afdeling}</div>
+                    <span className="badge badge-neutral">{w.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <ChecklistKaart eerstvolgende={eerstvolgende} />
         </>
       )}
     </div>
