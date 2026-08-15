@@ -54,7 +54,6 @@ function PersoonKaart({
   const klaar = p.status === "betaald";
   const kleur = klaar ? "success" : terugTeKrijgen ? "success" : "danger";
   const perSoort = SOORTEN.map((s) => ({ ...s, regels: p.regels.filter((r) => r.bron === s.bron) })).filter((s) => s.regels.length > 0);
-  const open4 = veldOpen === "bestelling" ? "bestelling" : veldOpen;
 
   return (
     <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -146,26 +145,21 @@ function PersoonKaart({
                 </div>
               )}
 
-              {open4 === "bestelling" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    <input
-                      placeholder="Wat, bv. Frituur 16/05 — mini + cola"
-                      value={nieuweRegel[p.user.id]?.omschrijving || ""}
-                      onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
-                      style={{ flex: 1, minWidth: 160 }}
-                    />
-                    <input
-                      type="number" step="0.01" placeholder="Bedrag"
-                      value={nieuweRegel[p.user.id]?.bedrag || ""}
-                      onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
-                      style={{ width: 100 }}
-                    />
-                    <button className="btn-primary" onClick={() => onRegelToevoegen(p.user.id, "bestelling")}>Toevoegen</button>
-                  </div>
-                  <p className="subtle" style={{ fontSize: 12 }}>
-                    Voor een bestelling met meerdere producten/personen tegelijk: <Link href="/bestellingen" className="link">volledige bestellingen-tool →</Link>
-                  </p>
+              {veldOpen === "bestelling" && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <input
+                    placeholder="Wat, bv. Frituur 16/05 — mini + cola"
+                    value={nieuweRegel[p.user.id]?.omschrijving || ""}
+                    onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
+                    style={{ flex: 1, minWidth: 160 }}
+                  />
+                  <input
+                    type="number" step="0.01" placeholder="Bedrag"
+                    value={nieuweRegel[p.user.id]?.bedrag || ""}
+                    onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
+                    style={{ width: 100 }}
+                  />
+                  <button className="btn-primary" onClick={() => onRegelToevoegen(p.user.id, "bestelling")}>Toevoegen</button>
                 </div>
               )}
 
@@ -188,23 +182,18 @@ function PersoonKaart({
               )}
 
               {veldOpen === "streepjes_bot" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                      Fysieke streepjes
-                      <input
-                        type="number" step="1"
-                        value={streepjesBewerk[p.user.id] ?? String(streepjesInfo?.fysieke_streepjes ?? 0)}
-                        onChange={(e) => setStreepjesBewerk((prev) => ({ ...prev, [p.user.id]: e.target.value }))}
-                        style={{ width: 70 }}
-                      />
-                    </label>
-                    <span className="subtle" style={{ fontSize: 12 }}>+ €{euro(streepjesInfo?.online_streepjes_bedrag || 0)} online</span>
-                    <button className="btn-primary" onClick={() => onStreepjesToevoegen(p.user.id)}>Toevoegen aan dit verslag</button>
-                  </div>
-                  <p className="subtle" style={{ fontSize: 12 }}>
-                    Online-bedrag komt uit de Discord-bot-CSV: <Link href="/streepjes" className="link">CSV uploaden →</Link>
-                  </p>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
+                    Fysieke streepjes
+                    <input
+                      type="number" step="1"
+                      value={streepjesBewerk[p.user.id] ?? String(streepjesInfo?.fysieke_streepjes ?? 0)}
+                      onChange={(e) => setStreepjesBewerk((prev) => ({ ...prev, [p.user.id]: e.target.value }))}
+                      style={{ width: 70 }}
+                    />
+                  </label>
+                  <span className="subtle" style={{ fontSize: 12 }}>+ €{euro(streepjesInfo?.online_streepjes_bedrag || 0)} online</span>
+                  <button className="btn-primary" onClick={() => onStreepjesToevoegen(p.user.id)}>Toevoegen aan dit verslag</button>
                 </div>
               )}
             </div>
@@ -645,6 +634,19 @@ export default function FinancieelVerslag() {
               <button onClick={() => setAlleenOpenstaand((v) => !v)} style={{ alignSelf: "flex-start" }}>
                 {alleenOpenstaand ? "✕ Toon iedereen" : "Toon enkel wie nog niet betaalde"}
               </button>
+            </div>
+          )}
+
+          {magBewerken && (
+            <div className="no-print card" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ fontWeight: 700, fontSize: 15 }}>Voor meerdere personen tegelijk</div>
+              <p className="muted" style={{ fontSize: 13 }}>
+                De 4 knoppen bij elke persoon zijn voor één snelle regel. Voor een bestelling of streepjeslijst over veel personen ineens gebruik je de volledige tool:
+              </p>
+              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                <Link href="/bestellingen" className="link" style={{ fontSize: 14 }}>Bestellingen splitsen (slim plakken) →</Link>
+                <Link href="/streepjes" className="link" style={{ fontSize: 14 }}>Streepjes CSV uploaden →</Link>
+              </div>
             </div>
           )}
 
