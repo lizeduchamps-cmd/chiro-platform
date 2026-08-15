@@ -1,37 +1,40 @@
 :root {
-  --bg: #efebe4;
+  --bg: #f7f5f1;
   --surface: #ffffff;
-  --surface-alt: #f7f5f1;
-  --surface-hover: #f1eee9;
-  --border: #e9e6e0;
-  --border-soft: #f1eee9;
-  --border-strong: #dad5cc;
-  --text: #17161a;
-  --text-muted: #6e6b76;
-  --text-subtle: #b7b2a9;
-  --primary: #1b315c;
-  --primary-hover: #0f1c36;
-  --primary-tint: #e6ebf3;
-  --danger: #bc0610;
-  --danger-deep: #8e040c;
-  --danger-tint: #fbe6e7;
-  --danger-border: #efc3c5;
-  --success: #1ba36b;
-  --success-text: #15764e;
-  --success-tint: #e4f6ec;
-  --success-border: #bfe6d1;
-  --warning: #f08a24;
-  --warning-text: #9c5a0b;
-  --warning-tint: #fdf0df;
-  --warning-border: #f5ddb8;
+  --surface-alt: #f1eee7;
+  --surface-hover: #ece7dc;
+  --border: #e4e0d8;
+  --border-soft: #ece8e0;
+  --border-strong: #d8d2c5;
+  --text: #1c2b45;
+  --text-muted: #3a4a66;
+  --text-subtle: #8891a0;
+  --primary: #1c2b45;
+  --primary-hover: #141f33;
+  --primary-tint: #e8ebf0;
+  --accent: #c9a227;
+  --accent-hover: #b28f22;
+  --accent-tint: #f1e4b8;
+  --danger: #a8452e;
+  --danger-deep: #7a331f;
+  --danger-tint: #f5e5e0;
+  --danger-border: #e8c9be;
+  --success: #4b7a5e;
+  --success-text: #35604a;
+  --success-tint: #e7f0ea;
+  --success-border: #c7dccd;
+  --warning: #c9a227;
+  --warning-text: #8a6a16;
+  --warning-tint: #f1e4b8;
+  --warning-border: #e3ce8a;
   --radius: 22px;
   --radius-sm: 16px;
   --radius-lg: 24px;
   --radius-pill: 999px;
-  --font-body: "Figtree", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-mono: "Space Grotesk", ui-monospace, monospace;
-  --shadow-md: 0 4px 16px rgba(23, 22, 26, 0.1);
-  --shadow-lg: 0 12px 32px rgba(23, 22, 26, 0.16);
+  --font-body: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --shadow-md: 0 4px 16px rgba(28, 43, 69, 0.1);
+  --shadow-lg: 0 12px 32px rgba(28, 43, 69, 0.16);
 }
 
 * {
@@ -91,14 +94,14 @@ button:disabled {
 }
 
 .btn-primary {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: white;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--text);
   font-weight: 700;
 }
 .btn-primary:hover {
-  background: var(--primary-hover);
-  border-color: var(--primary-hover);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .btn-danger {
