@@ -30,6 +30,7 @@ export async function GET(req) {
     { data: gekoppeldeTransacties, error: gekoppeldeError },
     { data: tickets, error: ticketsError },
     { data: sponsors, error: sponsorsError },
+    { data: kampTransacties, error: kampError },
   ] = await Promise.all([
     supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling, verwacht_bedrag").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_budgetten").select("id, hoofdcategorie, budget_toegewezen").eq("evenement_id", evenementId),
@@ -51,6 +52,10 @@ export async function GET(req) {
       .order("datum", { ascending: false }),
     supabaseAdmin.from("evenement_tickets").select("id, naam, prijs, aantal_verkocht").eq("evenement_id", evenementId).order("created_at"),
     supabaseAdmin.from("evenement_sponsors").select("id, naam, bedrag, opmerking").eq("evenement_id", evenementId).order("created_at"),
+    // Kamp houdt zijn kosten/inkomsten nog bij in een eigen tabel (zie
+    // Kampkosten) i.p.v. evenement_transacties — hier meetellen zodat de
+    // balans klopt als je Kamp via deze algemene evenementpagina bekijkt.
+    supabaseAdmin.from("kamp_transacties").select("bedrag, type_geldstroom").eq("evenement_id", evenementId),
   ]);
   if (kassasError) return NextResponse.json({ error: kassasError.message }, { status: 500 });
   if (budgettenError) return NextResponse.json({ error: budgettenError.message }, { status: 500 });
@@ -59,9 +64,12 @@ export async function GET(req) {
   if (gekoppeldeError) return NextResponse.json({ error: gekoppeldeError.message }, { status: 500 });
   if (ticketsError) return NextResponse.json({ error: ticketsError.message }, { status: 500 });
   if (sponsorsError) return NextResponse.json({ error: sponsorsError.message }, { status: 500 });
+  if (kampError) return NextResponse.json({ error: kampError.message }, { status: 500 });
 
   const ticketOmzet = (tickets || []).reduce((s, t) => s + Number(t.prijs) * Number(t.aantal_verkocht), 0);
   const sponsorBedrag = (sponsors || []).reduce((s, sp) => s + Number(sp.bedrag), 0);
+  const kampInkomsten = (kampTransacties || []).filter((t) => t.type_geldstroom === "inkomst").reduce((s, t) => s + Number(t.bedrag), 0);
+  const kampUitgaven = (kampTransacties || []).filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag), 0);
 
   // Kassa-omzet: cash = geteld eindbedrag - klaargezet wisselgeld; digitaal = volledig eindbedrag.
   // Tekort/overschot: enkel bepaald als er een verwacht_bedrag is ingevuld (de
@@ -91,8 +99,8 @@ export async function GET(req) {
   // die blijft puur wat de groep zelf via kassa's/transacties bijhoudt. Zo
   // niet zou eenzelfde bedrag dubbel meetellen zodra je (bv. na de
   // bankstorting) de kasboektransactie aan het evenement koppelt.
-  const totaalInkomsten = kassaOmzetTotaal + ticketOmzet + sponsorBedrag + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
-  const totaalUitgaven = uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+  const totaalInkomsten = kassaOmzetTotaal + ticketOmzet + sponsorBedrag + kampInkomsten + inkomstenTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+  const totaalUitgaven = kampUitgaven + uitgaveTransacties.reduce((s, t) => s + Number(t.bedrag_totaal), 0);
 
   const kostenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost !== "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
   const investeringenTotaal = uitgaveTransacties.filter((t) => t.type_kostenpost === "investering").reduce((s, t) => s + Number(t.bedrag_totaal), 0);

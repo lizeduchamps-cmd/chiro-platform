@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
 import { computeSaldos } from "@/lib/finance";
+import { vindOfMaakKampEvenement } from "@/lib/kampEvenement";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -49,6 +50,11 @@ export async function POST(req) {
     { werkjaar_id: werkjaar.id, type: "zicht", startsaldo: zichtStart },
     { werkjaar_id: werkjaar.id, type: "spaar", startsaldo: spaarStart },
   ]);
+
+  // Kamp bestaat als evenement (heeft_groepsbudgetten/heeft_rekening_scan) —
+  // meteen aanmaken zodat het al zichtbaar is in Evenementen & uitstappen,
+  // i.p.v. pas te verschijnen bij het eerste bezoek aan Kampbudgetten/-kosten.
+  await vindOfMaakKampEvenement(werkjaar.id);
 
   return NextResponse.json({ werkjaar });
 }

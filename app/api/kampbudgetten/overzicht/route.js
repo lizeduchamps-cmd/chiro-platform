@@ -24,25 +24,29 @@ export async function GET(req) {
 
   const { data: groepsbudget, error: budgetError } = await supabaseAdmin
     .from("groepsbudgetten")
-    .select("id, werkjaar_id, afdeling, aantal_leden")
+    .select("id, evenement_id, afdeling, aantal_leden, evenementen(werkjaar_id)")
     .eq("id", id)
     .maybeSingle();
   if (budgetError) return NextResponse.json({ error: budgetError.message }, { status: 500 });
   if (!groepsbudget) return NextResponse.json({ error: "Groepsbudget niet gevonden" }, { status: 404 });
 
+  // Wisselgeld-aanvragen zijn (nog) per werkjaar gekoppeld, niet per evenement
+  // — vandaar deze ene indirectie via het Kamp-evenement zelf.
+  const werkjaarId = groepsbudget.evenementen?.werkjaar_id;
+
   const [{ data: tarieven }, { data: transacties, error: txError }, { data: wisselgeldAanvragen, error: wisselgeldError }] = await Promise.all([
-    supabaseAdmin.from("kamp_tarieven").select("*").eq("werkjaar_id", groepsbudget.werkjaar_id).maybeSingle(),
+    supabaseAdmin.from("kamp_tarieven").select("*").eq("evenement_id", groepsbudget.evenement_id).maybeSingle(),
     supabaseAdmin
       .from("kamp_transacties")
       .select("id, transactie_code, datum, omschrijving, bedrag, status, bewijsstuk_url, users(naam)")
-      .eq("werkjaar_id", groepsbudget.werkjaar_id)
+      .eq("evenement_id", groepsbudget.evenement_id)
       .eq("hoofdcategorie", groepsbudget.afdeling)
       .eq("type_geldstroom", "uitgave")
       .order("datum", { ascending: false }),
     supabaseAdmin
       .from("wisselgeld_aanvragen")
       .select("id, aanvraag_code, datum_nodig, bedrag_gevraagd, doel_activiteit, status, aanvrager_user_id, users(naam)")
-      .eq("werkjaar_id", groepsbudget.werkjaar_id)
+      .eq("werkjaar_id", werkjaarId)
       .eq("afdeling", groepsbudget.afdeling)
       .order("datum_nodig", { ascending: false }),
   ]);

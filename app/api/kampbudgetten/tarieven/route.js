@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
+import { vindOfMaakKampEvenement } from "@/lib/kampEvenement";
 
 export async function GET(req) {
   const session = await getServerSession(authOptions);
@@ -11,13 +12,14 @@ export async function GET(req) {
   const werkjaarId = new URL(req.url).searchParams.get("werkjaarId");
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
 
-  const { data, error } = await supabaseAdmin.from("kamp_tarieven").select("*").eq("werkjaar_id", werkjaarId).maybeSingle();
+  const evenementId = await vindOfMaakKampEvenement(werkjaarId);
+  const { data, error } = await supabaseAdmin.from("kamp_tarieven").select("*").eq("evenement_id", evenementId).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ tarieven: data || { winkelen_jong: 0, winkelen_oud: 0, dropping_per_lid: 0, weekend_per_lid: 0, weekendplaats_vast: 50 } });
 }
 
-// Eén upsert-endpoint: bestaat de rij nog niet voor dit werkjaar, dan wordt
-// ze meteen aangemaakt met de meegegeven waarden.
+// Eén upsert-endpoint: bestaat de rij nog niet voor dit Kamp-evenement, dan
+// wordt ze meteen aangemaakt met de meegegeven waarden.
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
   if (!isFinancieel(session)) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
@@ -25,18 +27,19 @@ export async function PATCH(req) {
   const { werkjaarId, winkelenJong, winkelenOud, droppingPerLid, weekendPerLid, weekendplaatsVast } = await req.json();
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
 
+  const evenementId = await vindOfMaakKampEvenement(werkjaarId);
   const { data, error } = await supabaseAdmin
     .from("kamp_tarieven")
     .upsert(
       {
-        werkjaar_id: werkjaarId,
+        evenement_id: evenementId,
         winkelen_jong: Number(winkelenJong) || 0,
         winkelen_oud: Number(winkelenOud) || 0,
         dropping_per_lid: Number(droppingPerLid) || 0,
         weekend_per_lid: Number(weekendPerLid) || 0,
         weekendplaats_vast: Number(weekendplaatsVast) || 0,
       },
-      { onConflict: "werkjaar_id" }
+      { onConflict: "evenement_id" }
     )
     .select("*")
     .single();

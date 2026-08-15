@@ -394,29 +394,33 @@ create table if not exists evenement_sponsors (
 -- Tarieven zijn gedeeld over de afdelingen (jong = Sloebers/Speelclub/Rakwi,
 -- oud = Tito/Keti/Aspi krijgen ook dropping/weekend + een vast bedrag voor
 -- de weekendplaats zelf) — één rij per werkjaar, niet per afdeling.
+-- Kamp is een evenement (evenementen.heeft_groepsbudgetten = true) — deze en
+-- de volgende 2 tabellen hangen daarom aan evenement_id, niet rechtstreeks
+-- aan werkjaar_id. lib/kampEvenement.js zoekt (of maakt) dat ene Kamp-
+-- evenement per werkjaar op.
 create table if not exists kamp_tarieven (
   id uuid primary key default gen_random_uuid(),
-  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  evenement_id uuid references evenementen(id) on delete cascade,
   winkelen_jong numeric(10,2) not null default 0,      -- €/lid, Sloebers/Speelclub/Rakwi
   winkelen_oud numeric(10,2) not null default 0,        -- €/lid, Tito/Keti/Aspi
   dropping_per_lid numeric(10,2) not null default 0,    -- €/lid, enkel Tito/Keti/Aspi
   weekend_per_lid numeric(10,2) not null default 0,     -- €/lid, enkel Tito/Keti/Aspi
   weekendplaats_vast numeric(10,2) not null default 50, -- vast bedrag per groep (niet per lid), enkel Tito/Keti/Aspi
   created_at timestamptz default now(),
-  unique(werkjaar_id)
+  unique(evenement_id)
 );
 
--- Eén rij per afdeling per werkjaar. Enkel het aantal leden wordt hier
+-- Eén rij per afdeling per Kamp-evenement. Enkel het aantal leden wordt hier
 -- ingevuld — de tarieven komen uit kamp_tarieven en de uitgaven uit
 -- kamp_transacties (waar hoofdcategorie = deze afdeling), zodat je
 -- kampkosten maar op één plek moet ingeven en het automatisch meetelt.
 create table if not exists groepsbudgetten (
   id uuid primary key default gen_random_uuid(),
-  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  evenement_id uuid references evenementen(id) on delete cascade,
   afdeling text not null check (afdeling in ('Sloebers', 'Speelclub', 'Rakwi', 'Tito', 'Keti', 'Aspi')),
   aantal_leden integer not null default 0,
   created_at timestamptz default now(),
-  unique(werkjaar_id, afdeling)
+  unique(evenement_id, afdeling)
 );
 
 create table if not exists wisselgeld_aanvragen (
@@ -463,20 +467,20 @@ create index if not exists idx_kalender_werkjaar on kalender_items(werkjaar_id, 
 -- de rest (tenten, kampplaats, kampgeld-inkomsten, busvervoer, ...).
 create table if not exists kamp_categorieen (
   id uuid primary key default gen_random_uuid(),
-  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  evenement_id uuid references evenementen(id) on delete cascade,
   naam text not null,
   created_at timestamptz default now(),
-  unique(werkjaar_id, naam)
+  unique(evenement_id, naam)
 );
 
 create table if not exists kamp_transacties (
   id uuid primary key default gen_random_uuid(),
-  werkjaar_id uuid references werkjaren(id) on delete cascade,
+  evenement_id uuid references evenementen(id) on delete cascade,
   transactie_code text,                         -- bv. 'KAMP-1001', automatisch gegenereerd
   datum date not null,
   omschrijving text not null,
   type_geldstroom text not null check (type_geldstroom in ('inkomst', 'uitgave')),
-  hoofdcategorie text,                          -- naam uit kamp_categorieen van hetzelfde werkjaar
+  hoofdcategorie text,                          -- naam uit kamp_categorieen van hetzelfde Kamp-evenement
   bedrag numeric(10,2) not null,
   status text not null default 'Gepland' check (status in ('Gepland', 'Te vergoeden', 'Betaald', 'Afgerond')),
   medewerker_user_id uuid references users(id) on delete set null,  -- interne leiding die voorschoot
@@ -484,7 +488,7 @@ create table if not exists kamp_transacties (
   created_at timestamptz default now()
 );
 
-create index if not exists idx_kamp_transacties_werkjaar on kamp_transacties(werkjaar_id);
+create index if not exists idx_kamp_transacties_evenement on kamp_transacties(evenement_id);
 
 -- ============ DOCUMENTEN (bonnetjes/facturen) ============
 -- Bestand zelf staat in de Supabase Storage-bucket 'documenten' (bestand_pad

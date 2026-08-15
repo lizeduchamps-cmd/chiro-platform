@@ -3,18 +3,19 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
+import { vindOfMaakKampEvenement } from "@/lib/kampEvenement";
 
 // Categorieën die overeenkomen met de vaste rubrieken uit het kamp-
 // afrekeningsbestand die niet al door Kampbudgetten (winkelen/dropping/
 // weekend per afdeling) of het Financieel Verslag (kilometers) gedekt zijn.
 const STANDAARD_CATEGORIEEN = ["Leden", "Leiding", "Logistiek", "Tenten", "Kampplaats", "Keuken", "Algemeen", "Busvervoer", "Etentje na kamp"];
 
-async function zorgCategorieenBestaan(werkjaarId) {
+async function zorgCategorieenBestaan(evenementId) {
   await supabaseAdmin
     .from("kamp_categorieen")
     .upsert(
-      STANDAARD_CATEGORIEEN.map((naam) => ({ werkjaar_id: werkjaarId, naam })),
-      { onConflict: "werkjaar_id,naam", ignoreDuplicates: true }
+      STANDAARD_CATEGORIEEN.map((naam) => ({ evenement_id: evenementId, naam })),
+      { onConflict: "evenement_id,naam", ignoreDuplicates: true }
     );
 }
 
@@ -25,14 +26,15 @@ export async function GET(req) {
   const werkjaarId = new URL(req.url).searchParams.get("werkjaarId");
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
 
-  await zorgCategorieenBestaan(werkjaarId);
+  const evenementId = await vindOfMaakKampEvenement(werkjaarId);
+  await zorgCategorieenBestaan(evenementId);
 
   const [{ data: categorieen, error: catError }, { data: transacties, error: txError }] = await Promise.all([
-    supabaseAdmin.from("kamp_categorieen").select("id, naam").eq("werkjaar_id", werkjaarId).order("naam"),
+    supabaseAdmin.from("kamp_categorieen").select("id, naam").eq("evenement_id", evenementId).order("naam"),
     supabaseAdmin
       .from("kamp_transacties")
       .select("id, transactie_code, datum, omschrijving, type_geldstroom, hoofdcategorie, bedrag, status, bewijsstuk_url, medewerker_user_id, users(id, naam, iban)")
-      .eq("werkjaar_id", werkjaarId)
+      .eq("evenement_id", evenementId)
       .order("datum", { ascending: false }),
   ]);
   if (catError) return NextResponse.json({ error: catError.message }, { status: 500 });
@@ -81,13 +83,14 @@ export async function POST(req) {
     return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
   }
 
+  const evenementId = await vindOfMaakKampEvenement(werkjaarId);
   const { count } = await supabaseAdmin.from("kamp_transacties").select("id", { count: "exact", head: true });
   const transactieCode = `KAMP-${1001 + (count || 0)}`;
 
   const { data, error } = await supabaseAdmin
     .from("kamp_transacties")
     .insert({
-      werkjaar_id: werkjaarId,
+      evenement_id: evenementId,
       transactie_code: transactieCode,
       datum,
       omschrijving,

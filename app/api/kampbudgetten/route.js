@@ -4,21 +4,22 @@ import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { magAfdelingBewerken, afdelingVanGroepsbudget } from "@/lib/kampPermissies";
 import { AFDELINGEN_VOLGORDE, AFDELINGEN_OUD, sorteerOpAfdeling } from "@/lib/kampAfdelingen";
+import { vindOfMaakKampEvenement } from "@/lib/kampEvenement";
 
-// Alle 6 afdelingen horen altijd een rij te hebben voor het gekozen werkjaar
+// Alle 6 afdelingen horen altijd een rij te hebben voor het Kamp-evenement
 // (ook al is het budget nog niet ingevuld) — zo hoeft niemand een afdeling
 // apart "aan te maken", je vult gewoon het aantal leden in.
-async function zorgAfdelingenBestaan(werkjaarId) {
+async function zorgAfdelingenBestaan(evenementId) {
   await supabaseAdmin
     .from("groepsbudgetten")
     .upsert(
-      AFDELINGEN_VOLGORDE.map((afdeling) => ({ werkjaar_id: werkjaarId, afdeling })),
-      { onConflict: "werkjaar_id,afdeling", ignoreDuplicates: true }
+      AFDELINGEN_VOLGORDE.map((afdeling) => ({ evenement_id: evenementId, afdeling })),
+      { onConflict: "evenement_id,afdeling", ignoreDuplicates: true }
     );
 }
 
-async function haalTarieven(werkjaarId) {
-  const { data } = await supabaseAdmin.from("kamp_tarieven").select("*").eq("werkjaar_id", werkjaarId).maybeSingle();
+async function haalTarieven(evenementId) {
+  const { data } = await supabaseAdmin.from("kamp_tarieven").select("*").eq("evenement_id", evenementId).maybeSingle();
   return data || { winkelen_jong: 0, winkelen_oud: 0, dropping_per_lid: 0, weekend_per_lid: 0, weekendplaats_vast: 50 };
 }
 
@@ -36,15 +37,16 @@ export async function GET(req) {
   const werkjaarId = new URL(req.url).searchParams.get("werkjaarId");
   if (!werkjaarId) return NextResponse.json({ error: "werkjaarId ontbreekt" }, { status: 400 });
 
-  await zorgAfdelingenBestaan(werkjaarId);
+  const evenementId = await vindOfMaakKampEvenement(werkjaarId);
+  await zorgAfdelingenBestaan(evenementId);
 
   const [{ data: groepsbudgetten, error }, tarieven, { data: kampTransacties, error: txError }] = await Promise.all([
-    supabaseAdmin.from("groepsbudgetten").select("id, afdeling, aantal_leden").eq("werkjaar_id", werkjaarId),
-    haalTarieven(werkjaarId),
+    supabaseAdmin.from("groepsbudgetten").select("id, afdeling, aantal_leden").eq("evenement_id", evenementId),
+    haalTarieven(evenementId),
     supabaseAdmin
       .from("kamp_transacties")
       .select("hoofdcategorie, bedrag, status")
-      .eq("werkjaar_id", werkjaarId)
+      .eq("evenement_id", evenementId)
       .eq("type_geldstroom", "uitgave")
       .in("hoofdcategorie", AFDELINGEN_VOLGORDE),
   ]);

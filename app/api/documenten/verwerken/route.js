@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { haalDocument, magDocumentBewerken } from "@/lib/documentPermissies";
 import { verdeelNaarFv } from "@/lib/fvVerdeling";
+import { vindOfMaakKampEvenement } from "@/lib/kampEvenement";
 
 // Zet elke bon_regel om in een echte transactie op zijn bestemming — daarna
 // is het document "Verwerkt" en staan de bedragen mee in Kampkosten,
@@ -37,11 +38,13 @@ export async function POST(req) {
   const datum = new Date().toISOString().slice(0, 10);
   const status = document.geupload_door_user_id ? "Te vergoeden" : "Gepland";
 
+  const kampEvenementId = regels.some((r) => r.bestemming === "kamp") ? await vindOfMaakKampEvenement(document.werkjaar_id) : null;
+
   for (const regel of regels) {
     if (regel.bestemming === "kamp") {
       const { count } = await supabaseAdmin.from("kamp_transacties").select("id", { count: "exact", head: true });
       await supabaseAdmin.from("kamp_transacties").insert({
-        werkjaar_id: document.werkjaar_id,
+        evenement_id: kampEvenementId,
         transactie_code: `KAMP-${1001 + (count || 0)}`,
         datum,
         omschrijving: regel.omschrijving,

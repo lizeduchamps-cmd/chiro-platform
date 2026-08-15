@@ -29,11 +29,15 @@ export async function GET(req) {
 // voor de lijstweergave: enkel de totalen (geen budget-burn-rate, kassa-detail,
 // ...), zodat de lijst niet per evenement een apart request moet doen.
 async function metBalansTotalen(evenementen, evenementIds) {
-  const [{ data: kassas }, { data: transacties }, { data: tickets }, { data: sponsors }] = await Promise.all([
+  const [{ data: kassas }, { data: transacties }, { data: tickets }, { data: sponsors }, { data: kampTransacties }] = await Promise.all([
     supabaseAdmin.from("evenement_kassas").select("evenement_id, type, wisselgeld_start, inhoud_einde").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_transacties").select("evenement_id, type_geldstroom, bedrag_totaal").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_tickets").select("evenement_id, prijs, aantal_verkocht").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_sponsors").select("evenement_id, bedrag").in("evenement_id", evenementIds),
+    // Kamp (heeft_groepsbudgetten) houdt zijn kosten/inkomsten nog in een
+    // eigen tabel bij (zie Kampkosten) i.p.v. evenement_transacties — hier
+    // meetellen zodat de balans op deze lijst niet altijd €0 toont voor Kamp.
+    supabaseAdmin.from("kamp_transacties").select("evenement_id, type_geldstroom, bedrag").in("evenement_id", evenementIds),
   ]);
 
   return evenementen.map((e) => {
@@ -46,8 +50,14 @@ async function metBalansTotalen(evenementen, evenementIds) {
     const ticketOmzet = (tickets || []).filter((t) => t.evenement_id === e.id).reduce((s, t) => s + Number(t.prijs) * Number(t.aantal_verkocht), 0);
     const sponsorBedrag = (sponsors || []).filter((sp) => sp.evenement_id === e.id).reduce((s, sp) => s + Number(sp.bedrag), 0);
     const eigenTransacties = (transacties || []).filter((t) => t.evenement_id === e.id);
-    const inkomsten = kassaOmzet + ticketOmzet + sponsorBedrag + eigenTransacties.filter((t) => t.type_geldstroom === "inkomst").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
-    const uitgaven = eigenTransacties.filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag_totaal), 0);
+    const eigenKampTransacties = (kampTransacties || []).filter((t) => t.evenement_id === e.id);
+    const inkomsten =
+      kassaOmzet + ticketOmzet + sponsorBedrag +
+      eigenTransacties.filter((t) => t.type_geldstroom === "inkomst").reduce((s, t) => s + Number(t.bedrag_totaal), 0) +
+      eigenKampTransacties.filter((t) => t.type_geldstroom === "inkomst").reduce((s, t) => s + Number(t.bedrag), 0);
+    const uitgaven =
+      eigenTransacties.filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag_totaal), 0) +
+      eigenKampTransacties.filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag), 0);
     return {
       ...e,
       totaalInkomsten: Math.round(inkomsten * 100) / 100,

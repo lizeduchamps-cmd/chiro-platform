@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { isFinancieel } from "@/lib/permissies";
 import { supabaseAdmin } from "@/lib/supabase";
+import { vindOfMaakKampEvenement } from "@/lib/kampEvenement";
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
@@ -13,9 +14,10 @@ export async function POST(req) {
   const { werkjaarId, naam } = await req.json();
   if (!werkjaarId || !naam) return NextResponse.json({ error: "werkjaarId en naam zijn verplicht" }, { status: 400 });
 
+  const evenementId = await vindOfMaakKampEvenement(werkjaarId);
   const { data, error } = await supabaseAdmin
     .from("kamp_categorieen")
-    .insert({ werkjaar_id: werkjaarId, naam })
+    .insert({ evenement_id: evenementId, naam })
     .select("id, naam")
     .single();
 
