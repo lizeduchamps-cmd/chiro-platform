@@ -66,10 +66,21 @@ export default function Layout({ session, children }) {
   const recht = session?.user?.platformRecht;
   const [manueelOpen, setManueelOpen] = useState(new Set());
   const [mobielOpen, setMobielOpen] = useState(false);
+  const [evenementen, setEvenementen] = useState([]);
 
   // Zijbalk dichtklappen bij het navigeren op mobiel, anders blijft het paneel
   // openstaan boven de nieuwe pagina.
   useEffect(() => setMobielOpen(false), [pathname]);
+
+  // Evenementen komen uit de database (huidig werkjaar) i.p.v. vaste namen in de
+  // code, zodat nieuwe/verwijderde evenementen meteen in het menu kloppen.
+  useEffect(() => {
+    fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
+      const werkjaarId = d.werkjaren?.[0]?.id;
+      if (!werkjaarId) return;
+      fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((ed) => setEvenementen(ed.evenementen || []));
+    });
+  }, []);
 
   const groups = [
     { key: "dashboard", href: "/", label: "Financieel dashboard", children: [] },
@@ -94,37 +105,15 @@ export default function Layout({ session, children }) {
       key: "evenementen",
       href: "/evenementen",
       label: "Evenementen & uitstappen",
+      children: evenementen.map((e) => ({ key: `evenement-${e.id}`, href: `/evenementen/${e.id}`, label: e.naam })),
+    },
+    {
+      key: "kamp",
+      href: "/kamp",
+      label: "Kamp",
       children: [
-        { key: "lazarus", href: "/evenementen/Lazarus", label: "Lazarus" },
-        { key: "vlaams-weekend", href: "/evenementen/Vlaams Weekend", label: "Vlaams Weekend" },
-        { key: "taartenslag", href: "/evenementen/Taartenslag", label: "Taartenslag" },
-        {
-          key: "leiding-weekend-activiteit",
-          href: null,
-          label: "Leidingsweekend & -activiteit",
-          children: [
-            { key: "leidingsweekend", href: "/evenementen/Leidingsweekend", label: "Leidingsweekend" },
-            { key: "leidingsactiviteit", href: "/evenementen/Leidingsactiviteit", label: "Leidingsactiviteit" },
-          ],
-        },
-        {
-          key: "leden-weekend-activiteit",
-          href: null,
-          label: "Ledenweekend & -activiteit",
-          children: [
-            { key: "ledenweekend", href: "/evenementen/Ledenweekend", label: "Ledenweekend" },
-            { key: "ledenactiviteit", href: "/evenementen/Ledenactiviteit", label: "Ledenactiviteit" },
-          ],
-        },
-        {
-          key: "kamp",
-          href: "/kamp",
-          label: "Kamp",
-          children: [
-            { key: "kampbudgetten", href: "/kampbudgetten", label: "Kampbudgetten" },
-            { key: "kampkosten", href: "/kampkosten", label: "Kampkosten" },
-          ],
-        },
+        { key: "kampbudgetten", href: "/kampbudgetten", label: "Kampbudgetten" },
+        { key: "kampkosten", href: "/kampkosten", label: "Kampkosten" },
       ],
     },
     { key: "documenten", href: "/documenten", label: "Documenten", children: [] },
