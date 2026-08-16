@@ -262,14 +262,6 @@ export default function FinancieelVerslag() {
     streepjesLaden();
   }, [magBewerken]);
 
-  if (loading) {
-    return (
-      <div style={{ padding: 32, maxWidth: 1100 }}>
-        <SkeletonCard lines={2} />
-      </div>
-    );
-  }
-
   const ladenOverzicht = (id) => {
     fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => {
       // Bij een foutmelding (bv. de FV-maand bestaat niet meer) blijft
@@ -493,6 +485,18 @@ export default function FinancieelVerslag() {
     });
     ladenOverzicht(fvMaandId);
   };
+
+  // Belangrijk: deze check staat pas ná alle bovenstaande functiedefinities.
+  // Stond die ertussenin (zoals eerder), dan bestonden functies zoals
+  // streepjesLaden soms nog niet op het moment dat een useEffect ze probeerde
+  // aan te roepen — vandaar de "Cannot access ... before initialization"-fout.
+  if (loading) {
+    return (
+      <div style={{ padding: 32, maxWidth: 1100 }}>
+        <SkeletonCard lines={2} />
+      </div>
+    );
+  }
 
   const eigenPersoon = overzicht?.personen.find((p) => p.user.id === session?.user?.userId);
   const totaalNogNietBetaald = overzicht?.personen.filter((p) => p.status !== "betaald").length || 0;
