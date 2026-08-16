@@ -116,12 +116,11 @@ export default function Layout({ session, children }) {
   // 7 vaste hoofditems, voor iedereen in dezelfde volgorde (ook Gebruikers &
   // rollen — niet-admins zien het tabblad, de pagina zelf toont voor hen enkel
   // een melding dat ze geen toegang hebben). Individuele evenementen (ook
-  // herhalende zoals Lazarus/Taartenslag) komen bewust NIET als submenu hier
-  // te staan — die zijn enkel bereikbaar via de "Evenementen & uitstappen"-
-  // pagina zelf, waar ze gegroepeerd staan onder Afgerond/Lopend/Komend.
-  // Kampbudgetten/Kampkosten/Documenten staan voorlopig nog als aparte
-  // kinderen hieronder — dat is hun toekomstige plek zodra Kamp een echt
-  // evenement wordt (latere fase), maar zo blijven ze intussen bereikbaar.
+  // herhalende zoals Lazarus/Taartenslag/Kamp) komen bewust NIET als submenu
+  // hier te staan — die zijn enkel bereikbaar via de "Evenementen &
+  // uitstappen"-pagina zelf, waar ze gegroepeerd staan onder Afgerond/Lopend/
+  // Komend. Kamp is gewoon zo'n evenement (met Groepsbudgetten/Rekening
+  // scannen als tabbladen op zijn eigen pagina), geen aparte ingang meer.
   const groups = [
     { key: "dashboard", href: "/", kort: "Overzicht", label: "Overzicht", children: [] },
     {
@@ -138,8 +137,6 @@ export default function Layout({ session, children }) {
       kort: "Uitstappen",
       label: "Evenementen & uitstappen",
       children: [
-        { key: "kampbudgetten", href: "/kampbudgetten", label: "Kampbudgetten" },
-        { key: "kampkosten", href: "/kampkosten", label: "Kampkosten" },
         { key: "documenten", href: "/documenten", label: "Documenten" },
       ],
     },

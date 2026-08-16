@@ -16,7 +16,7 @@ export async function GET(req) {
 
   const { data: evenement, error: evenementError } = await supabaseAdmin
     .from("evenementen")
-    .select("id, naam, datum, status, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
+    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
     .eq("id", evenementId)
     .maybeSingle();
   if (evenementError) return NextResponse.json({ error: evenementError.message }, { status: 500 });

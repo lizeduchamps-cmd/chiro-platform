@@ -1,8 +1,11 @@
 "use client";
 import { useSession, getSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { evenementMatchTag } from "@/lib/evenementMatch";
 import { BRIEFJES, MUNTEN, samenstellingTotaal } from "@/lib/coupureVoorstel";
+import { AFDELINGEN_VOLGORDE, AFDELINGEN_OUD } from "@/lib/kampAfdelingen";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
 
@@ -66,16 +69,32 @@ function naarBewerkVeld(t) {
   };
 }
 
+// Welke tabbladen een evenement heeft hangt af van zijn optionele modules —
+// zelfde vinkjes als bij het aanmaken. Kostenoverzicht en Kassabeheer staan
+// er altijd; de rest verschijnt enkel als de bijhorende module aanstaat. Zo
+// is Kamp gewoon een evenement met Groepsbudgetten + Rekening scannen aan,
+// i.p.v. een aparte pagina buiten dit ene pad om.
+const TABS = [
+  { key: "kostenoverzicht", label: "Kostenoverzicht" },
+  { key: "kassabeheer", label: "Kassabeheer" },
+  { key: "ticketverkoop", label: "Ticketverkoop", gate: "heeft_ticketverkoop" },
+  { key: "sponsoring", label: "Sponsoring", gate: "heeft_sponsoring" },
+  { key: "groepsbudgetten", label: "Groepsbudgetten", gate: "heeft_groepsbudgetten" },
+  { key: "rekeningscannen", label: "Rekening scannen", gate: "heeft_rekening_scan" },
+];
+
 export default function EvenementDetail({ params }) {
   const ruweId = decodeURIComponent(params.id);
   const { data: session } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
+  const zoekParams = useSearchParams();
   const [evenementId, setEvenementId] = useState(null);
   const [melding, setMelding] = useState(null);
   const [overzicht, setOverzicht] = useState(null);
   const [loading, setLoading] = useState(true);
   const [gebruikers, setGebruikers] = useState([]);
+  const [tab, setTab] = useState(zoekParams.get("tab") || "kostenoverzicht");
   const [nieuweKassa, setNieuweKassa] = useState({ naam: "", type: "cash" });
   const [toonNieuweKassa, setToonNieuweKassa] = useState(false);
   const [nieuweTransactie, setNieuweTransactie] = useState(LEGE_TRANSACTIE);
@@ -417,6 +436,7 @@ export default function EvenementDetail({ params }) {
   };
 
   const { evenement, kassas, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, tickets, ticketOmzet, sponsors, sponsorBedrag, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
+  const tabsBeschikbaar = TABS.filter((t) => !t.gate || evenement[t.gate]);
 
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
@@ -448,9 +468,344 @@ export default function EvenementDetail({ params }) {
         </div>
       </div>
 
-      {/* Ticketverkoop (optionele module) */}
-      {evenement.heeft_ticketverkoop && (
-        <div className="card" style={{ marginBottom: 24 }}>
+      {/* Tabbladen */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {tabsBeschikbaar.map((t) => (
+          <button key={t.key} className={tab === t.key ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }} onClick={() => setTab(t.key)}>{t.label}</button>
+        ))}
+      </div>
+
+      {tab === "kostenoverzicht" && (
+        evenement.heeft_groepsbudgetten ? (
+          <KampKostenoverzicht werkjaarId={evenement.werkjaar_id} gekoppeldeTransacties={gekoppeldeTransacties} gebruikers={gebruikers} magBewerken={magBewerken} />
+        ) : (
+          <>
+            {/* Gekoppelde kasboektransacties */}
+            {gekoppeldeTransacties.length > 0 && (
+              <div className="card" style={{ marginBottom: 24 }}>
+                <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Gekoppelde kasboektransacties</div>
+                <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
+                  Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie. Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt.
+                </p>
+                {gekoppeldeTransacties.map((t, i) => (
+                  <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14 }}>
+                    <div className="subtle money">{t.datum}</div>
+                    <div className="muted" style={{ flex: 1 }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</div>
+                    <div className={`money ${t.soort === "uitgave" ? "amount-neg" : ""}`} style={{ fontWeight: 700 }}>{t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Budgetten */}
+            <div style={{ marginBottom: 24 }}>
+              <div className="eyebrow" style={{ marginBottom: 4 }}>Budget per hoofdcategorie</div>
+              <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>Optioneel — laat leeg voor categorieën zonder vast budget.</p>
+              {categorieen.length === 0 && (
+                <p className="muted" style={{ fontStyle: "italic" }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</p>
+              )}
+              <div className="card" style={{ padding: 0 }}>
+                {categorieen.map((c, i) => {
+                  const cat = c.naam;
+                  const rij = budgetBurnRate.find((b) => b.hoofdcategorie === cat);
+                  const { pct, kleur } = budgetVulling(rij?.uitgegeven, rij?.budget);
+                  return (
+                    <div key={c.id} style={{ padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>{cat}</div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          {magBewerken ? (
+                            <input type="number" step="0.01" defaultValue={rij?.budget ?? ""} placeholder="geen limiet" onBlur={(e) => budgetBijwerken(cat, e.target.value)} style={{ width: 90, textAlign: "right" }} />
+                          ) : (
+                            <span className="money muted" style={{ fontSize: 13 }}>{rij?.budget !== null && rij?.budget !== undefined ? euro(rij.budget) : "geen limiet"}</span>
+                          )}
+                          <span className="money" style={{ fontWeight: 700 }}>{euro(rij?.uitgegeven || 0)}</span>
+                          {magBewerken && <button className="btn-danger" onClick={() => categorieVerwijderen(c.id)}>🗑️</button>}
+                        </div>
+                      </div>
+                      {rij?.budget ? (
+                        <>
+                          <div className="progress-track"><div className={`progress-fill ${kleur}`} style={{ width: `${pct}%` }} /></div>
+                          <div className={`muted money ${rij.resterend < 0 ? "amount-neg" : ""}`} style={{ fontSize: 12 }}>
+                            {rij.resterend < 0 ? "over budget: " : "resterend: "}{euro(Math.abs(rij.resterend))}
+                          </div>
+                        </>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Nog terug te betalen */}
+            {nogTerugTeBetalen.length > 0 && (
+              <div className="card card-warning" style={{ marginBottom: 24 }}>
+                <span className="badge badge-warning" style={{ marginBottom: 10, display: "inline-block" }}>Nog terug te betalen</span>
+                {nogTerugTeBetalen.map((r, i) => (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{r.wie?.naam || "-"}</div>
+                      <div className="subtle" style={{ fontSize: 13 }}>{r.omschrijving} · {r.wie?.iban || "IBAN onbekend"}</div>
+                    </div>
+                    <div className="money" style={{ fontWeight: 700, fontSize: 17 }}>{euro(r.bedrag)}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Transacties */}
+            <div className="eyebrow" style={{ marginBottom: 10 }}>Transacties</div>
+            <div style={{ marginBottom: 12 }}>
+              {magBewerken && (
+                <button onClick={() => setToonTransactieForm(!toonTransactieForm)}>{toonTransactieForm ? "Annuleren" : "+ Transactie toevoegen"}</button>
+              )}
+            </div>
+
+            {toonTransactieForm && (
+              <div className="card" style={{ marginBottom: 16 }}>
+                <div className="grid-3" style={{ marginBottom: 8 }}>
+                  <input type="date" value={nieuweTransactie.datum} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, datum: e.target.value })} />
+                  <input placeholder="Omschrijving" value={nieuweTransactie.omschrijving} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
+                  <select value={nieuweTransactie.typeGeldstroom} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeGeldstroom: e.target.value })}>
+                    <option value="uitgave">Uitgave</option>
+                    <option value="inkomst">Inkomst</option>
+                  </select>
+                  {nieuweTransactie.typeGeldstroom === "uitgave" && (
+                    <select value={nieuweTransactie.typeKostenpost} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeKostenpost: e.target.value })}>
+                      <option value="kost">Kost (eenmalig)</option>
+                      <option value="investering">Investering (blijft mee)</option>
+                    </select>
+                  )}
+                  <input type="number" step="0.01" placeholder="Bedrag" value={nieuweTransactie.bedrag} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedrag: e.target.value })} />
+                  <div style={{ display: "flex", gap: 4 }}>
+                    <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
+                      <option value="">Hoofdcategorie...</option>
+                      {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                    </select>
+                    <button type="button" onClick={() => categorieToevoegen((naam) => setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie">+</button>
+                  </div>
+                  <input placeholder="Waar gekocht/besteld (optioneel)" value={nieuweTransactie.waar} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, waar: e.target.value })} />
+                  <input type="number" step="0.01" placeholder="Hoeveelheid (optioneel)" value={nieuweTransactie.hoeveelheid} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoeveelheid: e.target.value })} />
+                </div>
+                <button className="btn-primary" onClick={transactieToevoegen}>Toevoegen</button>
+              </div>
+            )}
+
+            <div className="card" style={{ padding: 0 }}>
+              {transacties.length === 0 && <p className="muted" style={{ padding: 24, textAlign: "center" }}>Nog geen transacties.</p>}
+              {transacties.map((t, i) => {
+                const open = bewerkId === t.id;
+                return (
+                  <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default" }} onClick={() => rijOpenen(t)}>
+                      <div className="money muted" style={{ width: 60, fontSize: 13, flexShrink: 0 }}>{t.datum}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 600, fontSize: 15 }}>
+                          {t.omschrijving}
+                          {t.waar && <span className="subtle"> · {t.waar}</span>}
+                          {t.hoeveelheid ? <span className="subtle"> · {t.hoeveelheid}×</span> : ""}
+                        </div>
+                        <div className="muted" style={{ fontSize: 12 }}>
+                          {t.transactie_code}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}
+                          {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" className="link" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
+                        </div>
+                      </div>
+                      <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
+                      <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ width: 90, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
+                        {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
+                      </div>
+                      {magBewerken && (
+                        <button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
+                      )}
+                    </div>
+                    {open && bewerkVeld && (
+                      <div style={{ padding: "0 18px 16px" }}>
+                        <div className="grid-3" style={{ marginBottom: 8 }}>
+                          <input type="date" value={bewerkVeld.datum} onChange={(e) => setBewerkVeld({ ...bewerkVeld, datum: e.target.value })} />
+                          <input placeholder="Omschrijving" value={bewerkVeld.omschrijving} onChange={(e) => setBewerkVeld({ ...bewerkVeld, omschrijving: e.target.value })} style={{ gridColumn: "span 2" }} />
+                          <select value={bewerkVeld.typeGeldstroom} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeGeldstroom: e.target.value })}>
+                            <option value="uitgave">Uitgave</option>
+                            <option value="inkomst">Inkomst</option>
+                          </select>
+                          {bewerkVeld.typeGeldstroom === "uitgave" && (
+                            <select value={bewerkVeld.typeKostenpost} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeKostenpost: e.target.value })}>
+                              <option value="kost">Kost (eenmalig)</option>
+                              <option value="investering">Investering (blijft mee)</option>
+                            </select>
+                          )}
+                          <input type="number" step="0.01" placeholder="Bedrag" value={bewerkVeld.bedrag} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bedrag: e.target.value })} />
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <select value={bewerkVeld.hoofdcategorie} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
+                              <option value="">Hoofdcategorie...</option>
+                              {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                            </select>
+                            <button type="button" onClick={() => categorieToevoegen((naam) => setBewerkVeld((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie">+</button>
+                          </div>
+                          <input placeholder="Waar gekocht/besteld" value={bewerkVeld.waar} onChange={(e) => setBewerkVeld({ ...bewerkVeld, waar: e.target.value })} />
+                          <input type="number" step="0.01" placeholder="Hoeveelheid" value={bewerkVeld.hoeveelheid} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoeveelheid: e.target.value })} />
+                          <select value={bewerkVeld.betaalmethode} onChange={(e) => setBewerkVeld({ ...bewerkVeld, betaalmethode: e.target.value })}>
+                            <option value="">Betaalmethode...</option>
+                            {BETAALMETHODES.map((b) => <option key={b} value={b}>{b}</option>)}
+                          </select>
+                          <select value={bewerkVeld.status} onChange={(e) => setBewerkVeld({ ...bewerkVeld, status: e.target.value })}>
+                            {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
+                          </select>
+                          <select value={bewerkVeld.medewerkerUserId} onChange={(e) => setBewerkVeld({ ...bewerkVeld, medewerkerUserId: e.target.value })}>
+                            <option value="">Voorgeschoten door (optioneel)...</option>
+                            {gebruikers.map((g) => <option key={g.id} value={g.id}>{g.naam}</option>)}
+                          </select>
+                          <input placeholder="Link naar bonnetje/factuur" value={bewerkVeld.bewijsstukUrl} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bewijsstukUrl: e.target.value })} style={{ gridColumn: "span 2" }} />
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button className="btn-primary" onClick={bewerkOpslaan}>Opslaan</button>
+                          <button onClick={() => { setBewerkId(null); setBewerkVeld(null); }}>Annuleren</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        )
+      )}
+
+      {tab === "kassabeheer" && (
+        <div>
+          {kassasMetTekort.length > 0 && (
+            <div className="card card-danger" style={{ marginBottom: 14, fontSize: 14 }}>
+              ⚠️ Kassa-tekort gedetecteerd: {kassasMetTekort.map((k) => `${k.naam} (${euro(Math.abs(k.verschil))} te weinig)`).join(", ")}
+            </div>
+          )}
+          {kassas.length === 0 && <p className="muted" style={{ fontStyle: "italic", marginBottom: 14 }}>Nog geen kassa's.</p>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: magBewerken ? 14 : 0 }}>
+            {kassas.map((k) => (
+              <div key={k.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 16 }}>{k.naam}</div>
+                    <div className="subtle" style={{ fontSize: 13 }}>{k.type === "cash" ? "Cash" : "Digitaal"}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div className="muted" style={{ fontSize: 12 }}>Omzet</div>
+                      <div className="money" style={{ fontWeight: 700, fontSize: 18 }}>{euro(k.omzet)}</div>
+                    </div>
+                    {k.verschil !== null && (
+                      <span className={`badge ${k.heeftTekort ? "badge-danger" : "badge-success"}`}>{k.verschil > 0 ? "+" : ""}{euro(k.verschil)}</span>
+                    )}
+                    {magBewerken && <button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                  {k.type === "cash" && (
+                    <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                      Wisselgeld start
+                      {magBewerken ? (
+                        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                          <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 90 }} />
+                          <button type="button" title="Coupures tellen" className="btn-plain" onClick={() => tellerOpenen(k, "wisselgeldStart")}><MuntenIcon color="var(--text-subtle)" /></button>
+                        </div>
+                      ) : <span className="money" style={{ fontWeight: 600 }}>{euro(k.wisselgeld_start)}</span>}
+                    </label>
+                  )}
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                    Inhoud na afloop
+                    {magBewerken ? (
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input key={`${k.id}-ie-${k.inhoud_einde}`} type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 90 }} />
+                        {k.type === "cash" && <button type="button" title="Coupures tellen" className="btn-plain" onClick={() => tellerOpenen(k, "inhoudEinde")}><MuntenIcon color="var(--text-subtle)" /></button>}
+                      </div>
+                    ) : <span className="money" style={{ fontWeight: 600 }}>{k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}</span>}
+                  </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                    Verwacht
+                    {magBewerken ? (
+                      <input key={`${k.id}-vb-${k.verwacht_bedrag}`} type="number" step="0.01" defaultValue={k.verwacht_bedrag ?? ""} placeholder="optioneel" onBlur={(e) => kassaBijwerken(k.id, "verwachtBedrag", e.target.value)} style={{ width: 90 }} />
+                    ) : <span className="money" style={{ fontWeight: 600 }}>{k.verwacht_bedrag !== null ? euro(k.verwacht_bedrag) : "-"}</span>}
+                  </label>
+                </div>
+
+                {/* Digitale betalingen die naast deze kassa binnenkwamen (bv. mensen die aan de toog met SumUp betaalden) — tellen bovenop mee in de omzet. */}
+                <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                  {[["digitaal_sumup", "digitaalSumup", "SumUp"], ["digitaal_bancontact", "digitaalBancontact", "Bancontact"], ["digitaal_kbc_qr", "digitaalKbcQr", "KBC QR-code"]].map(([veld, apiVeld, label]) => (
+                    <label key={veld} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                      {label}
+                      {magBewerken ? (
+                        <input key={`${k.id}-${veld}-${k[veld]}`} type="number" step="0.01" defaultValue={k[veld] ?? ""} placeholder="optioneel" onBlur={(e) => kassaBijwerken(k.id, apiVeld, e.target.value)} style={{ width: 90 }} />
+                      ) : <span className="money" style={{ fontWeight: 600 }}>{k[veld] ? euro(k[veld]) : "-"}</span>}
+                    </label>
+                  ))}
+                </div>
+
+                {tellerOpen?.kassaId === k.id && (
+                  <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+                      {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
+                    </div>
+                    {tellerOpen.veld === "wisselgeldStart" && kopieerBronnen.length > 0 && (
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                        <select value={kopieerKeuze} onChange={(e) => setKopieerKeuze(e.target.value)} style={{ fontSize: 12 }}>
+                          <option value="">Kopieer van vorig jaar...</option>
+                          {kopieerBronnen.map((b) => <option key={b.id} value={b.id}>{b.evenementNaam} — {b.naam} ({euro(b.wisselgeld_start)})</option>)}
+                        </select>
+                        <button type="button" disabled={!kopieerKeuze} onClick={kopieerToepassen}>Overnemen</button>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
+                      <div>
+                        <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>BRIEFJES</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {BRIEFJES.map((d) => (
+                            <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                              €{d}
+                              <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={tellerAantallen[d] ?? ""} onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>MUNTJES</div>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {MUNTEN.map((d) => (
+                            <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                              €{d}
+                              <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={tellerAantallen[d] ?? ""} onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <span className="money" style={{ fontWeight: 700 }}>Totaal: {euro(samenstellingTotaal(tellerAantallen))}</span>
+                      <button className="btn-primary" onClick={tellerToepassen}>Toepassen</button>
+                      <button onClick={() => setTellerOpen(null)}>Annuleren</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {magBewerken && (
+            toonNieuweKassa ? (
+              <div className="card" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <input placeholder="Naam, bv. Kassa inkom" value={nieuweKassa.naam} onChange={(e) => setNieuweKassa({ ...nieuweKassa, naam: e.target.value })} style={{ flex: 1, minWidth: 140 }} />
+                <select value={nieuweKassa.type} onChange={(e) => setNieuweKassa({ ...nieuweKassa, type: e.target.value })}>
+                  <option value="cash">Cash</option>
+                  <option value="digitaal">Digitaal (SumUp/Payconiq)</option>
+                </select>
+                <button className="btn-primary" onClick={kassaToevoegen}>Toevoegen</button>
+                <button onClick={() => setToonNieuweKassa(false)}>Annuleren</button>
+              </div>
+            ) : (
+              <button onClick={() => setToonNieuweKassa(true)}>+ Kassa toevoegen</button>
+            )
+          )}
+        </div>
+      )}
+
+      {tab === "ticketverkoop" && evenement.heeft_ticketverkoop && (
+        <div className="card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Ticketverkoop</div>
             <div className="money" style={{ fontWeight: 700 }}>{euro(ticketOmzet)}</div>
@@ -486,9 +841,8 @@ export default function EvenementDetail({ params }) {
         </div>
       )}
 
-      {/* Sponsoring (optionele module) */}
-      {evenement.heeft_sponsoring && (
-        <div className="card" style={{ marginBottom: 24 }}>
+      {tab === "sponsoring" && evenement.heeft_sponsoring && (
+        <div className="card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Sponsoring</div>
             <div className="money" style={{ fontWeight: 700 }}>{euro(sponsorBedrag)}</div>
@@ -512,12 +866,402 @@ export default function EvenementDetail({ params }) {
         </div>
       )}
 
-      {/* Gekoppelde kasboektransacties */}
-      {gekoppeldeTransacties.length > 0 && (
-        <div className="card" style={{ marginBottom: 24 }}>
+      {tab === "groepsbudgetten" && evenement.heeft_groepsbudgetten && (
+        <GroepsbudgettenTab werkjaarId={evenement.werkjaar_id} session={session} magBewerken={magBewerken} />
+      )}
+
+      {tab === "rekeningscannen" && evenement.heeft_rekening_scan && (
+        <p className="muted" style={{ fontStyle: "italic" }}>
+          Binnenkort beschikbaar — rekening scannen wacht nog op een beslissing over de Anthropic API.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// Groepsbudgetten-tabblad (overgenomen van de vroegere /kampbudgetten pagina)
+// ============================================================
+
+const LEGE_TARIEVEN = { winkelenJong: 0, winkelenOud: 0, droppingPerLid: 0, weekendPerLid: 0, weekendplaatsVast: 50 };
+
+function naarTarievenFormVeld(t) {
+  return {
+    winkelenJong: t.winkelen_jong,
+    winkelenOud: t.winkelen_oud,
+    droppingPerLid: t.dropping_per_lid,
+    weekendPerLid: t.weekend_per_lid,
+    weekendplaatsVast: t.weekendplaats_vast,
+  };
+}
+
+function kampBudgetStatus(uitgegeven, budget) {
+  if (!budget) return { pct: 0, kleur: "", badge: "badge-neutral", label: "Geen budget" };
+  const pct = (Number(uitgegeven) / Number(budget)) * 100;
+  if (pct > 100) return { pct: 100, kleur: "danger", badge: "badge-danger", label: "Over budget" };
+  if (pct >= 80) return { pct, kleur: "warning", badge: "badge-warning", label: "Bijna op" };
+  return { pct, kleur: "", badge: "badge-success", label: "Op schema" };
+}
+
+function AfdelingRij({ g, groot, magBewerken, onAantalLeden, open, onToggleOpen }) {
+  const status = kampBudgetStatus(g.uitgegeven, g.totaalToegewezen);
+  return (
+    <div style={{ padding: groot ? 0 : "14px 4px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => onToggleOpen(g.id)}
+        className={groot ? "" : "nav-row"}
+        style={{ display: "block", cursor: "pointer", margin: groot ? 0 : "-14px -4px", padding: groot ? 0 : "14px 4px" }}
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+            <div style={{ fontWeight: 700, fontSize: groot ? 18 : 16, color: "var(--primary)" }}>
+              {g.afdeling}
+              {AFDELINGEN_OUD.includes(g.afdeling) && <span className="subtle" style={{ fontSize: 12, fontWeight: 500 }}> · dropping/weekend</span>}
+            </div>
+            <span className={`badge ${status.badge}`}>{status.label}</span>
+          </div>
+          <div className="progress-track" style={{ height: groot ? 12 : 9 }}><div className={`progress-fill ${status.kleur}`} style={{ width: `${status.pct}%` }} /></div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+            <div className="muted money" style={{ fontSize: 14 }}>{euro(g.uitgegeven)} van {euro(g.totaalToegewezen)}</div>
+            <div style={{ textAlign: "right" }}>
+              <div className="muted" style={{ fontSize: 12 }}>{g.resterend < 0 ? "Over budget" : "Nog te besteden"}</div>
+              <div className={`money ${g.resterend < 0 ? "amount-neg" : ""}`} style={{ fontWeight: 700, fontSize: groot ? 22 : 16, color: g.resterend >= 0 ? "var(--success-text)" : undefined }}>{euro(Math.abs(g.resterend))}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {magBewerken && (
+        <label className="muted" style={{ fontSize: 13, fontWeight: 600, display: "flex", alignItems: "center", gap: 8 }}>
+          Aantal leden
+          <input type="number" step="1" min="0" defaultValue={g.aantalLeden} onBlur={(e) => onAantalLeden(g.id, e.target.value)} style={{ width: 70 }} />
+        </label>
+      )}
+      {open && <AfdelingDetail groepsbudgetId={g.id} />}
+    </div>
+  );
+}
+
+// Inline-uitklap i.p.v. een aparte /kampbudgetten/[id]-route: toont de
+// Kampkosten-transacties en wisselgeld-aanvragen voor deze ene afdeling.
+function AfdelingDetail({ groepsbudgetId }) {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch(`/api/kampbudgetten/overzicht?id=${groepsbudgetId}`).then((r) => r.json()).then(setData);
+  }, [groepsbudgetId]);
+
+  if (!data) return <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Laden...</p>;
+  if (data.error) return <p className="amount-neg" style={{ fontSize: 13 }}>{data.error}</p>;
+
+  const { transacties, wisselgeldAanvragen } = data;
+
+  return (
+    <div style={{ borderTop: "1px solid var(--border-soft)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 16 }}>
+      <div>
+        <div className="eyebrow" style={{ marginBottom: 8 }}>Uitgaven</div>
+        <p className="subtle" style={{ fontSize: 11, marginBottom: 8 }}>
+          Alle transacties met deze afdeling als hoofdcategorie — bewerk of verwijder ze via het Kostenoverzicht-tabblad.
+        </p>
+        {transacties.length === 0 && <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Nog geen uitgaven.</p>}
+        {transacties.map((t, i) => (
+          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>
+                {t.omschrijving}
+                {t.users?.naam && <span className="subtle"> · {t.users.naam}</span>}
+                {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" className="link" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
+              </div>
+              <div className="muted" style={{ fontSize: 11 }}>{t.transactie_code} · {t.datum}</div>
+            </div>
+            <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
+            <div className="money" style={{ fontWeight: 700, width: 80, textAlign: "right" }}>{euro(t.bedrag)}</div>
+          </div>
+        ))}
+      </div>
+      <div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 8 }}>
+          <div className="eyebrow">Wisselgeld-aanvragen</div>
+          <Link href="/wisselgeld" className="link" style={{ fontSize: 12 }} onClick={(e) => e.stopPropagation()}>Nieuwe aanvraag →</Link>
+        </div>
+        {wisselgeldAanvragen.length === 0 && <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Nog geen aanvragen.</p>}
+        {wisselgeldAanvragen.map((w, i) => (
+          <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontWeight: 600 }}>{w.doel_activiteit || "-"}</div>
+              <div className="muted" style={{ fontSize: 11 }}>{w.aanvraag_code} · nodig op {w.datum_nodig}</div>
+            </div>
+            <span className="badge badge-neutral">{w.status}</span>
+            <div className="money" style={{ fontWeight: 700, width: 80, textAlign: "right" }}>{euro(w.bedrag_gevraagd)}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function GroepsbudgettenTab({ werkjaarId, session, magBewerken }) {
+  const toast = useToast();
+  const [groepsbudgetten, setGroepsbudgetten] = useState([]);
+  const [tarieven, setTarieven] = useState(LEGE_TARIEVEN);
+  const [toonTarieven, setToonTarieven] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [openId, setOpenId] = useState(null);
+
+  const laden = () =>
+    fetch(`/api/kampbudgetten?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((d) => {
+      setGroepsbudgetten(d.groepsbudgetten || []);
+      if (d.tarieven) setTarieven(naarTarievenFormVeld(d.tarieven));
+      setLoading(false);
+    });
+
+  useEffect(() => { if (werkjaarId) laden(); }, [werkjaarId]);
+
+  if (loading) return <SkeletonCard lines={4} />;
+
+  const aantalLedenBijwerken = async (id, waarde) => {
+    setGroepsbudgetten((prev) => prev.map((g) => (g.id === id ? { ...g, aantalLeden: waarde } : g)));
+    const res = await fetch("/api/kampbudgetten", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, aantalLeden: waarde }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    laden();
+  };
+
+  const tarievenOpslaan = async () => {
+    const res = await fetch("/api/kampbudgetten/tarieven", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ werkjaarId, ...tarieven }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    laden();
+    toast.success("Tarieven opgeslagen");
+  };
+
+  const totalen = groepsbudgetten.reduce(
+    (s, g) => ({
+      toegewezen: s.toegewezen + g.totaalToegewezen,
+      uitgegeven: s.uitgegeven + g.uitgegeven,
+      resterend: s.resterend + g.resterend,
+    }),
+    { toegewezen: 0, uitgegeven: 0, resterend: 0 }
+  );
+  const totaalStatus = kampBudgetStatus(totalen.uitgegeven, totalen.toegewezen);
+  const jouwAfdeling = groepsbudgetten.find((g) => g.afdeling === session?.user?.groep);
+  const andere = groepsbudgetten.filter((g) => g.id !== jouwAfdeling?.id);
+  const toggleOpen = (id) => setOpenId((prev) => (prev === id ? null : id));
+
+  return (
+    <div>
+      <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
+        Budget voor het winkelen in juli, en dropping/weekend voor Tito, Keti en Aspi. Uitgaven log je bij het Kostenoverzicht-tabblad onder de juiste afdeling.
+      </p>
+
+      {magBewerken && (
+        toonTarieven ? (
+          <div className="card" style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Tarieven (gelden voor alle afdelingen samen)</div>
+            <div className="grid-3" style={{ marginBottom: 10 }}>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                €/lid winkelen — Sloebers/Speelclub/Rakwi
+                <input type="number" step="0.5" min="0" value={tarieven.winkelenJong} onChange={(e) => setTarieven({ ...tarieven, winkelenJong: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                €/lid winkelen — Tito/Keti/Aspi
+                <input type="number" step="0.5" min="0" value={tarieven.winkelenOud} onChange={(e) => setTarieven({ ...tarieven, winkelenOud: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                €/lid dropping — Tito/Keti/Aspi
+                <input type="number" step="0.5" min="0" value={tarieven.droppingPerLid} onChange={(e) => setTarieven({ ...tarieven, droppingPerLid: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                €/lid weekend — Tito/Keti/Aspi
+                <input type="number" step="0.5" min="0" value={tarieven.weekendPerLid} onChange={(e) => setTarieven({ ...tarieven, weekendPerLid: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 13, fontWeight: 600 }}>
+                Vast budget weekendplaats (per groep) — Tito/Keti/Aspi
+                <input type="number" step="1" min="0" value={tarieven.weekendplaatsVast} onChange={(e) => setTarieven({ ...tarieven, weekendplaatsVast: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+              </label>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-primary" onClick={tarievenOpslaan}>Tarieven opslaan</button>
+              <button onClick={() => setToonTarieven(false)}>Sluiten</button>
+            </div>
+          </div>
+        ) : (
+          <button onClick={() => setToonTarieven(true)} style={{ marginBottom: 20 }}>Tarieven aanpassen</button>
+        )
+      )}
+
+      <div className={`card card-lg ${totaalStatus.kleur === "danger" ? "card-danger" : totaalStatus.kleur === "warning" ? "card-warning" : ""}`} style={{ marginBottom: 24, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <span className={`badge ${totaalStatus.badge}`}>{totaalStatus.label}</span>
+          <span className="muted" style={{ fontSize: 14 }}>Alle afdelingen samen</span>
+        </div>
+        <div className="muted" style={{ fontSize: 14 }}>Nog te besteden op kamp</div>
+        <div className="money" style={{ fontSize: 40, fontWeight: 700, letterSpacing: "-0.02em", color: totalen.resterend >= 0 ? "var(--success-text)" : "var(--danger-deep)" }}>{euro(Math.abs(totalen.resterend))}</div>
+        <div className="progress-track"><div className={`progress-fill ${totaalStatus.kleur}`} style={{ width: `${totaalStatus.pct}%` }} /></div>
+        <div className="muted money" style={{ fontSize: 14 }}>{euro(totalen.uitgegeven)} van {euro(totalen.toegewezen)} uitgegeven</div>
+      </div>
+
+      {jouwAfdeling && (
+        <div style={{ marginBottom: 24 }}>
+          <div className="eyebrow" style={{ marginBottom: 10 }}>Jouw afdeling</div>
+          <div className="card" style={{ borderWidth: 1.5, borderColor: "var(--text)" }}>
+            <AfdelingRij g={jouwAfdeling} groot magBewerken={magBewerken} onAantalLeden={aantalLedenBijwerken} open={openId === jouwAfdeling.id} onToggleOpen={toggleOpen} />
+          </div>
+        </div>
+      )}
+
+      <div>
+        <div className="eyebrow" style={{ marginBottom: 10 }}>{jouwAfdeling ? "De andere afdelingen" : "Alle afdelingen"}</div>
+        <div className="card" style={{ padding: "4px 18px" }}>
+          {andere.length === 0 && <p className="muted" style={{ padding: "16px 0", textAlign: "center" }}>Geen afdelingen.</p>}
+          {andere.map((g, i) => (
+            <div key={g.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <AfdelingRij g={g} magBewerken={magBewerken} onAantalLeden={aantalLedenBijwerken} open={openId === g.id} onToggleOpen={toggleOpen} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Kostenoverzicht voor Kamp (overgenomen van de vroegere /kampkosten pagina)
+// ============================================================
+
+const LEGE_KAMP_TRANSACTIE = {
+  datum: new Date().toISOString().slice(0, 10),
+  omschrijving: "",
+  typeGeldstroom: "uitgave",
+  hoofdcategorie: "",
+  bedrag: "",
+};
+
+function naarKampBewerkVeld(t) {
+  return {
+    datum: t.datum || "",
+    omschrijving: t.omschrijving || "",
+    typeGeldstroom: t.type_geldstroom || "uitgave",
+    hoofdcategorie: t.hoofdcategorie || "",
+    bedrag: t.bedrag ?? "",
+    status: t.status || "Gepland",
+    medewerkerUserId: t.medewerker_user_id || "",
+    bewijsstukUrl: t.bewijsstuk_url || "",
+  };
+}
+
+function KampKostenoverzicht({ werkjaarId, gekoppeldeTransacties, gebruikers, magBewerken }) {
+  const toast = useToast();
+  const [overzicht, setOverzicht] = useState(null);
+  const [nieuweTransactie, setNieuweTransactie] = useState(LEGE_KAMP_TRANSACTIE);
+  const [toonForm, setToonForm] = useState(false);
+  const [bewerkId, setBewerkId] = useState(null);
+  const [bewerkVeld, setBewerkVeld] = useState(null);
+
+  const laden = () => fetch(`/api/kampkosten?werkjaarId=${werkjaarId}`).then((r) => r.json()).then(setOverzicht);
+
+  useEffect(() => { if (werkjaarId) laden(); }, [werkjaarId]);
+
+  if (!overzicht) return <SkeletonCard lines={4} />;
+
+  const transactieToevoegen = async () => {
+    const t = nieuweTransactie;
+    if (!t.datum || !t.omschrijving || !t.bedrag) return toast.error("Vul minstens datum, omschrijving en bedrag in.");
+    const res = await fetch("/api/kampkosten", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ werkjaarId, ...t, hoofdcategorie: t.hoofdcategorie || null }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setNieuweTransactie(LEGE_KAMP_TRANSACTIE);
+    laden();
+    toast.success("Transactie toegevoegd");
+  };
+
+  const transactieVerwijderen = (t) => {
+    if (bewerkId === t.id) { setBewerkId(null); setBewerkVeld(null); }
+    setOverzicht((prev) => ({ ...prev, transacties: prev.transacties.filter((x) => x.id !== t.id) }));
+    toast.undoable({
+      message: "Transactie verwijderd",
+      onUndo: laden,
+      onCommit: async () => {
+        await fetch(`/api/kampkosten?id=${t.id}`, { method: "DELETE" });
+        laden();
+      },
+    });
+  };
+
+  const rijOpenen = (t) => {
+    if (!magBewerken) return;
+    if (bewerkId === t.id) { setBewerkId(null); setBewerkVeld(null); return; }
+    setBewerkId(t.id);
+    setBewerkVeld(naarKampBewerkVeld(t));
+  };
+
+  const bewerkOpslaan = async () => {
+    const v = bewerkVeld;
+    if (!v.datum || !v.omschrijving || !v.bedrag) return toast.error("Vul minstens datum, omschrijving en bedrag in.");
+    const res = await fetch("/api/kampkosten", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: bewerkId,
+        datum: v.datum,
+        omschrijving: v.omschrijving,
+        typeGeldstroom: v.typeGeldstroom,
+        hoofdcategorie: v.hoofdcategorie || null,
+        bedrag: v.bedrag,
+        status: v.status,
+        medewerkerUserId: v.medewerkerUserId || null,
+        bewijsstukUrl: v.bewijsstukUrl || null,
+      }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    setBewerkId(null);
+    setBewerkVeld(null);
+    laden();
+    toast.success("Transactie bijgewerkt");
+  };
+
+  const categorieToevoegen = async (zetIn) => {
+    const naam = prompt("Naam van de nieuwe categorie:");
+    if (!naam?.trim()) return;
+    const res = await fetch("/api/kampkosten/categorieen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ werkjaarId, naam: naam.trim() }),
+    });
+    const data = await res.json();
+    if (data.error) return toast.error(data.error);
+    zetIn(naam.trim());
+    laden();
+    toast.success(`Categorie "${naam.trim()}" toegevoegd`);
+  };
+
+  const { categorieen, transacties, nogTerugTeBetalen } = overzicht;
+
+  return (
+    <div>
+      <p className="muted" style={{ fontSize: 14, marginBottom: 16 }}>
+        Zet je bij een kost een afdeling als categorie, dan telt het bedrag mee in hun kampbudget.
+      </p>
+
+      {gekoppeldeTransacties?.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
           <div style={{ fontWeight: 700, marginBottom: 4, fontSize: 15 }}>Gekoppelde kasboektransacties</div>
           <p className="muted" style={{ fontSize: 12, marginBottom: 10 }}>
-            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie. Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt.
+            Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie. Ze tellen niet mee in de balans hierboven.
           </p>
           {gekoppeldeTransacties.map((t, i) => (
             <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14 }}>
@@ -529,183 +1273,8 @@ export default function EvenementDetail({ params }) {
         </div>
       )}
 
-      {/* Kassabeheer */}
-      <div style={{ marginBottom: 24 }}>
-        <div className="eyebrow" style={{ marginBottom: 10 }}>Kassabeheer</div>
-        {kassasMetTekort.length > 0 && (
-          <div className="card card-danger" style={{ marginBottom: 14, fontSize: 14 }}>
-            ⚠️ Kassa-tekort gedetecteerd: {kassasMetTekort.map((k) => `${k.naam} (${euro(Math.abs(k.verschil))} te weinig)`).join(", ")}
-          </div>
-        )}
-        {kassas.length === 0 && <p className="muted" style={{ fontStyle: "italic", marginBottom: 14 }}>Nog geen kassa's.</p>}
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginBottom: magBewerken ? 14 : 0 }}>
-          {kassas.map((k) => (
-            <div key={k.id} className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 700, fontSize: 16 }}>{k.naam}</div>
-                  <div className="subtle" style={{ fontSize: 13 }}>{k.type === "cash" ? "Cash" : "Digitaal"}</div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <div style={{ textAlign: "right" }}>
-                    <div className="muted" style={{ fontSize: 12 }}>Omzet</div>
-                    <div className="money" style={{ fontWeight: 700, fontSize: 18 }}>{euro(k.omzet)}</div>
-                  </div>
-                  {k.verschil !== null && (
-                    <span className={`badge ${k.heeftTekort ? "badge-danger" : "badge-success"}`}>{k.verschil > 0 ? "+" : ""}{euro(k.verschil)}</span>
-                  )}
-                  {magBewerken && <button className="btn-danger" onClick={() => kassaVerwijderen(k.id)}>🗑️</button>}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                {k.type === "cash" && (
-                  <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                    Wisselgeld start
-                    {magBewerken ? (
-                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                        <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 90 }} />
-                        <button type="button" title="Coupures tellen" className="btn-plain" onClick={() => tellerOpenen(k, "wisselgeldStart")}><MuntenIcon color="var(--text-subtle)" /></button>
-                      </div>
-                    ) : <span className="money" style={{ fontWeight: 600 }}>{euro(k.wisselgeld_start)}</span>}
-                  </label>
-                )}
-                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  Inhoud na afloop
-                  {magBewerken ? (
-                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                      <input key={`${k.id}-ie-${k.inhoud_einde}`} type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 90 }} />
-                      {k.type === "cash" && <button type="button" title="Coupures tellen" className="btn-plain" onClick={() => tellerOpenen(k, "inhoudEinde")}><MuntenIcon color="var(--text-subtle)" /></button>}
-                    </div>
-                  ) : <span className="money" style={{ fontWeight: 600 }}>{k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}</span>}
-                </label>
-                <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                  Verwacht
-                  {magBewerken ? (
-                    <input key={`${k.id}-vb-${k.verwacht_bedrag}`} type="number" step="0.01" defaultValue={k.verwacht_bedrag ?? ""} placeholder="optioneel" onBlur={(e) => kassaBijwerken(k.id, "verwachtBedrag", e.target.value)} style={{ width: 90 }} />
-                  ) : <span className="money" style={{ fontWeight: 600 }}>{k.verwacht_bedrag !== null ? euro(k.verwacht_bedrag) : "-"}</span>}
-                </label>
-              </div>
-
-              {/* Digitale betalingen die naast deze kassa binnenkwamen (bv. mensen die aan de toog met SumUp betaalden) — tellen bovenop mee in de omzet. */}
-              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
-                {[["digitaal_sumup", "digitaalSumup", "SumUp"], ["digitaal_bancontact", "digitaalBancontact", "Bancontact"], ["digitaal_kbc_qr", "digitaalKbcQr", "KBC QR-code"]].map(([veld, apiVeld, label]) => (
-                  <label key={veld} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
-                    {label}
-                    {magBewerken ? (
-                      <input key={`${k.id}-${veld}-${k[veld]}`} type="number" step="0.01" defaultValue={k[veld] ?? ""} placeholder="optioneel" onBlur={(e) => kassaBijwerken(k.id, apiVeld, e.target.value)} style={{ width: 90 }} />
-                    ) : <span className="money" style={{ fontWeight: 600 }}>{k[veld] ? euro(k[veld]) : "-"}</span>}
-                  </label>
-                ))}
-              </div>
-
-              {tellerOpen?.kassaId === k.id && (
-                <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-                    {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
-                  </div>
-                  {tellerOpen.veld === "wisselgeldStart" && kopieerBronnen.length > 0 && (
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
-                      <select value={kopieerKeuze} onChange={(e) => setKopieerKeuze(e.target.value)} style={{ fontSize: 12 }}>
-                        <option value="">Kopieer van vorig jaar...</option>
-                        {kopieerBronnen.map((b) => <option key={b.id} value={b.id}>{b.evenementNaam} — {b.naam} ({euro(b.wisselgeld_start)})</option>)}
-                      </select>
-                      <button type="button" disabled={!kopieerKeuze} onClick={kopieerToepassen}>Overnemen</button>
-                    </div>
-                  )}
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
-                    <div>
-                      <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>BRIEFJES</div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {BRIEFJES.map((d) => (
-                          <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                            €{d}
-                            <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={tellerAantallen[d] ?? ""} onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                    <div>
-                      <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>MUNTJES</div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        {MUNTEN.map((d) => (
-                          <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-                            €{d}
-                            <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={tellerAantallen[d] ?? ""} onChange={(e) => setTellerAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
-                          </label>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <span className="money" style={{ fontWeight: 700 }}>Totaal: {euro(samenstellingTotaal(tellerAantallen))}</span>
-                    <button className="btn-primary" onClick={tellerToepassen}>Toepassen</button>
-                    <button onClick={() => setTellerOpen(null)}>Annuleren</button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-        {magBewerken && (
-          toonNieuweKassa ? (
-            <div className="card" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <input placeholder="Naam, bv. Kassa inkom" value={nieuweKassa.naam} onChange={(e) => setNieuweKassa({ ...nieuweKassa, naam: e.target.value })} style={{ flex: 1, minWidth: 140 }} />
-              <select value={nieuweKassa.type} onChange={(e) => setNieuweKassa({ ...nieuweKassa, type: e.target.value })}>
-                <option value="cash">Cash</option>
-                <option value="digitaal">Digitaal (SumUp/Payconiq)</option>
-              </select>
-              <button className="btn-primary" onClick={kassaToevoegen}>Toevoegen</button>
-              <button onClick={() => setToonNieuweKassa(false)}>Annuleren</button>
-            </div>
-          ) : (
-            <button onClick={() => setToonNieuweKassa(true)}>+ Kassa toevoegen</button>
-          )
-        )}
-      </div>
-
-      {/* Budgetten */}
-      <div style={{ marginBottom: 24 }}>
-        <div className="eyebrow" style={{ marginBottom: 4 }}>Budget per hoofdcategorie</div>
-        <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>Optioneel — laat leeg voor categorieën zonder vast budget.</p>
-        {categorieen.length === 0 && (
-          <p className="muted" style={{ fontStyle: "italic" }}>Nog geen categorieën — maak er een aan via het "+"-knopje bij een nieuwe transactie.</p>
-        )}
-        <div className="card" style={{ padding: 0 }}>
-          {categorieen.map((c, i) => {
-            const cat = c.naam;
-            const rij = budgetBurnRate.find((b) => b.hoofdcategorie === cat);
-            const { pct, kleur } = budgetVulling(rij?.uitgegeven, rij?.budget);
-            return (
-              <div key={c.id} style={{ padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ fontWeight: 600, fontSize: 15 }}>{cat}</div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    {magBewerken ? (
-                      <input type="number" step="0.01" defaultValue={rij?.budget ?? ""} placeholder="geen limiet" onBlur={(e) => budgetBijwerken(cat, e.target.value)} style={{ width: 90, textAlign: "right" }} />
-                    ) : (
-                      <span className="money muted" style={{ fontSize: 13 }}>{rij?.budget !== null && rij?.budget !== undefined ? euro(rij.budget) : "geen limiet"}</span>
-                    )}
-                    <span className="money" style={{ fontWeight: 700 }}>{euro(rij?.uitgegeven || 0)}</span>
-                    {magBewerken && <button className="btn-danger" onClick={() => categorieVerwijderen(c.id)}>🗑️</button>}
-                  </div>
-                </div>
-                {rij?.budget ? (
-                  <>
-                    <div className="progress-track"><div className={`progress-fill ${kleur}`} style={{ width: `${pct}%` }} /></div>
-                    <div className={`muted money ${rij.resterend < 0 ? "amount-neg" : ""}`} style={{ fontSize: 12 }}>
-                      {rij.resterend < 0 ? "over budget: " : "resterend: "}{euro(Math.abs(rij.resterend))}
-                    </div>
-                  </>
-                ) : null}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Nog terug te betalen */}
       {nogTerugTeBetalen.length > 0 && (
-        <div className="card card-warning" style={{ marginBottom: 24 }}>
+        <div className="card card-warning" style={{ marginBottom: 20 }}>
           <span className="badge badge-warning" style={{ marginBottom: 10, display: "inline-block" }}>Nog terug te betalen</span>
           {nogTerugTeBetalen.map((r, i) => (
             <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
@@ -719,15 +1288,14 @@ export default function EvenementDetail({ params }) {
         </div>
       )}
 
-      {/* Transacties */}
-      <div className="eyebrow" style={{ marginBottom: 10 }}>Transacties</div>
-      <div style={{ marginBottom: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 10 }}>
+        <div className="eyebrow">Transacties</div>
         {magBewerken && (
-          <button onClick={() => setToonTransactieForm(!toonTransactieForm)}>{toonTransactieForm ? "Annuleren" : "+ Transactie toevoegen"}</button>
+          <button onClick={() => setToonForm(!toonForm)}>{toonForm ? "Annuleren" : "+ Transactie toevoegen"}</button>
         )}
       </div>
 
-      {toonTransactieForm && (
+      {toonForm && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="grid-3" style={{ marginBottom: 8 }}>
             <input type="date" value={nieuweTransactie.datum} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, datum: e.target.value })} />
@@ -736,22 +1304,19 @@ export default function EvenementDetail({ params }) {
               <option value="uitgave">Uitgave</option>
               <option value="inkomst">Inkomst</option>
             </select>
-            {nieuweTransactie.typeGeldstroom === "uitgave" && (
-              <select value={nieuweTransactie.typeKostenpost} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, typeKostenpost: e.target.value })}>
-                <option value="kost">Kost (eenmalig)</option>
-                <option value="investering">Investering (blijft mee)</option>
-              </select>
-            )}
-            <input type="number" step="0.01" placeholder="Bedrag" value={nieuweTransactie.bedrag} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedrag: e.target.value })} />
             <div style={{ display: "flex", gap: 4 }}>
               <select value={nieuweTransactie.hoofdcategorie} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
                 <option value="">Hoofdcategorie...</option>
-                {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                <optgroup label="Afdeling (telt mee voor kampbudget)">
+                  {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
+                </optgroup>
+                <optgroup label="Algemeen">
+                  {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                </optgroup>
               </select>
               <button type="button" onClick={() => categorieToevoegen((naam) => setNieuweTransactie((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie">+</button>
             </div>
-            <input placeholder="Waar gekocht/besteld (optioneel)" value={nieuweTransactie.waar} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, waar: e.target.value })} />
-            <input type="number" step="0.01" placeholder="Hoeveelheid (optioneel)" value={nieuweTransactie.hoeveelheid} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, hoeveelheid: e.target.value })} />
+            <input type="number" step="0.01" placeholder="Bedrag" value={nieuweTransactie.bedrag} onChange={(e) => setNieuweTransactie({ ...nieuweTransactie, bedrag: e.target.value })} />
           </div>
           <button className="btn-primary" onClick={transactieToevoegen}>Toevoegen</button>
         </div>
@@ -764,21 +1329,16 @@ export default function EvenementDetail({ params }) {
           return (
             <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default" }} onClick={() => rijOpenen(t)}>
-                <div className="money muted" style={{ width: 60, fontSize: 13, flexShrink: 0 }}>{t.datum}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>
                     {t.omschrijving}
-                    {t.waar && <span className="subtle"> · {t.waar}</span>}
-                    {t.hoeveelheid ? <span className="subtle"> · {t.hoeveelheid}×</span> : ""}
-                  </div>
-                  <div className="muted" style={{ fontSize: 12 }}>
-                    {t.transactie_code}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}
                     {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" className="link" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
                   </div>
+                  <div className="muted" style={{ fontSize: 12 }}>{t.transactie_code} · {t.datum}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}</div>
                 </div>
                 <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
                 <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ width: 90, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
-                  {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
+                  {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag)}
                 </div>
                 {magBewerken && (
                   <button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
@@ -793,26 +1353,19 @@ export default function EvenementDetail({ params }) {
                       <option value="uitgave">Uitgave</option>
                       <option value="inkomst">Inkomst</option>
                     </select>
-                    {bewerkVeld.typeGeldstroom === "uitgave" && (
-                      <select value={bewerkVeld.typeKostenpost} onChange={(e) => setBewerkVeld({ ...bewerkVeld, typeKostenpost: e.target.value })}>
-                        <option value="kost">Kost (eenmalig)</option>
-                        <option value="investering">Investering (blijft mee)</option>
-                      </select>
-                    )}
-                    <input type="number" step="0.01" placeholder="Bedrag" value={bewerkVeld.bedrag} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bedrag: e.target.value })} />
                     <div style={{ display: "flex", gap: 4 }}>
                       <select value={bewerkVeld.hoofdcategorie} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoofdcategorie: e.target.value })} style={{ flex: 1 }}>
                         <option value="">Hoofdcategorie...</option>
-                        {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                        <optgroup label="Afdeling (telt mee voor kampbudget)">
+                          {AFDELINGEN_VOLGORDE.map((a) => <option key={a} value={a}>{a}</option>)}
+                        </optgroup>
+                        <optgroup label="Algemeen">
+                          {categorieen.map((c) => <option key={c.id} value={c.naam}>{c.naam}</option>)}
+                        </optgroup>
                       </select>
                       <button type="button" onClick={() => categorieToevoegen((naam) => setBewerkVeld((prev) => ({ ...prev, hoofdcategorie: naam })))} title="Nieuwe categorie">+</button>
                     </div>
-                    <input placeholder="Waar gekocht/besteld" value={bewerkVeld.waar} onChange={(e) => setBewerkVeld({ ...bewerkVeld, waar: e.target.value })} />
-                    <input type="number" step="0.01" placeholder="Hoeveelheid" value={bewerkVeld.hoeveelheid} onChange={(e) => setBewerkVeld({ ...bewerkVeld, hoeveelheid: e.target.value })} />
-                    <select value={bewerkVeld.betaalmethode} onChange={(e) => setBewerkVeld({ ...bewerkVeld, betaalmethode: e.target.value })}>
-                      <option value="">Betaalmethode...</option>
-                      {BETAALMETHODES.map((b) => <option key={b} value={b}>{b}</option>)}
-                    </select>
+                    <input type="number" step="0.01" placeholder="Bedrag" value={bewerkVeld.bedrag} onChange={(e) => setBewerkVeld({ ...bewerkVeld, bedrag: e.target.value })} />
                     <select value={bewerkVeld.status} onChange={(e) => setBewerkVeld({ ...bewerkVeld, status: e.target.value })}>
                       {STATUSSEN.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
