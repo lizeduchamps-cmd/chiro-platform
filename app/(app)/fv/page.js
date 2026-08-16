@@ -271,7 +271,13 @@ export default function FinancieelVerslag() {
   }
 
   const ladenOverzicht = (id) => {
-    fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => setOverzicht(d));
+    fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => {
+      // Bij een foutmelding (bv. de FV-maand bestaat niet meer) blijft
+      // overzicht leeg i.p.v. de foutmelding zelf te tonen als was het data —
+      // dat deed de pagina eerder vastlopen op overzicht.personen.
+      if (d.error) { toast.error(d.error); setOverzicht(null); return; }
+      setOverzicht(d);
+    });
   };
 
   const streepjesLaden = () => {
