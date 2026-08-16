@@ -3,7 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonTable } from "@/components/Skeleton";
-import { BRIEFJES, MUNTEN, samenstellingTotaal, berekenCoupureVoorstel } from "@/lib/coupureVoorstel";
+import { BRIEFJES, MUNTEN, samenstellingTotaal } from "@/lib/coupureVoorstel";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -120,7 +120,7 @@ export default function Wisselgeld() {
   const [nieuweAanvraag, setNieuweAanvraag] = useState(LEGE_AANVRAAG);
   const [modus, setModus] = useState("eenvoudig");
   const [prijslijnen, setPrijslijnen] = useState([{ ...LEGE_PRIJSLIJN }]);
-  const [voorstel, setVoorstel] = useState(null);
+  const [coupures, setCoupures] = useState({});
 
   const isFinancien = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
   const eigenAfdeling = session?.user?.groep || null;
@@ -163,26 +163,26 @@ export default function Wisselgeld() {
   const prijslijnToevoegen = () => setPrijslijnen((prev) => [...prev, { ...LEGE_PRIJSLIJN }]);
   const prijslijnVerwijderen = (i) => setPrijslijnen((prev) => prev.filter((_, idx) => idx !== i));
 
-  const voorstelBerekenen = () => {
-    const geldige = prijslijnen.filter((r) => Number(r.prijs) > 0 && Number(r.aantalVerwacht) > 0);
-    if (geldige.length === 0) return toast.error("Vul minstens één prijs met een verwacht aantal in.");
-    const { samenstelling, totaalBedrag } = berekenCoupureVoorstel(geldige);
-    setVoorstel(samenstelling);
-    setNieuweAanvraag((prev) => ({ ...prev, bedragGevraagd: String(totaalBedrag) }));
-    toast.success(`Voorstel berekend: ${euro(totaalBedrag)} — pas gerust nog aan.`);
+  // Vult ook meteen "bedrag gevraagd" aan, zuiver als optelsom van wat hier
+  // staat — geen voorspelling, gewoon de som van wat je zelf hebt ingevuld.
+  const coupureWijzigen = (updater) => {
+    const nieuw = typeof updater === "function" ? updater(coupures) : updater;
+    setCoupures(nieuw);
+    setNieuweAanvraag((prev) => ({ ...prev, bedragGevraagd: String(Math.round(samenstellingTotaal(nieuw) * 100) / 100) }));
   };
 
   const resetForm = () => {
     setNieuweAanvraag({ ...LEGE_AANVRAAG, afdeling: afdelingenKeuze.length === 1 ? afdelingenKeuze[0] : "" });
     setModus("eenvoudig");
     setPrijslijnen([{ ...LEGE_PRIJSLIJN }]);
-    setVoorstel(null);
+    setCoupures({});
   };
 
   const aanvraagIndienen = async () => {
     const a = nieuweAanvraag;
     if (!a.afdeling || !a.datumNodig || !a.bedragGevraagd) return toast.error("Vul afdeling, datum en bedrag in.");
     const geldigePrijslijnen = modus === "prijzen" ? prijslijnen.filter((r) => Number(r.prijs) > 0 && Number(r.aantalVerwacht) > 0) : null;
+    const heeftCoupures = modus === "prijzen" && Object.values(coupures).some((n) => Number(n) > 0);
     const res = await fetch("/api/wisselgeld", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -190,7 +190,7 @@ export default function Wisselgeld() {
         werkjaarId,
         ...a,
         verkoopprijzen: geldigePrijslijnen?.length ? geldigePrijslijnen : null,
-        samenstellingVoorstel: modus === "prijzen" && voorstel ? voorstel : null,
+        samenstellingVoorstel: heeftCoupures ? coupures : null,
       }),
     });
     const data = await res.json();
@@ -307,7 +307,7 @@ export default function Wisselgeld() {
           ) : (
             <div style={{ marginBottom: 12 }}>
               <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>
-                Wat ga je verkopen, tegen welke prijs, en hoeveel verwacht je er ongeveer van te verkopen? Op basis daarvan stelt het platform voor hoeveel briefjes/muntjes van elke waarde je klaar moet leggen.
+                Wat ga je verkopen en tegen welke prijs? Puur als geheugensteuntje voor jezelf — dit wordt nergens automatisch in verrekend. Vul hieronder zelf in welke briefjes en muntjes je meeneemt.
               </p>
               {prijslijnen.map((r, i) => (
                 <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
@@ -317,23 +317,17 @@ export default function Wisselgeld() {
                   {prijslijnen.length > 1 && <button className="btn-danger" onClick={() => prijslijnVerwijderen(i)}>🗑️</button>}
                 </div>
               ))}
-              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div style={{ marginBottom: 10 }}>
                 <button onClick={prijslijnToevoegen}>+ Prijs</button>
-                <button className="btn-primary" onClick={voorstelBerekenen}>Bereken voorstel</button>
               </div>
 
-              {voorstel && (
-                <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14, marginBottom: 10 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Voorstel — pas gerust aan</div>
-                  <p className="subtle" style={{ fontSize: 11, marginBottom: 10 }}>
-                    Er wordt van uitgegaan dat kopers spreiden over elk briefje/muntstuk vanaf de prijs tot en met €20 — dus ook wisselgeld voor wie met €10 of €20 betaalt, niet enkel voor wie exact past betaalt.
-                  </p>
-                  <CoupureGrid aantallen={voorstel} setAantallen={setVoorstel} />
-                  <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-                    Totaal: <span className="money" style={{ fontWeight: 700 }}>{euro(samenstellingTotaal(voorstel))}</span>
-                  </div>
+              <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14, marginBottom: 10 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Coupures die je meeneemt</div>
+                <CoupureGrid aantallen={coupures} setAantallen={coupureWijzigen} />
+                <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+                  Totaal: <span className="money" style={{ fontWeight: 700 }}>{euro(samenstellingTotaal(coupures))}</span>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
