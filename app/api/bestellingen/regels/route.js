@@ -28,7 +28,26 @@ export async function POST(req) {
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await prijsOnthouden(bestellingId, product, Number(prijsPerStuk));
+
   return NextResponse.json({ regel: data });
+}
+
+// Prijsgeheugen (product_prijzen) bijwerken — los van bestelling_regels, zodat
+// het verwijderen van een oude bestelling deze prijssuggestie niet meeneemt.
+// Een hapering hier mag het toevoegen van de regel zelf niet laten mislukken.
+async function prijsOnthouden(bestellingId, product, prijs) {
+  try {
+    const { data: bestelling } = await supabaseAdmin.from("bestellingen").select("winkel").eq("id", bestellingId).maybeSingle();
+    const winkelKey = (bestelling?.winkel || "").trim().toLowerCase();
+    await supabaseAdmin.from("product_prijzen").upsert(
+      { product: product.trim(), product_key: product.trim().toLowerCase(), winkel_key: winkelKey, prijs, bijgewerkt_op: new Date().toISOString() },
+      { onConflict: "product_key,winkel_key" }
+    );
+  } catch {
+    // Prijsgeheugen is een comfort-feature, geen kritieke data — negeren.
+  }
 }
 
 export async function DELETE(req) {

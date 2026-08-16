@@ -298,6 +298,21 @@ create table if not exists bestelling_regels (
   created_at timestamptz default now()
 );
 
+-- Prijsgeheugen voor de prijssuggestie bij het invullen van een bestelregel —
+-- los van bestelling_regels gehouden, zodat een oude bestelling verwijderen
+-- (met cascade naar haar regels) de prijssuggesties niet laat verdwijnen.
+-- Wordt bijgewerkt telkens een regel met prijs toegevoegd wordt; leest niet
+-- uit oude bestellingen.
+create table if not exists product_prijzen (
+  id uuid primary key default gen_random_uuid(),
+  product text not null,                    -- weergavenaam, laatst gebruikte schrijfwijze
+  product_key text not null,                -- genormaliseerd (trim + lowercase) voor matching
+  winkel_key text not null default '',      -- genormaliseerd; lege string = geen winkel opgegeven
+  prijs numeric(10,2) not null,
+  bijgewerkt_op timestamptz default now(),
+  unique (product_key, winkel_key)
+);
+
 -- ============ EVENEMENTEN (Fase 3: Kassasysteem per Evenement) ============
 -- Kassabeheer + kosten/inkomsten-logboek per evenement (fuif, taartenslag, ...),
 -- met budget per hoofdcategorie en een automatisch berekende winst/verliesbalans.
