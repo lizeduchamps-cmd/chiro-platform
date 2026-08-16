@@ -32,13 +32,43 @@ function fvGroep(user) {
   return "Leiding";
 }
 
-// De 4 soorten regels — vaste volgorde, elk met een eigen sneltoevoegknop.
+// De 4 soorten regels — vaste volgorde, gebruikt om bestaande regels
+// gegroepeerd te tonen (Details-lijst en PDF-export). Enkel "handmatig" heeft
+// nog een sneltoevoegknop per persoon; km/bestelling/streepjes gaan bovenaan
+// de pagina via de bulk-tools.
 const SOORTEN = [
-  { bron: "bestelling", label: "Bestellingen", knop: "+ Bestelling" },
-  { bron: "kilometers", label: "Kilometers", knop: "+ Kilometers" },
-  { bron: "streepjes_bot", label: "Streepjes", knop: "+ Streepjes" },
-  { bron: "handmatig", label: "Handmatig", knop: "+ Handmatig" },
+  { bron: "bestelling", label: "Bestellingen" },
+  { bron: "kilometers", label: "Kilometers" },
+  { bron: "streepjes_bot", label: "Streepjes" },
+  { bron: "handmatig", label: "Handmatig" },
 ];
+
+function perSoortVoorPersoon(p) {
+  return SOORTEN.map((s) => ({ ...s, regels: p.regels.filter((r) => r.bron === s.bron) })).filter((s) => s.regels.length > 0);
+}
+
+// Bulk-acties bovenaan: Km opent hier "Slim plakken", Bestelling/Streepjes
+// linken naar hun eigen volledige tool — zelfde functionaliteit als voorheen,
+// enkel visueel als icoonknoppen i.p.v. tekstlinks per persoon.
+const KM_ICOON = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="6" cy="18" r="2.2" />
+    <circle cx="18" cy="6" r="2.2" />
+    <path d="M8 16.5C12.5 11.5 12.5 12.5 16 7.5" />
+  </svg>
+);
+const BESTELLING_ICOON = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M6 8h12l-1 12H7L6 8z" />
+    <path d="M9 8V6a3 3 0 016 0v2" />
+  </svg>
+);
+const STREEPJES_ICOON = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+    <path d="M7 6v12M11 6v12M15 6v12" />
+    <path d="M5 8l14 6" />
+  </svg>
+);
 
 // Eén persoonskaart: regels ingeklapt achter "Details (N)", gegroepeerd per
 // soort. Enkel wie mag bewerken ziet de 4 sneltoevoegknoppen.
@@ -46,14 +76,12 @@ function PersoonKaart({
   p, jezelf, magBewerken, open, onToggleOpen, groot,
   veldOpen, onVeldOpen,
   nieuweRegel, setNieuweRegel, onRegelToevoegen,
-  nieuweKm, setNieuweKm, onKmToevoegen,
-  streepjesInfo, streepjesBewerk, setStreepjesBewerk, onStreepjesToevoegen,
   onRegelVerwijderen, onStatusToggle,
 }) {
   const terugTeKrijgen = p.totaal < 0;
   const klaar = p.status === "betaald";
   const kleur = klaar ? "success" : terugTeKrijgen ? "success" : "danger";
-  const perSoort = SOORTEN.map((s) => ({ ...s, regels: p.regels.filter((r) => r.bron === s.bron) })).filter((s) => s.regels.length > 0);
+  const perSoort = perSoortVoorPersoon(p);
 
   return (
     <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -120,11 +148,9 @@ function PersoonKaart({
           {magBewerken && (
             <div className="no-print" style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {SOORTEN.map((s) => (
-                  <button key={s.bron} onClick={() => onVeldOpen(p.user.id, veldOpen === s.bron ? null : s.bron)} style={veldOpen === s.bron ? { borderColor: "var(--accent)", color: "var(--text)" } : undefined}>
-                    {s.knop}
-                  </button>
-                ))}
+                <button onClick={() => onVeldOpen(p.user.id, veldOpen === "handmatig" ? null : "handmatig")} style={veldOpen === "handmatig" ? { borderColor: "var(--accent)", color: "var(--text)" } : undefined}>
+                  Handmatig toevoegen
+                </button>
               </div>
 
               {veldOpen === "handmatig" && (
@@ -142,58 +168,6 @@ function PersoonKaart({
                     style={{ width: 100 }}
                   />
                   <button className="btn-primary" onClick={() => onRegelToevoegen(p.user.id, "handmatig")}>Toevoegen</button>
-                </div>
-              )}
-
-              {veldOpen === "bestelling" && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <input
-                    placeholder="Wat, bv. Frituur 16/05 — mini + cola"
-                    value={nieuweRegel[p.user.id]?.omschrijving || ""}
-                    onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], omschrijving: e.target.value } }))}
-                    style={{ flex: 1, minWidth: 160 }}
-                  />
-                  <input
-                    type="number" step="0.01" placeholder="Bedrag"
-                    value={nieuweRegel[p.user.id]?.bedrag || ""}
-                    onChange={(e) => setNieuweRegel((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], bedrag: e.target.value } }))}
-                    style={{ width: 100 }}
-                  />
-                  <button className="btn-primary" onClick={() => onRegelToevoegen(p.user.id, "bestelling")}>Toevoegen</button>
-                </div>
-              )}
-
-              {veldOpen === "kilometers" && (
-                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <input
-                    type="number" step="1" placeholder="Km gereden"
-                    value={nieuweKm[p.user.id]?.km || ""}
-                    onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], km: e.target.value } }))}
-                    style={{ width: 100 }}
-                  />
-                  <input
-                    placeholder="Waarvoor? bv. Weekend"
-                    value={nieuweKm[p.user.id]?.reden || ""}
-                    onChange={(e) => setNieuweKm((prev) => ({ ...prev, [p.user.id]: { ...prev[p.user.id], reden: e.target.value } }))}
-                    style={{ width: 140 }}
-                  />
-                  <button className="btn-primary" onClick={() => onKmToevoegen(p.user.id)}>Toevoegen</button>
-                </div>
-              )}
-
-              {veldOpen === "streepjes_bot" && (
-                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <label style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6 }}>
-                    Fysieke streepjes
-                    <input
-                      type="number" step="1"
-                      value={streepjesBewerk[p.user.id] ?? String(streepjesInfo?.fysieke_streepjes ?? 0)}
-                      onChange={(e) => setStreepjesBewerk((prev) => ({ ...prev, [p.user.id]: e.target.value }))}
-                      style={{ width: 70 }}
-                    />
-                  </label>
-                  <span className="subtle" style={{ fontSize: 12 }}>+ €{euro(streepjesInfo?.online_streepjes_bedrag || 0)} online</span>
-                  <button className="btn-primary" onClick={() => onStreepjesToevoegen(p.user.id)}>Toevoegen aan dit verslag</button>
                 </div>
               )}
             </div>
@@ -223,9 +197,6 @@ export default function FinancieelVerslag() {
   const [kmBewerkOpen, setKmBewerkOpen] = useState(false);
   const [kmBewerk, setKmBewerk] = useState({ dieselprijs: "", verbruik: "7" });
   const [nieuweRegel, setNieuweRegel] = useState({});
-  const [nieuweKm, setNieuweKm] = useState({});
-  const [streepjesData, setStreepjesData] = useState({});
-  const [streepjesBewerk, setStreepjesBewerk] = useState({});
   const [plakOpen, setPlakOpen] = useState(false);
   const [plakTekst, setPlakTekst] = useState("");
   const [plakReden, setPlakReden] = useState("");
@@ -234,6 +205,7 @@ export default function FinancieelVerslag() {
   const [openKaarten, setOpenKaarten] = useState(new Set());
   const [veldOpenPerPersoon, setVeldOpenPerPersoon] = useState({});
   const [alleenOpenstaand, setAlleenOpenstaand] = useState(false);
+  const [printGroep, setPrintGroep] = useState(null);
 
   const magBewerken = session?.user?.platformRecht === "admin" || session?.user?.platformRecht === "financieel_verantwoordelijke";
 
@@ -257,11 +229,6 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   }, [fvMaandId]);
 
-  useEffect(() => {
-    if (!magBewerken) return;
-    streepjesLaden();
-  }, [magBewerken]);
-
   const ladenOverzicht = (id) => {
     fetch(`/api/fv/overzicht?fvMaandId=${id}`).then((r) => r.json()).then((d) => {
       // Bij een foutmelding (bv. de FV-maand bestaat niet meer) blijft
@@ -269,14 +236,6 @@ export default function FinancieelVerslag() {
       // dat deed de pagina eerder vastlopen op overzicht.personen.
       if (d.error) { toast.error(d.error); setOverzicht(null); return; }
       setOverzicht(d);
-    });
-  };
-
-  const streepjesLaden = () => {
-    fetch("/api/streepjes").then((r) => r.json()).then((d) => {
-      const map = {};
-      (d.users || []).forEach((u) => { map[u.id] = u; });
-      setStreepjesData(map);
     });
   };
 
@@ -367,49 +326,6 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   };
 
-  const kmToevoegen = async (userId) => {
-    const veld = nieuweKm[userId] || {};
-    const km = parseFloat(veld.km);
-    if (!km) return toast.error("Vul een aantal kilometer in.");
-    const res = await fetch("/api/kilometers", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fvMaandId, userId, km, activiteit: veld.reden || null }),
-    });
-    const data = await res.json();
-    if (data.error) return toast.error(data.error);
-    setNieuweKm((prev) => ({ ...prev, [userId]: { km: "", reden: "" } }));
-    veldOpenZetten(userId, null);
-    ladenOverzicht(fvMaandId);
-  };
-
-  // Bumpt eventueel eerst de fysieke telling, en zet dan de volledige
-  // streepjes-stand (fysiek + online) van deze ene persoon om in een fv_regel
-  // — zelfde onderliggende actie als "Alleen deze doorzetten" op /streepjes.
-  const streepjesToevoegen = async (userId) => {
-    const huidig = streepjesData[userId];
-    const nieuweWaarde = streepjesBewerk[userId];
-    if (nieuweWaarde !== undefined && Number(nieuweWaarde) !== Number(huidig?.fysieke_streepjes || 0)) {
-      await fetch("/api/streepjes", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId, fysiekeStreepjes: Number(nieuweWaarde) || 0 }),
-      });
-    }
-    const res = await fetch("/api/fv/streepjes-toevoegen", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fvMaandId, userIds: [userId] }),
-    });
-    const data = await res.json();
-    if (data.error) return toast.error(data.error);
-    setStreepjesBewerk((prev) => { const next = { ...prev }; delete next[userId]; return next; });
-    veldOpenZetten(userId, null);
-    streepjesLaden();
-    ladenOverzicht(fvMaandId);
-    toast.success(data.aantal > 0 ? "Streepjes toegevoegd" : "Geen streepjes om toe te voegen");
-  };
-
   // Zet geplakte tekst ("Naam: NNNkm" per regel) om in een bewerkbare preview
   // met gematchte persoon en herkend aantal kilometer.
   const plakVerwerken = () => {
@@ -486,9 +402,27 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   };
 
+  // PDF per groep: leunt op de browser-eigen "Opslaan als PDF" in het
+  // printdialoog (zoals de oude "Afdrukken / PDF"-knop al deed), maar toont
+  // enkel de gekozen groep met alle personen + hun volledige regel-per-regel
+  // afrekening (zie .print-only), i.p.v. het huidige scherm.
+  const pdfExporteren = (groep) => setPrintGroep(groep);
+
+  useEffect(() => {
+    if (!printGroep) return;
+    const timer = setTimeout(() => window.print(), 50);
+    return () => clearTimeout(timer);
+  }, [printGroep]);
+
+  useEffect(() => {
+    const afterPrint = () => setPrintGroep(null);
+    window.addEventListener("afterprint", afterPrint);
+    return () => window.removeEventListener("afterprint", afterPrint);
+  }, []);
+
   // Belangrijk: deze check staat pas ná alle bovenstaande functiedefinities.
   // Stond die ertussenin (zoals eerder), dan bestonden functies zoals
-  // streepjesLaden soms nog niet op het moment dat een useEffect ze probeerde
+  // ladenOverzicht soms nog niet op het moment dat een useEffect ze probeerde
   // aan te roepen — vandaar de "Cannot access ... before initialization"-fout.
   if (loading) {
     return (
@@ -508,7 +442,13 @@ export default function FinancieelVerslag() {
           <h1 style={{ fontSize: 30, fontWeight: 800 }}>Financieel Verslag</h1>
           <p className="muted" style={{ fontSize: 15, marginTop: 6 }}>Wat je deze maand moet betalen of terugkrijgt. Details staan onder elk bedrag.</p>
         </div>
-        {overzicht && <button onClick={() => window.print()}>Afdrukken / PDF</button>}
+        {overzicht && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((g) => (
+              <button key={g} onClick={() => pdfExporteren(g)}>PDF: {g}</button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="no-print" style={{ display: "flex", gap: 10, alignItems: "center", margin: "16px 0 20px", flexWrap: "wrap" }}>
@@ -528,7 +468,7 @@ export default function FinancieelVerslag() {
         <div className="no-print card" style={{ marginBottom: 20 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 10 }}>Nieuwe FV-maand</div>
           <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-            Iedereen krijgt meteen een lege plaats op dit FV. Streepjes voeg je bewust toe via de "+ Streepjes"-knop bij elke persoon.
+            Iedereen krijgt meteen een lege plaats op dit FV. Streepjes voeg je bewust toe via de "Streepjes"-knop bovenaan.
           </p>
           <div className="grid-2" style={{ marginBottom: 10 }}>
             <label style={{ fontSize: 13, fontWeight: 600 }}>
@@ -566,7 +506,76 @@ export default function FinancieelVerslag() {
           </div>
         )
       ) : (
-        <>
+        <div className={printGroep ? "no-print" : undefined}>
+          {magBewerken && (
+            <div className="no-print" style={{ marginBottom: 20 }}>
+              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(3, 1fr)", maxWidth: 300 }}>
+                <button className="quick-action btn-plain" onClick={() => setPlakOpen((v) => !v)}>
+                  <span className="quick-action-icon">{KM_ICOON}</span>
+                  <span className="quick-action-label">Km</span>
+                </button>
+                <Link href="/bestellingen" className="quick-action">
+                  <span className="quick-action-icon">{BESTELLING_ICOON}</span>
+                  <span className="quick-action-label">Bestelling</span>
+                </Link>
+                <Link href="/streepjes" className="quick-action">
+                  <span className="quick-action-icon">{STREEPJES_ICOON}</span>
+                  <span className="quick-action-label">Streepjes</span>
+                </Link>
+              </div>
+
+              {plakOpen && (
+                <div className="card" style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>Km toevoegen: slim plakken</div>
+                  <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>
+                    Plak een lijst zoals "Lize: 250km" (één persoon per regel). Vul eventueel hieronder in waarvoor de kilometers waren — dat komt in de omschrijving van elke regel.
+                  </p>
+                  <input
+                    placeholder="Waarvoor? bv. Ledenweekend (optioneel)"
+                    value={plakReden}
+                    onChange={(e) => setPlakReden(e.target.value)}
+                    style={{ width: "100%", marginBottom: 8 }}
+                  />
+                  <textarea
+                    value={plakTekst}
+                    onChange={(e) => setPlakTekst(e.target.value)}
+                    placeholder={"Lize: 250km\nLucas: 300km\nDries: 150km"}
+                    rows={5}
+                    style={{ width: "100%", marginBottom: 8, fontFamily: "inherit" }}
+                  />
+                  {!plakPreview ? (
+                    <button className="btn-primary" onClick={plakVerwerken}>Verwerken</button>
+                  ) : (
+                    <>
+                      {plakPreview.length === 0 ? (
+                        <p className="muted" style={{ fontStyle: "italic", marginBottom: 8 }}>Niets meer om toe te voegen.</p>
+                      ) : (
+                        <div className="card" style={{ padding: 0, marginBottom: 8 }}>
+                          {plakPreview.map((r, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+                              <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ flex: 1, borderColor: r.userId ? undefined : "var(--danger)" }}>
+                                <option value="">{r.naam} (niet gevonden)</option>
+                                {overzicht.personen.map((p) => <option key={p.user.id} value={p.user.id}>{p.user.naam}</option>)}
+                              </select>
+                              <input type="number" step="1" value={r.km} onChange={(e) => plakRijWijzigen(i, "km", e.target.value)} style={{ width: 80 }} />
+                              <button className="btn-danger" onClick={() => plakRijVerwijderen(i)}>🗑️</button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {plakPreview.length > 0 && (
+                          <button className="btn-primary" disabled={plakBezig} onClick={plakBevestigen}>Alles toevoegen ({plakPreview.length})</button>
+                        )}
+                        <button onClick={() => setPlakPreview(null)}>Opnieuw verwerken</button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {eigenPersoon && (
             <PersoonKaart
               p={eigenPersoon}
@@ -580,13 +589,6 @@ export default function FinancieelVerslag() {
               nieuweRegel={nieuweRegel}
               setNieuweRegel={setNieuweRegel}
               onRegelToevoegen={regelToevoegen}
-              nieuweKm={nieuweKm}
-              setNieuweKm={setNieuweKm}
-              onKmToevoegen={kmToevoegen}
-              streepjesInfo={streepjesData[eigenPersoon.user.id]}
-              streepjesBewerk={streepjesBewerk}
-              setStreepjesBewerk={setStreepjesBewerk}
-              onStreepjesToevoegen={streepjesToevoegen}
               onRegelVerwijderen={regelVerwijderen}
               onStatusToggle={statusToggle}
             />
@@ -647,76 +649,6 @@ export default function FinancieelVerslag() {
             </div>
           )}
 
-          {magBewerken && (
-            <div className="no-print card" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 8 }}>
-              <div style={{ fontWeight: 700, fontSize: 15 }}>Voor meerdere personen tegelijk</div>
-              <p className="muted" style={{ fontSize: 13 }}>
-                De 4 knoppen bij elke persoon zijn voor één snelle regel. Voor een bestelling of streepjeslijst over veel personen ineens gebruik je de volledige tool:
-              </p>
-              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                <Link href="/bestellingen" className="link" style={{ fontSize: 14 }}>Bestellingen splitsen (slim plakken) →</Link>
-                <Link href="/streepjes" className="link" style={{ fontSize: 14 }}>Streepjes CSV uploaden →</Link>
-              </div>
-            </div>
-          )}
-
-          {magBewerken && (
-            <div className="no-print card" style={{ marginBottom: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: plakOpen ? 10 : 0 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>Slim plakken: kilometers</div>
-                <button onClick={() => setPlakOpen(!plakOpen)}>{plakOpen ? "Annuleren" : "Lijst plakken"}</button>
-              </div>
-              {plakOpen && (
-                <>
-                  <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>
-                    Plak een lijst zoals "Lize: 250km" (één persoon per regel). Vul eventueel hieronder in waarvoor de kilometers waren — dat komt in de omschrijving van elke regel.
-                  </p>
-                  <input
-                    placeholder="Waarvoor? bv. Ledenweekend (optioneel)"
-                    value={plakReden}
-                    onChange={(e) => setPlakReden(e.target.value)}
-                    style={{ width: "100%", marginBottom: 8 }}
-                  />
-                  <textarea
-                    value={plakTekst}
-                    onChange={(e) => setPlakTekst(e.target.value)}
-                    placeholder={"Lize: 250km\nLucas: 300km\nDries: 150km"}
-                    rows={5}
-                    style={{ width: "100%", marginBottom: 8, fontFamily: "inherit" }}
-                  />
-                  {!plakPreview ? (
-                    <button className="btn-primary" onClick={plakVerwerken}>Verwerken</button>
-                  ) : (
-                    <>
-                      {plakPreview.length === 0 ? (
-                        <p className="muted" style={{ fontStyle: "italic", marginBottom: 8 }}>Niets meer om toe te voegen.</p>
-                      ) : (
-                        <div className="card" style={{ padding: 0, marginBottom: 8 }}>
-                          {plakPreview.map((r, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                              <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ flex: 1, borderColor: r.userId ? undefined : "var(--danger)" }}>
-                                <option value="">{r.naam} (niet gevonden)</option>
-                                {overzicht.personen.map((p) => <option key={p.user.id} value={p.user.id}>{p.user.naam}</option>)}
-                              </select>
-                              <input type="number" step="1" value={r.km} onChange={(e) => plakRijWijzigen(i, "km", e.target.value)} style={{ width: 80 }} />
-                              <button className="btn-danger" onClick={() => plakRijVerwijderen(i)}>🗑️</button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      <div style={{ display: "flex", gap: 8 }}>
-                        {plakPreview.length > 0 && (
-                          <button className="btn-primary" disabled={plakBezig} onClick={plakBevestigen}>Alles toevoegen ({plakPreview.length})</button>
-                        )}
-                        <button onClick={() => setPlakPreview(null)}>Opnieuw verwerken</button>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-
           {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((groep) => {
             const personenInGroep = overzicht.personen.filter((p) => fvGroep(p.user) === groep && (!alleenOpenstaand || p.status !== "betaald"));
             if (personenInGroep.length === 0) return null;
@@ -747,13 +679,6 @@ export default function FinancieelVerslag() {
                       nieuweRegel={nieuweRegel}
                       setNieuweRegel={setNieuweRegel}
                       onRegelToevoegen={regelToevoegen}
-                      nieuweKm={nieuweKm}
-                      setNieuweKm={setNieuweKm}
-                      onKmToevoegen={kmToevoegen}
-                      streepjesInfo={streepjesData[p.user.id]}
-                      streepjesBewerk={streepjesBewerk}
-                      setStreepjesBewerk={setStreepjesBewerk}
-                      onStreepjesToevoegen={streepjesToevoegen}
                       onRegelVerwijderen={regelVerwijderen}
                       onStatusToggle={statusToggle}
                     />
@@ -762,7 +687,42 @@ export default function FinancieelVerslag() {
               </div>
             );
           })}
-        </>
+        </div>
+      )}
+
+      {printGroep && overzicht && (
+        <div className="print-only">
+          <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{printGroep} — {maandLabel(overzicht.fvMaand.maand)}</h1>
+          {overzicht.fvMaand.betaaldeadline && <p style={{ marginBottom: 20 }}>Betaaldeadline {overzicht.fvMaand.betaaldeadline}</p>}
+          {overzicht.personen.filter((p) => fvGroep(p.user) === printGroep).map((p, i, arr) => (
+            <div key={p.user.id} style={{ pageBreakAfter: i < arr.length - 1 ? "always" : "auto", paddingBottom: 24 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{p.user.naam}</h2>
+              <p style={{ fontSize: 13, marginBottom: 12 }}>{p.user.type}{p.user.groep ? ` · ${p.user.groep}` : ""}</p>
+              {p.regels.length === 0 ? (
+                <p style={{ fontStyle: "italic", fontSize: 14 }}>Geen regels.</p>
+              ) : (
+                perSoortVoorPersoon(p).map((s) => (
+                  <div key={s.bron} style={{ marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>{s.label}</div>
+                    {s.regels.map((r) => (
+                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderTop: "1px solid #ccc", fontSize: 14 }}>
+                        <span>{r.omschrijving}</span>
+                        <span>{r.bedrag < 0 ? "−" : ""}{euro(Math.abs(r.bedrag))}</span>
+                      </div>
+                    ))}
+                  </div>
+                ))
+              )}
+              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
+                <span>{p.totaal < 0 ? "Terug te krijgen" : "Te betalen"}</span>
+                <span>{euro(Math.abs(p.totaal))}</span>
+              </div>
+              {p.totaal < 0 && (
+                <p style={{ fontSize: 12, marginTop: 4 }}>{p.user.iban ? `Terug te storten naar ${p.user.iban}` : "Geen IBAN bekend voor terugbetaling"}</p>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

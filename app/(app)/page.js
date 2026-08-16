@@ -81,7 +81,7 @@ function ChecklistKaart({ eerstvolgende }) {
 
 const SNELKOPPELINGEN = [
   { href: "/kasboek", label: "Kasboek toevoegen", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg> },
-  { href: "/fv", label: "FV posten", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="16" rx="3" /><path d="M9 9h6M9 12.5h6M9 16h3.5" /></svg> },
+  { href: "/fv", label: "Financieel verslag", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="16" rx="3" /><path d="M9 9h6M9 12.5h6M9 16h3.5" /></svg> },
   { href: "/streepjes", label: "Streepjes", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M7 6v12M11 6v12M15 6v12" /><path d="M5 8l14 6" /></svg> },
   { href: "/evenementen", label: "Evenementen", icoon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-7.2 7-12a7 7 0 10-14 0c0 4.8 7 12 7 12z" /><circle cx="12" cy="9" r="2.4" /></svg> },
 ];
