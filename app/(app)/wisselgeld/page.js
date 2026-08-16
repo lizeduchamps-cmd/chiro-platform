@@ -325,6 +325,9 @@ export default function Wisselgeld() {
               {voorstel && (
                 <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14, marginBottom: 10 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Voorstel — pas gerust aan</div>
+                  <p className="subtle" style={{ fontSize: 11, marginBottom: 10 }}>
+                    Er wordt van uitgegaan dat kopers spreiden over elk briefje/muntstuk vanaf de prijs tot en met €20 — dus ook wisselgeld voor wie met €10 of €20 betaalt, niet enkel voor wie exact past betaalt.
+                  </p>
                   <CoupureGrid aantallen={voorstel} setAantallen={setVoorstel} />
                   <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
                     Totaal: <span className="money" style={{ fontWeight: 700 }}>{euro(samenstellingTotaal(voorstel))}</span>
