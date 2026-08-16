@@ -16,7 +16,10 @@ const RECHT_KORT = { admin: "Admin", financieel_verantwoordelijke: "Financiën",
 
 // Compacte multi-select i.p.v. een rij aangevinkte checkboxes per gebruiker:
 // toegewezen verantwoordelijkheden tonen als chips, een "+ toewijzen"-knopje
-// opent een klein afvinklijstje om aan te passen.
+// opent een klein afvinklijstje om aan te passen. Dit is de enige plek waar
+// je iemand aan een taak toewijst — of je die persoon nu bekijkt via zijn/haar
+// eigen rij in "Overige leden" of via een afdelings-sectie maakt niet uit,
+// het schrijft altijd naar dezelfde toewijzing.
 function VerantwoordelijkhedenCel({ user, alle, open, onToggleOpen, onToggle }) {
   const toegewezen = user.verantwoordelijkheden;
   return (
@@ -47,6 +50,83 @@ function VerantwoordelijkhedenCel({ user, alle, open, onToggleOpen, onToggle }) 
   );
 }
 
+// Eén gebruikersrij — wordt hergebruikt in elke sectie (Admin, per afdeling,
+// per taak, Overige leden). Eenzelfde persoon kan dus in meerdere secties
+// tegelijk verschijnen als die meerdere rollen/taken heeft; het is telkens
+// dezelfde onderliggende gebruiker die bewerkt wordt.
+function GebruikerRij({ u, alle, bewerkOpen, onToggleBewerk, pickerOpen, onTogglePicker, onToggleVerant, onUpdate, onVerwijderen }) {
+  return (
+    <div style={{ padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{u.naam}</div>
+          <div className="subtle" style={{ fontSize: 13 }}>{u.discord_username ? `@${u.discord_username}` : "Naam (geen login)"} · {u.type || "-"}{u.groep ? ` · ${u.groep}` : ""}</div>
+        </div>
+        <span className={`badge ${RECHT_BADGE[u.platform_recht] || "badge-neutral"}`}>{RECHT_KORT[u.platform_recht] || "Lid"}</span>
+        <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => onToggleBewerk(u.id)}>{bewerkOpen ? "Klaar" : "Wijzig"}</button>
+      </div>
+
+      <VerantwoordelijkhedenCel user={u} alle={alle} open={pickerOpen} onToggleOpen={onTogglePicker} onToggle={onToggleVerant} />
+
+      {bewerkOpen && (
+        <div className="grid-3" style={{ paddingTop: 4 }}>
+          <select value={u.type || ""} onChange={(e) => onUpdate({ type: e.target.value })}>
+            {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <select value={u.groep || ""} onChange={(e) => onUpdate({ groep: e.target.value })}>
+            <option value="">Groep...</option>
+            {GROEPEN.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+          <select value={u.platform_recht || "lid"} onChange={(e) => onUpdate({ platform_recht: e.target.value })}>
+            {RECHTEN.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </select>
+          <input
+            defaultValue={u.iban || ""}
+            placeholder="IBAN, bv. BE68 ..."
+            onBlur={(e) => { if (e.target.value !== (u.iban || "")) onUpdate({ iban: e.target.value.trim() }); }}
+            style={{ gridColumn: "span 2" }}
+          />
+          <button className="btn-danger-solid" onClick={onVerwijderen}>Verwijderen</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Eén sectiekaart: titel + optionele actie rechtsboven, daaronder de leden als
+// rijen of een lege-staat-tekst. Gedeeld door alle groeperingen hieronder.
+function Sectie({ titel, actie, leden, leeg, ctx }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div className="eyebrow" style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <span>{titel}</span>
+        {actie}
+      </div>
+      <div className="card" style={{ padding: 0 }}>
+        {leden.length === 0 ? (
+          <p className="muted" style={{ fontStyle: "italic", fontSize: 13, padding: "14px 18px" }}>{leeg}</p>
+        ) : (
+          leden.map((u, i) => (
+            <div key={u.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
+              <GebruikerRij
+                u={u}
+                alle={ctx.verantwoordelijkheden}
+                bewerkOpen={ctx.bewerkId === u.id}
+                onToggleBewerk={ctx.onToggleBewerk}
+                pickerOpen={ctx.openPicker === u.id}
+                onTogglePicker={ctx.onTogglePicker}
+                onToggleVerant={ctx.onToggleVerant}
+                onUpdate={(fields) => ctx.onUpdate(u.id, fields)}
+                onVerwijderen={() => ctx.onVerwijderen(u)}
+              />
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function GebruikersBeheer() {
   const { data: session } = useSession();
   const toast = useToast();
@@ -57,7 +137,6 @@ export default function GebruikersBeheer() {
   const [error, setError] = useState("");
   const [openPicker, setOpenPicker] = useState(null);
   const [bewerkId, setBewerkId] = useState(null);
-  const [toonVerantwoordelijkheden, setToonVerantwoordelijkheden] = useState(false);
   const [toonNieuwePersoon, setToonNieuwePersoon] = useState(false);
   const [nieuwePersoon, setNieuwePersoon] = useState({ soort: "gebruiker", discordUsername: "", naam: "" });
 
@@ -191,6 +270,33 @@ export default function GebruikersBeheer() {
 
   const zonderIban = users.filter((u) => !u.iban);
 
+  // Groeperen per taak: rol (admin/financiën), afdeling en verantwoordelijkheid-
+  // tag staan elk als aparte secties. Wie meerdere taken heeft, staat gewoon
+  // in meerdere secties — dat is de realiteit. Wie nergens bij hoort komt in
+  // "Overige leden" terecht, zodat niemand zoek raakt.
+  const admins = users.filter((u) => u.platform_recht === "admin");
+  const financieel = users.filter((u) => u.platform_recht === "financieel_verantwoordelijke");
+  const perAfdeling = GROEPEN.map((g) => ({ naam: g, leden: users.filter((u) => u.groep === g) }));
+  const perTaak = verantwoordelijkheden.map((v) => ({ ...v, leden: users.filter((u) => u.verantwoordelijkheden.some((x) => x.id === v.id)) }));
+  const getaaktIds = new Set([
+    ...admins.map((u) => u.id),
+    ...financieel.map((u) => u.id),
+    ...perAfdeling.flatMap((g) => g.leden.map((u) => u.id)),
+    ...perTaak.flatMap((t) => t.leden.map((u) => u.id)),
+  ]);
+  const overige = users.filter((u) => !getaaktIds.has(u.id));
+
+  const ctx = {
+    verantwoordelijkheden,
+    bewerkId,
+    onToggleBewerk: (id) => setBewerkId((prev) => (prev === id ? null : id)),
+    openPicker,
+    onTogglePicker: (id) => setOpenPicker((prev) => (prev === id ? null : id)),
+    onToggleVerant: toggleVerantwoordelijkheid,
+    onUpdate: updateUser,
+    onVerwijderen: verwijderGebruiker,
+  };
+
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6, flexWrap: "wrap", gap: 12 }}>
@@ -198,7 +304,7 @@ export default function GebruikersBeheer() {
         <button className="btn-primary" onClick={() => setToonNieuwePersoon(!toonNieuwePersoon)}>{toonNieuwePersoon ? "Annuleren" : "+ Persoon toevoegen"}</button>
       </div>
       <p className="muted" style={{ fontSize: 15, marginBottom: 20 }}>
-        Type, afdeling, verantwoordelijkheden en rechten per persoon. Alles wat je wijzigt, is meteen opgeslagen.
+        Gegroepeerd per taak: rol, afdeling en verantwoordelijkheid. Alles wat je wijzigt, is meteen opgeslagen.
       </p>
 
       {toonNieuwePersoon && (
@@ -233,7 +339,7 @@ export default function GebruikersBeheer() {
         </div>
       )}
 
-      <div className="card" style={{ marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
+      <div className="card" style={{ marginBottom: 24, display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 16, flexWrap: "wrap" }}>
         <div>
           <div className="muted" style={{ fontSize: 14 }}>Leiding op het platform</div>
           <div className="money" style={{ fontSize: 26, fontWeight: 700 }}>{users.length}</div>
@@ -243,83 +349,40 @@ export default function GebruikersBeheer() {
         )}
       </div>
 
-      <div className="eyebrow" style={{ marginBottom: 10 }}>Iedereen</div>
-      <div className="card" style={{ padding: 0, marginBottom: 20 }}>
-        {users.map((u, i) => {
-          const open = bewerkId === u.id;
-          return (
-            <div key={u.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", padding: "14px 18px", display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-                <div style={{ flex: 1, minWidth: 160 }}>
-                  <div style={{ fontWeight: 700, fontSize: 15 }}>{u.naam}</div>
-                  <div className="subtle" style={{ fontSize: 13 }}>{u.discord_username ? `@${u.discord_username}` : "Naam (geen login)"} · {u.type || "-"}{u.groep ? ` · ${u.groep}` : ""}</div>
-                </div>
-                <span className={`badge ${RECHT_BADGE[u.platform_recht] || "badge-neutral"}`}>{RECHT_KORT[u.platform_recht] || "Lid"}</span>
-                <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => setBewerkId(open ? null : u.id)}>{open ? "Klaar" : "Wijzig"}</button>
-              </div>
+      <Sectie titel="Admin" leden={admins} leeg="Nog geen admin toegewezen." ctx={ctx} />
+      <Sectie titel="Financieel verantwoordelijke" leden={financieel} leeg="Nog geen financieel verantwoordelijke toegewezen." ctx={ctx} />
 
-              <VerantwoordelijkhedenCel
-                user={u}
-                alle={verantwoordelijkheden}
-                open={openPicker === u.id}
-                onToggleOpen={(id) => setOpenPicker((prev) => (prev === id ? null : id))}
-                onToggle={toggleVerantwoordelijkheid}
-              />
+      {perAfdeling.map((g) => (
+        <Sectie key={g.naam} titel={`${g.naam}-leiding`} leden={g.leden} leeg="Nog geen leiding toegewezen." ctx={ctx} />
+      ))}
 
-              {open && (
-                <div className="grid-3" style={{ paddingTop: 4 }}>
-                  <select value={u.type || ""} onChange={(e) => updateUser(u.id, { type: e.target.value })}>
-                    {TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                  <select value={u.groep || ""} onChange={(e) => updateUser(u.id, { groep: e.target.value })}>
-                    <option value="">Groep...</option>
-                    {GROEPEN.map((g) => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                  <select value={u.platform_recht || "lid"} onChange={(e) => updateUser(u.id, { platform_recht: e.target.value })}>
-                    {RECHTEN.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
-                  </select>
-                  <input
-                    defaultValue={u.iban || ""}
-                    placeholder="IBAN, bv. BE68 ..."
-                    onBlur={(e) => { if (e.target.value !== (u.iban || "")) updateUser(u.id, { iban: e.target.value.trim() }); }}
-                    style={{ gridColumn: "span 2" }}
-                  />
-                  <button className="btn-danger-solid" onClick={() => verwijderGebruiker(u)}>Verwijderen</button>
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: -4 }}>
+        <div className="eyebrow" style={{ marginTop: 8 }}>Verantwoordelijkheden</div>
       </div>
-
-      {toonVerantwoordelijkheden ? (
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontWeight: 700, fontSize: 15 }}>Verantwoordelijkheden</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={nieuweVerantwoordelijkheid}>+ Nieuwe</button>
-              <button onClick={() => setToonVerantwoordelijkheden(false)}>Sluiten</button>
-            </div>
-          </div>
-          {verantwoordelijkheden.length === 0 ? (
-            <p className="muted" style={{ fontStyle: "italic", fontSize: 13 }}>Nog geen verantwoordelijkheden aangemaakt.</p>
-          ) : (
-            verantwoordelijkheden.map((v, i) => (
-              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                <div style={{ flex: 1, fontWeight: 600, fontSize: 14 }}>{v.naam}</div>
-                <select value={v.hoofdverantwoordelijke?.id || ""} onChange={(e) => hoofdverantwoordelijkeInstellen(v.id, e.target.value)}>
-                  <option value="">- niemand -</option>
-                  {users.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
-                </select>
-                <span className="muted" style={{ fontSize: 12, minWidth: 120 }}>{v.medeverantwoordelijken.length > 0 ? v.medeverantwoordelijken.map((m) => m.naam).join(", ") : "geen mede"}</span>
-                <button className="btn-danger" onClick={() => verantwoordelijkheidVerwijderen(v)}>🗑️</button>
-              </div>
-            ))
-          )}
-        </div>
-      ) : (
-        <button onClick={() => setToonVerantwoordelijkheden(true)}>Verantwoordelijkheden beheren</button>
+      {perTaak.length === 0 && (
+        <p className="muted" style={{ fontStyle: "italic", fontSize: 13, marginBottom: 10 }}>Nog geen verantwoordelijkheden aangemaakt.</p>
       )}
+      {perTaak.map((v) => (
+        <Sectie
+          key={v.id}
+          titel={v.naam}
+          leeg="Nog niemand toegewezen."
+          leden={v.leden}
+          ctx={ctx}
+          actie={
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <select value={v.hoofdverantwoordelijke?.id || ""} onChange={(e) => hoofdverantwoordelijkeInstellen(v.id, e.target.value)} style={{ fontSize: 12 }}>
+                <option value="">Hoofdverantwoordelijke...</option>
+                {users.map((u) => <option key={u.id} value={u.id}>{u.naam}</option>)}
+              </select>
+              <button className="btn-danger" onClick={() => verantwoordelijkheidVerwijderen(v)}>🗑️</button>
+            </div>
+          }
+        />
+      ))}
+      <button onClick={nieuweVerantwoordelijkheid} style={{ marginBottom: 18 }}>+ Nieuwe verantwoordelijkheid</button>
+
+      <Sectie titel="Overige leden" leden={overige} leeg="Iedereen heeft een taak." ctx={ctx} />
     </div>
   );
 }
