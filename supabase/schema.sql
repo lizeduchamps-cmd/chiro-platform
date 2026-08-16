@@ -434,6 +434,12 @@ create table if not exists wisselgeld_aanvragen (
   samenstelling_cash text,                     -- vrije tekst, bv. '10x€5, 5x€10'
   doel_activiteit text,
   status text not null default 'Aangevraagd' check (status in ('Aangevraagd', 'Goedgekeurd', 'Klaargezet', 'Opgehaald')),
+  -- Optioneel: doorgegeven verkoopprijzen (bv. [{"naam":"Cola","prijs":1.5,"aantalVerwacht":80}])
+  -- en het daaruit berekende coupure-voorstel ({"5": 12, "2": 6, ...}) — apart
+  -- van samenstelling_cash gehouden zodat de vrije-tekst-versie blijft werken
+  -- voor wie geen prijzen wil ingeven.
+  verkoopprijzen jsonb,
+  samenstelling_voorstel jsonb,
   created_at timestamptz default now()
 );
 

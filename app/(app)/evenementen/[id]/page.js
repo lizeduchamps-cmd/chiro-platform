@@ -2,6 +2,7 @@
 import { useSession, getSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { evenementMatchTag } from "@/lib/evenementMatch";
+import { BRIEFJES, MUNTEN, samenstellingTotaal } from "@/lib/coupureVoorstel";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonStatRow, SkeletonCard } from "@/components/Skeleton";
 
@@ -23,12 +24,6 @@ const STATUS_BADGE = { Gepland: "badge-neutral", "Te vergoeden": "badge-warning"
 const BETAALMETHODES = ["Overschrijving", "Cash", "Bancontact/Kaart", "Factuur op termijn"];
 const STATUSSEN = ["Gepland", "Te vergoeden", "Betaald", "Afgerond"];
 const STATUS_LABEL = { gepland: "Gepland", lopend: "Lopend", afgerond: "Afgerond" };
-const BRIEFJES = [50, 20, 10, 5];
-const MUNTEN = [2, 1, 0.5, 0.2, 0.1];
-
-function samenstellingTotaal(samenstelling) {
-  return Object.entries(samenstelling || {}).reduce((s, [denom, aantal]) => s + Number(denom) * Number(aantal || 0), 0);
-}
 
 const LEGE_TRANSACTIE = {
   datum: new Date().toISOString().slice(0, 10),

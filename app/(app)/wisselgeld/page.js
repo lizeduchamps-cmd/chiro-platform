@@ -3,6 +3,7 @@ import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonTable } from "@/components/Skeleton";
+import { BRIEFJES, MUNTEN, samenstellingTotaal, berekenCoupureVoorstel } from "@/lib/coupureVoorstel";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -13,8 +14,57 @@ const STATUS_VOLGORDE = ["Aangevraagd", "Goedgekeurd", "Klaargezet", "Opgehaald"
 const STATUS_BADGE = { Aangevraagd: "badge-warning", Goedgekeurd: "badge-primary", Klaargezet: "badge-primary", Opgehaald: "badge-success" };
 
 const LEGE_AANVRAAG = { afdeling: "", datumNodig: "", bedragGevraagd: "", samenstellingCash: "", doelActiviteit: "" };
+const LEGE_PRIJSLIJN = { naam: "", prijs: "", aantalVerwacht: "" };
 
-function AanvraagKaart({ a, magActie, volgende, onStatusVooruit, onVerwijderen }) {
+// Leesbare samenvatting van een coupure-object, bv. "5×€5, 2×€2, 1×€1".
+function coupureSamenvatting(samenstelling) {
+  return Object.entries(samenstelling || {})
+    .sort((a, b) => Number(b[0]) - Number(a[0]))
+    .filter(([, aantal]) => Number(aantal) > 0)
+    .map(([denom, aantal]) => `${aantal}×€${denom}`)
+    .join(", ");
+}
+
+// Dezelfde briefjes/muntjes-tel-grid als bij een evenement-kassa, hier
+// hergebruikt voor het coupure-voorstel.
+function CoupureGrid({ aantallen, setAantallen }) {
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
+      <div>
+        <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>BRIEFJES</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {BRIEFJES.map((d) => (
+            <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+              €{d}
+              <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={aantallen[d] ?? ""} onChange={(e) => setAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
+            </label>
+          ))}
+        </div>
+      </div>
+      <div>
+        <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>MUNTJES</div>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {MUNTEN.map((d) => (
+            <label key={d} style={{ fontSize: 12, display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+              €{d}
+              <input type="number" min="0" step="1" style={{ width: 54, textAlign: "center" }} value={aantallen[d] ?? ""} onChange={(e) => setAantallen((prev) => ({ ...prev, [d]: e.target.value === "" ? "" : Number(e.target.value) }))} />
+            </label>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AanvraagKaart({ a, magActie, isFinancien, volgende, onStatusVooruit, onVerwijderen, onVoorstelOpslaan }) {
+  const [wijzigCoupures, setWijzigCoupures] = useState(false);
+  const [aantallen, setAantallen] = useState(a.samenstelling_voorstel || {});
+
+  const opslaan = async () => {
+    await onVoorstelOpslaan(a, aantallen);
+    setWijzigCoupures(false);
+  };
+
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
@@ -28,14 +78,32 @@ function AanvraagKaart({ a, magActie, volgende, onStatusVooruit, onVerwijderen }
         <div>
           <div className="muted" style={{ fontSize: 14 }}>Gevraagd</div>
           <div className="money" style={{ fontSize: 26, fontWeight: 700, letterSpacing: "-0.02em" }}>{euro(a.bedrag_gevraagd)}</div>
-          {a.samenstelling_cash && <div className="subtle" style={{ fontSize: 13 }}>{a.samenstelling_cash}</div>}
+          {a.samenstelling_voorstel && <div className="subtle" style={{ fontSize: 13 }}>Voorstel: {coupureSamenvatting(a.samenstelling_voorstel)}</div>}
+          {!a.samenstelling_voorstel && a.samenstelling_cash && <div className="subtle" style={{ fontSize: 13 }}>{a.samenstelling_cash}</div>}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span className="subtle" style={{ fontSize: 13 }}>{a.aanvraag_code}</span>
+          {isFinancien && <button className="btn-plain link" style={{ fontSize: 13 }} onClick={() => setWijzigCoupures(!wijzigCoupures)}>{wijzigCoupures ? "Sluiten" : "Coupures wijzigen"}</button>}
           {magActie && volgende && <button className="btn-primary" onClick={() => onStatusVooruit(a)}>{volgende} →</button>}
           {magActie && <button className="btn-danger" onClick={() => onVerwijderen(a)}>🗑️</button>}
         </div>
       </div>
+
+      {wijzigCoupures && (
+        <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12, display: "flex", flexDirection: "column", gap: 10 }}>
+          <CoupureGrid aantallen={aantallen} setAantallen={setAantallen} />
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span className="muted" style={{ fontSize: 13 }}>Totaal: <span className="money" style={{ fontWeight: 700 }}>{euro(samenstellingTotaal(aantallen))}</span></span>
+            <button className="btn-primary" onClick={opslaan}>Opslaan</button>
+          </div>
+        </div>
+      )}
+
+      {a.verkoopprijzen?.length > 0 && (
+        <div className="subtle" style={{ fontSize: 12 }}>
+          Verkoopprijzen: {a.verkoopprijzen.map((p) => `${p.naam ? p.naam + " " : ""}€${p.prijs} × ${p.aantalVerwacht}`).join(" · ")}
+        </div>
+      )}
     </div>
   );
 }
@@ -50,6 +118,9 @@ export default function Wisselgeld() {
   const [filterAfdeling, setFilterAfdeling] = useState("");
   const [toonForm, setToonForm] = useState(false);
   const [nieuweAanvraag, setNieuweAanvraag] = useState(LEGE_AANVRAAG);
+  const [modus, setModus] = useState("eenvoudig");
+  const [prijslijnen, setPrijslijnen] = useState([{ ...LEGE_PRIJSLIJN }]);
+  const [voorstel, setVoorstel] = useState(null);
 
   const isFinancien = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
   const eigenAfdeling = session?.user?.groep || null;
@@ -86,17 +157,45 @@ export default function Wisselgeld() {
     );
   }
 
+  const prijslijnWijzigen = (i, veld, waarde) => {
+    setPrijslijnen((prev) => prev.map((r, idx) => (idx === i ? { ...r, [veld]: waarde } : r)));
+  };
+  const prijslijnToevoegen = () => setPrijslijnen((prev) => [...prev, { ...LEGE_PRIJSLIJN }]);
+  const prijslijnVerwijderen = (i) => setPrijslijnen((prev) => prev.filter((_, idx) => idx !== i));
+
+  const voorstelBerekenen = () => {
+    const geldige = prijslijnen.filter((r) => Number(r.prijs) > 0 && Number(r.aantalVerwacht) > 0);
+    if (geldige.length === 0) return toast.error("Vul minstens één prijs met een verwacht aantal in.");
+    const { samenstelling, totaalBedrag } = berekenCoupureVoorstel(geldige);
+    setVoorstel(samenstelling);
+    setNieuweAanvraag((prev) => ({ ...prev, bedragGevraagd: String(totaalBedrag) }));
+    toast.success(`Voorstel berekend: ${euro(totaalBedrag)} — pas gerust nog aan.`);
+  };
+
+  const resetForm = () => {
+    setNieuweAanvraag({ ...LEGE_AANVRAAG, afdeling: afdelingenKeuze.length === 1 ? afdelingenKeuze[0] : "" });
+    setModus("eenvoudig");
+    setPrijslijnen([{ ...LEGE_PRIJSLIJN }]);
+    setVoorstel(null);
+  };
+
   const aanvraagIndienen = async () => {
     const a = nieuweAanvraag;
     if (!a.afdeling || !a.datumNodig || !a.bedragGevraagd) return toast.error("Vul afdeling, datum en bedrag in.");
+    const geldigePrijslijnen = modus === "prijzen" ? prijslijnen.filter((r) => Number(r.prijs) > 0 && Number(r.aantalVerwacht) > 0) : null;
     const res = await fetch("/api/wisselgeld", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ werkjaarId, ...a }),
+      body: JSON.stringify({
+        werkjaarId,
+        ...a,
+        verkoopprijzen: geldigePrijslijnen?.length ? geldigePrijslijnen : null,
+        samenstellingVoorstel: modus === "prijzen" && voorstel ? voorstel : null,
+      }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
-    setNieuweAanvraag({ ...LEGE_AANVRAAG, afdeling: afdelingenKeuze.length === 1 ? afdelingenKeuze[0] : "" });
+    resetForm();
     setToonForm(false);
     laden(werkjaarId, filterAfdeling);
     toast.success(`Aanvraag ${data.aanvraag.aanvraag_code} ingediend`);
@@ -117,6 +216,16 @@ export default function Wisselgeld() {
     });
     laden(werkjaarId, filterAfdeling);
     toast.success(`Status bijgewerkt naar "${nieuw}"`);
+  };
+
+  const voorstelOpslaan = async (aanvraag, aantallen) => {
+    await fetch("/api/wisselgeld", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: aanvraag.id, samenstellingVoorstel: aantallen }),
+    });
+    laden(werkjaarId, filterAfdeling);
+    toast.success("Coupure-voorstel opgeslagen");
   };
 
   const aanvraagVerwijderen = (aanvraag) => {
@@ -176,10 +285,55 @@ export default function Wisselgeld() {
               {afdelingenKeuze.map((a) => <option key={a} value={a}>{a}</option>)}
             </select>
             <input type="date" placeholder="Datum nodig" value={nieuweAanvraag.datumNodig} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, datumNodig: e.target.value })} />
-            <input type="number" step="0.01" placeholder="Bedrag gevraagd" value={nieuweAanvraag.bedragGevraagd} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, bedragGevraagd: e.target.value })} />
             <input placeholder="Doel, bv. Dropping snack/inkom" value={nieuweAanvraag.doelActiviteit} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, doelActiviteit: e.target.value })} style={{ gridColumn: "span 2" }} />
-            <input placeholder="Samenstelling (optioneel), bv. 10x€5, 5x€10" value={nieuweAanvraag.samenstellingCash} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, samenstellingCash: e.target.value })} />
           </div>
+
+          <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <input type="radio" checked={modus === "eenvoudig"} onChange={() => setModus("eenvoudig")} />
+              Eenvoudig — gewoon een bedrag
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+              <input type="radio" checked={modus === "prijzen"} onChange={() => setModus("prijzen")} />
+              Met verkoopprijzen — automatisch coupure-voorstel
+            </label>
+          </div>
+
+          {modus === "eenvoudig" ? (
+            <div className="grid-2" style={{ marginBottom: 10 }}>
+              <input type="number" step="0.01" placeholder="Bedrag gevraagd" value={nieuweAanvraag.bedragGevraagd} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, bedragGevraagd: e.target.value })} />
+              <input placeholder="Samenstelling (optioneel), bv. 10x€5, 5x€10" value={nieuweAanvraag.samenstellingCash} onChange={(e) => setNieuweAanvraag({ ...nieuweAanvraag, samenstellingCash: e.target.value })} />
+            </div>
+          ) : (
+            <div style={{ marginBottom: 12 }}>
+              <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>
+                Wat ga je verkopen, tegen welke prijs, en hoeveel verwacht je er ongeveer van te verkopen? Op basis daarvan stelt het platform voor hoeveel briefjes/muntjes van elke waarde je klaar moet leggen.
+              </p>
+              {prijslijnen.map((r, i) => (
+                <div key={i} style={{ display: "flex", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                  <input placeholder="Wat, bv. Cola (optioneel)" value={r.naam} onChange={(e) => prijslijnWijzigen(i, "naam", e.target.value)} style={{ flex: 1, minWidth: 120 }} />
+                  <input type="number" step="0.01" placeholder="Prijs" value={r.prijs} onChange={(e) => prijslijnWijzigen(i, "prijs", e.target.value)} style={{ width: 90 }} />
+                  <input type="number" step="1" placeholder="Verwacht aantal" value={r.aantalVerwacht} onChange={(e) => prijslijnWijzigen(i, "aantalVerwacht", e.target.value)} style={{ width: 120 }} />
+                  {prijslijnen.length > 1 && <button className="btn-danger" onClick={() => prijslijnVerwijderen(i)}>🗑️</button>}
+                </div>
+              ))}
+              <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                <button onClick={prijslijnToevoegen}>+ Prijs</button>
+                <button className="btn-primary" onClick={voorstelBerekenen}>Bereken voorstel</button>
+              </div>
+
+              {voorstel && (
+                <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14, marginBottom: 10 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>Voorstel — pas gerust aan</div>
+                  <CoupureGrid aantallen={voorstel} setAantallen={setVoorstel} />
+                  <div className="muted" style={{ fontSize: 13, marginTop: 10 }}>
+                    Totaal: <span className="money" style={{ fontWeight: 700 }}>{euro(samenstellingTotaal(voorstel))}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <button className="btn-primary" onClick={aanvraagIndienen}>Aanvraag indienen</button>
         </div>
       )}
@@ -198,7 +352,7 @@ export default function Wisselgeld() {
           <div className="eyebrow" style={{ marginBottom: 10 }}>Te regelen</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {teRegelen.map((a) => (
-              <AanvraagKaart key={a.id} a={a} magActie={magActieOp(a) && (isFinancien || a.status === "Klaargezet")} volgende={volgendeStatus(a.status)} onStatusVooruit={statusVooruit} onVerwijderen={aanvraagVerwijderen} />
+              <AanvraagKaart key={a.id} a={a} magActie={magActieOp(a) && (isFinancien || a.status === "Klaargezet")} isFinancien={isFinancien} volgende={volgendeStatus(a.status)} onStatusVooruit={statusVooruit} onVerwijderen={aanvraagVerwijderen} onVoorstelOpslaan={voorstelOpslaan} />
             ))}
           </div>
         </div>
@@ -209,7 +363,7 @@ export default function Wisselgeld() {
           <div className="eyebrow" style={{ marginBottom: 10 }}>Opgehaald</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             {opgehaald.map((a) => (
-              <AanvraagKaart key={a.id} a={a} magActie={magActieOp(a)} volgende={null} onStatusVooruit={statusVooruit} onVerwijderen={aanvraagVerwijderen} />
+              <AanvraagKaart key={a.id} a={a} magActie={magActieOp(a)} isFinancien={isFinancien} volgende={null} onStatusVooruit={statusVooruit} onVerwijderen={aanvraagVerwijderen} onVoorstelOpslaan={voorstelOpslaan} />
             ))}
           </div>
         </div>
