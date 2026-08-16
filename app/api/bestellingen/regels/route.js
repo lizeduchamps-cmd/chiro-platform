@@ -36,11 +36,15 @@ export async function POST(req) {
 
 // Prijsgeheugen (product_prijzen) bijwerken — los van bestelling_regels, zodat
 // het verwijderen van een oude bestelling deze prijssuggestie niet meeneemt.
-// Een hapering hier mag het toevoegen van de regel zelf niet laten mislukken.
+// Zonder winkel op de bestelling wordt niets onthouden: dat is meestal een
+// eenmalige aankoop (geen vaste leverancier), en zou de suggesties enkel
+// vervuilen. Een hapering hier mag het toevoegen van de regel zelf niet
+// laten mislukken.
 async function prijsOnthouden(bestellingId, product, prijs) {
   try {
     const { data: bestelling } = await supabaseAdmin.from("bestellingen").select("winkel").eq("id", bestellingId).maybeSingle();
     const winkelKey = (bestelling?.winkel || "").trim().toLowerCase();
+    if (!winkelKey) return;
     await supabaseAdmin.from("product_prijzen").upsert(
       { product: product.trim(), product_key: product.trim().toLowerCase(), winkel_key: winkelKey, prijs, bijgewerkt_op: new Date().toISOString() },
       { onConflict: "product_key,winkel_key" }

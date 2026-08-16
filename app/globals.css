@@ -625,14 +625,14 @@ tbody tr:hover {
     z-index: 40;
     background: var(--surface);
     border-top: 1px solid var(--border);
-    padding: 6px 2px calc(6px + env(safe-area-inset-bottom));
+    padding: 10px 2px calc(12px + env(safe-area-inset-bottom));
   }
   .mobile-tab {
     flex: 1;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 4px;
     padding: 4px 2px;
     text-decoration: none;
     color: var(--text-subtle);
@@ -675,7 +675,7 @@ tbody tr:hover {
 
   /* Ruimte onderaan zodat de onderste tabbalk geen inhoud/knoppen bedekt. */
   .app-content-inner {
-    padding-bottom: 76px;
+    padding-bottom: 90px;
   }
 
   .grid-2,
