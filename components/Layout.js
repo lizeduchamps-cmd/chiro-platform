@@ -98,18 +98,14 @@ function NavNode({ node, depth, pathname, manueelOpen, toggleManueel, linkStyle,
 export default function Layout({ session, children }) {
   const pathname = usePathname();
   const [manueelOpen, setManueelOpen] = useState(new Set());
-  const [evenementen, setEvenementen] = useState([]);
   const [nietZekerCount, setNietZekerCount] = useState(0);
 
-  // Evenementen komen uit de database (huidig werkjaar) i.p.v. vaste namen in de
-  // code, zodat nieuwe/verwijderde evenementen meteen in het menu kloppen.
-  // Meteen ook tellen hoeveel kasboektransacties nog niet helemaal zeker
-  // gecategoriseerd zijn, voor het bolletje op het Kasboek-tabblad.
+  // Tellen hoeveel kasboektransacties nog niet helemaal zeker gecategoriseerd
+  // zijn, voor het bolletje op het Kasboek-tabblad.
   useEffect(() => {
     fetch("/api/werkjaren").then((r) => r.json()).then((d) => {
       const werkjaarId = d.werkjaren?.[0]?.id;
       if (!werkjaarId) return;
-      fetch(`/api/evenementen?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((ed) => setEvenementen(ed.evenementen || []));
       fetch(`/api/transacties?werkjaarId=${werkjaarId}`).then((r) => r.json()).then((td) => {
         const aantal = (td.transacties || []).filter((t) => t.categorie_zekerheid === "waarschijnlijk" || t.categorie_zekerheid === "onzeker").length;
         setNietZekerCount(aantal);
@@ -119,10 +115,13 @@ export default function Layout({ session, children }) {
 
   // 7 vaste hoofditems, voor iedereen in dezelfde volgorde (ook Gebruikers &
   // rollen — niet-admins zien het tabblad, de pagina zelf toont voor hen enkel
-  // een melding dat ze geen toegang hebben). Kampbudgetten/Kampkosten/
-  // Documenten staan voorlopig nog als aparte kinderen onder Evenementen &
-  // uitstappen — dat is hun toekomstige plek zodra Kamp een echt evenement
-  // wordt (latere fase), maar zo blijven ze intussen gewoon bereikbaar.
+  // een melding dat ze geen toegang hebben). Individuele evenementen (ook
+  // herhalende zoals Lazarus/Taartenslag) komen bewust NIET als submenu hier
+  // te staan — die zijn enkel bereikbaar via de "Evenementen & uitstappen"-
+  // pagina zelf, waar ze gegroepeerd staan onder Afgerond/Lopend/Komend.
+  // Kampbudgetten/Kampkosten/Documenten staan voorlopig nog als aparte
+  // kinderen hieronder — dat is hun toekomstige plek zodra Kamp een echt
+  // evenement wordt (latere fase), maar zo blijven ze intussen bereikbaar.
   const groups = [
     { key: "dashboard", href: "/", kort: "Overzicht", label: "Overzicht", children: [] },
     {
@@ -139,7 +138,6 @@ export default function Layout({ session, children }) {
       kort: "Uitstappen",
       label: "Evenementen & uitstappen",
       children: [
-        ...evenementen.map((e) => ({ key: `evenement-${e.id}`, href: `/evenementen/${e.id}`, label: e.naam })),
         { key: "kampbudgetten", href: "/kampbudgetten", label: "Kampbudgetten" },
         { key: "kampkosten", href: "/kampkosten", label: "Kampkosten" },
         { key: "documenten", href: "/documenten", label: "Documenten" },
