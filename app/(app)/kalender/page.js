@@ -58,7 +58,7 @@ export default function Kalender() {
   const [loading, setLoading] = useState(true);
   const [huidigeMaand, setHuidigeMaand] = useState(() => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth(), 1); });
   const [toonForm, setToonForm] = useState(false);
-  const [toonMaand, setToonMaand] = useState(false);
+  const [weergave, setWeergave] = useState("lijst");
   const [nieuwItem, setNieuwItem] = useState(LEEG_ITEM);
 
   const magBewerken = ["admin", "financieel_verantwoordelijke"].includes(session?.user?.platformRecht);
@@ -182,34 +182,41 @@ export default function Kalender() {
         </div>
       )}
 
-      {eerstvolgende.length > 0 && (
-        <div style={{ marginBottom: 20 }}>
-          <div className="eyebrow" style={{ marginBottom: 10 }}>Eerstvolgende</div>
-          <div className="card" style={{ padding: 0 }}>
-            {eerstvolgende.map((it, i) => {
-              const kleur = itemKleur(it.type);
-              const dagen = daagVerschil(it.datum_deadline, vandaag);
-              return (
-                <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", cursor: it.virtueel || magBewerken ? "pointer" : "default" }} onClick={() => itemKlikken(it)}>
-                  <span style={{ width: 10, height: 10, borderRadius: 99, background: kleur.fg, flexShrink: 0 }} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{it.titel}</div>
-                    <div className="subtle" style={{ fontSize: 13 }}>{it.type}</div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <button className={weergave === "lijst" ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }} onClick={() => setWeergave("lijst")}>Lijst</button>
+        <button className={weergave === "maand" ? "btn-primary" : ""} style={{ borderRadius: "var(--radius-pill)" }} onClick={() => setWeergave("maand")}>Maand</button>
+      </div>
+
+      {weergave === "lijst" && (
+        eerstvolgende.length === 0 ? (
+          <p className="muted" style={{ fontStyle: "italic" }}>Niets eerstvolgend.</p>
+        ) : (
+          <div style={{ marginBottom: 20 }}>
+            <div className="eyebrow" style={{ marginBottom: 10 }}>Eerstvolgende</div>
+            <div className="card" style={{ padding: 0 }}>
+              {eerstvolgende.map((it, i) => {
+                const kleur = itemKleur(it.type);
+                const dagen = daagVerschil(it.datum_deadline, vandaag);
+                return (
+                  <div key={it.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", cursor: it.virtueel || magBewerken ? "pointer" : "default" }} onClick={() => itemKlikken(it)}>
+                    <span style={{ width: 10, height: 10, borderRadius: 99, background: kleur.fg, flexShrink: 0 }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{it.titel}</div>
+                      <div className="subtle" style={{ fontSize: 13 }}>{it.type}</div>
+                    </div>
+                    <span className="badge" style={{ background: kleur.bg, color: kleur.fg }}>{dagen === 0 ? "vandaag" : dagen === 1 ? "morgen" : `over ${dagen} dagen`}</span>
+                    {magBewerken && !it.virtueel && (
+                      <button className="btn-plain" onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} title="Verwijderen">🗑️</button>
+                    )}
                   </div>
-                  <span className="badge" style={{ background: kleur.bg, color: kleur.fg }}>{dagen === 0 ? "vandaag" : dagen === 1 ? "morgen" : `over ${dagen} dagen`}</span>
-                  {magBewerken && !it.virtueel && (
-                    <button className="btn-plain" onClick={(e) => { e.stopPropagation(); itemVerwijderen(it); }} title="Verwijderen">🗑️</button>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
+        )
       )}
 
-      {!toonMaand ? (
-        <button onClick={() => setToonMaand(true)}>Maandoverzicht bekijken</button>
-      ) : (
+      {weergave === "maand" && (
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
             <button onClick={() => maandWisselen(-1)}>← Vorige</button>
