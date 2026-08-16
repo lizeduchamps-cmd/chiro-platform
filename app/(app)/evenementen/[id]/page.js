@@ -12,6 +12,18 @@ function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
 }
 
+// Zelfde lijniconen-stijl als de zijbalk (NavIcon in components/Layout.js) —
+// gestapelde muntjes, i.p.v. een emoji, om coupures tellen/aanpassen te openen.
+function MuntenIcon({ color = "currentColor" }) {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="6" rx="7" ry="3" />
+      <path d="M5 6v5c0 1.66 3.13 3 7 3s7-1.34 7-3V6" />
+      <path d="M5 11v5c0 1.66 3.13 3 7 3s7-1.34 7-3v-5" />
+    </svg>
+  );
+}
+
 // Zelfde drempels als lib/budgetKleur.js (<80% groen, tot 100% oranje, erboven rood).
 function budgetVulling(uitgegeven, budget) {
   if (!budget) return { pct: 0, kleur: "" };
@@ -64,21 +76,18 @@ export default function EvenementDetail({ params }) {
   const [overzicht, setOverzicht] = useState(null);
   const [loading, setLoading] = useState(true);
   const [gebruikers, setGebruikers] = useState([]);
-  const [nieuweKassa, setNieuweKassa] = useState({ naam: "", type: "cash", wisselgeldStart: "" });
+  const [nieuweKassa, setNieuweKassa] = useState({ naam: "", type: "cash" });
   const [toonNieuweKassa, setToonNieuweKassa] = useState(false);
   const [nieuweTransactie, setNieuweTransactie] = useState(LEGE_TRANSACTIE);
   const [toonTransactieForm, setToonTransactieForm] = useState(false);
   const [bewerkId, setBewerkId] = useState(null);
   const [bewerkVeld, setBewerkVeld] = useState(null);
-  const [tellerOpen, setTellerOpen] = useState(null);
+  const [tellerOpen, setTellerOpen] = useState(null); // { kassaId, veld: "wisselgeldStart" | "inhoudEinde" }
   const [tellerAantallen, setTellerAantallen] = useState({});
   const [nieuwTicket, setNieuwTicket] = useState({ naam: "", prijs: "", aantalVerkocht: "" });
   const [nieuweSponsor, setNieuweSponsor] = useState({ naam: "", bedrag: "", opmerking: "" });
-  const [kasSamenstelling, setKasSamenstelling] = useState({});
-  const [kasSamenstellingGewijzigd, setKasSamenstellingGewijzigd] = useState(false);
-  const [toonKopieren, setToonKopieren] = useState(false);
   const [kopieerBronnen, setKopieerBronnen] = useState([]);
-  const [kopieerBron, setKopieerBron] = useState("");
+  const [kopieerKeuze, setKopieerKeuze] = useState("");
 
   // Vaste namen in de zijbalk (bv. "Lazarus") wijzen rechtstreeks naar dit pad
   // i.p.v. naar een evenement-id, want dat verandert elk werkjaar. Is het al
@@ -133,19 +142,6 @@ export default function EvenementDetail({ params }) {
     laden();
     fetch("/api/gebruikers/lijst").then((r) => r.json()).then((d) => setGebruikers(d.users || []));
   }, [evenementId]);
-
-  // Houdt het lokale invoerraster voor de kassa-samenstelling in sync met de
-  // server: elke keer overzicht opnieuw geladen wordt (na opslaan, kopiëren,
-  // een kassa toevoegen/verwijderen, ...) start het raster weer vanaf de
-  // opgeslagen waarden.
-  useEffect(() => {
-    const init = {};
-    (overzicht?.kassas || []).forEach((k) => {
-      if (k.type === "cash") init[k.id] = { ...(k.wisselgeld_start_samenstelling || {}) };
-    });
-    setKasSamenstelling(init);
-    setKasSamenstellingGewijzigd(false);
-  }, [overzicht]);
 
   if (melding) {
     return (
@@ -232,14 +228,22 @@ export default function EvenementDetail({ params }) {
     const res = await fetch("/api/evenementen/kassas", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evenementId, ...nieuweKassa }),
+      body: JSON.stringify({ evenementId, naam: nieuweKassa.naam, type: nieuweKassa.type }),
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
-    setNieuweKassa({ naam: "", type: "cash", wisselgeldStart: "" });
+    const type = nieuweKassa.type;
+    setNieuweKassa({ naam: "", type: "cash" });
     setToonNieuweKassa(false);
     laden();
     toast.success("Kassa toegevoegd");
+    // Meteen doorklikken naar het telpaneel: coupures invullen kan zo
+    // meteen, zonder eerst een los totaalbedrag te moeten intypen.
+    if (type === "cash") {
+      setTellerAantallen({});
+      setTellerOpen({ kassaId: data.kassa.id, veld: "wisselgeldStart" });
+      kopierenLaden();
+    }
   };
 
   const kassaBijwerken = async (kassaId, veld, waarde) => {
@@ -251,21 +255,21 @@ export default function EvenementDetail({ params }) {
     laden();
   };
 
-  // Enkel nog voor "Inhoud na afloop" — dat is de werkelijkheid die na een
-  // evenement altijd opnieuw geteld moet worden. "Wisselgeld start" (vooraf)
-  // gebeurt hieronder via de gecombineerde kassa-samenstellingstabel.
-  const tellerOpenen = (kassa) => {
-    if (tellerOpen === kassa.id) { setTellerOpen(null); return; }
-    setTellerAantallen(kassa.inhoud_einde_samenstelling || {});
-    setTellerOpen(kassa.id);
+  const tellerOpenen = (kassa, veld) => {
+    if (tellerOpen?.kassaId === kassa.id && tellerOpen?.veld === veld) { setTellerOpen(null); return; }
+    const bestaande = veld === "wisselgeldStart" ? kassa.wisselgeld_start_samenstelling : kassa.inhoud_einde_samenstelling;
+    setTellerAantallen(bestaande || {});
+    setTellerOpen({ kassaId: kassa.id, veld });
+    if (veld === "wisselgeldStart") kopierenLaden();
   };
 
   const tellerToepassen = async () => {
     const totaal = Math.round(samenstellingTotaal(tellerAantallen) * 100) / 100;
+    const samenstellingVeld = tellerOpen.veld === "wisselgeldStart" ? "wisselgeldStartSamenstelling" : "inhoudEindeSamenstelling";
     await fetch("/api/evenementen/kassas", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: tellerOpen, inhoudEinde: totaal, inhoudEindeSamenstelling: tellerAantallen }),
+      body: JSON.stringify({ id: tellerOpen.kassaId, [tellerOpen.veld]: totaal, [samenstellingVeld]: tellerAantallen }),
     });
     setTellerOpen(null);
     laden();
@@ -280,54 +284,21 @@ export default function EvenementDetail({ params }) {
     toast.success("Kassa verwijderd");
   };
 
-  const kasSamenstellingWijzigen = (kassaId, denom, waarde) => {
-    setKasSamenstelling((prev) => ({
-      ...prev,
-      [kassaId]: { ...prev[kassaId], [denom]: waarde === "" ? "" : Number(waarde) },
-    }));
-    setKasSamenstellingGewijzigd(true);
-  };
-
-  const kasSamenstellingOpslaan = async () => {
-    const cashKassas = (overzicht?.kassas || []).filter((k) => k.type === "cash");
-    await Promise.all(
-      cashKassas.map((k) => {
-        const samenstelling = kasSamenstelling[k.id] || {};
-        return fetch("/api/evenementen/kassas", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: k.id,
-            wisselgeldStart: Math.round(samenstellingTotaal(samenstelling) * 100) / 100,
-            wisselgeldStartSamenstelling: samenstelling,
-          }),
-        });
-      })
-    );
-    laden();
-    toast.success("Kassa-samenstelling opgeslagen");
-  };
-
-  const kopierenOpenen = async () => {
+  // Bronnen voor "kopieer van vorig jaar" — cash-kassa's van andere
+  // evenementen, ophalen zodra het wisselgeld-start-telpaneel opengaat.
+  const kopierenLaden = async () => {
     const res = await fetch(`/api/evenementen/kassas/bronnen?exclude=${evenementId}`);
     const data = await res.json();
-    setKopieerBronnen(data.evenementen || []);
-    setToonKopieren(true);
+    setKopieerBronnen(data.kassas || []);
+    setKopieerKeuze("");
   };
 
-  const kassasKopieren = async () => {
-    if (!kopieerBron) return;
-    const res = await fetch("/api/evenementen/kassas/kopieer", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ evenementId, bronEvenementId: kopieerBron }),
-    });
-    const data = await res.json();
-    if (data.error) return toast.error(data.error);
-    setToonKopieren(false);
-    setKopieerBron("");
-    laden();
-    toast.success("Kassa-samenstelling gekopieerd — pas gerust aan.");
+  // Vult enkel het lokale telraster — pas bij "Toepassen" wordt het echt
+  // opgeslagen, zodat je de overgenomen coupures nog kan bijstellen.
+  const kopieerToepassen = () => {
+    const bron = kopieerBronnen.find((b) => b.id === kopieerKeuze);
+    if (!bron) return;
+    setTellerAantallen(bron.wisselgeld_start_samenstelling || {});
   };
 
   const budgetBijwerken = async (hoofdcategorie, budgetToegewezen) => {
@@ -446,8 +417,6 @@ export default function EvenementDetail({ params }) {
   };
 
   const { evenement, kassas, kassasMetTekort, categorieen, transacties, gekoppeldeTransacties, tickets, ticketOmzet, sponsors, sponsorBedrag, budgetBurnRate, nogTerugTeBetalen, balans } = overzicht;
-  const cashKassas = kassas.filter((k) => k.type === "cash");
-  const ALLE_COUPURES = [...BRIEFJES, ...MUNTEN];
 
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
@@ -593,16 +562,19 @@ export default function EvenementDetail({ params }) {
                   <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
                     Wisselgeld start
                     {magBewerken ? (
-                      <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 90 }} />
+                      <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                        <input key={`${k.id}-ws-${k.wisselgeld_start}`} type="number" step="0.01" defaultValue={k.wisselgeld_start} onBlur={(e) => kassaBijwerken(k.id, "wisselgeldStart", e.target.value)} style={{ width: 90 }} />
+                        <button type="button" title="Coupures tellen" className="btn-plain" onClick={() => tellerOpenen(k, "wisselgeldStart")}><MuntenIcon color="var(--text-subtle)" /></button>
+                      </div>
                     ) : <span className="money" style={{ fontWeight: 600 }}>{euro(k.wisselgeld_start)}</span>}
                   </label>
                 )}
                 <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
                   Inhoud na afloop
                   {magBewerken ? (
-                    <div style={{ display: "flex", gap: 4 }}>
+                    <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
                       <input key={`${k.id}-ie-${k.inhoud_einde}`} type="number" step="0.01" defaultValue={k.inhoud_einde ?? ""} placeholder="nog niet geteld" onBlur={(e) => kassaBijwerken(k.id, "inhoudEinde", e.target.value)} style={{ width: 90 }} />
-                      {k.type === "cash" && <button type="button" title="Briefjes/muntjes tellen" onClick={() => tellerOpenen(k)}>🧮</button>}
+                      {k.type === "cash" && <button type="button" title="Coupures tellen" className="btn-plain" onClick={() => tellerOpenen(k, "inhoudEinde")}><MuntenIcon color="var(--text-subtle)" /></button>}
                     </div>
                   ) : <span className="money" style={{ fontWeight: 600 }}>{k.inhoud_einde !== null ? euro(k.inhoud_einde) : "-"}</span>}
                 </label>
@@ -614,11 +586,32 @@ export default function EvenementDetail({ params }) {
                 </label>
               </div>
 
-              {tellerOpen === k.id && (
+              {/* Digitale betalingen die naast deze kassa binnenkwamen (bv. mensen die aan de toog met SumUp betaalden) — tellen bovenop mee in de omzet. */}
+              <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+                {[["digitaal_sumup", "digitaalSumup", "SumUp"], ["digitaal_bancontact", "digitaalBancontact", "Bancontact"], ["digitaal_kbc_qr", "digitaalKbcQr", "KBC QR-code"]].map(([veld, apiVeld, label]) => (
+                  <label key={veld} style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: 13, fontWeight: 600 }}>
+                    {label}
+                    {magBewerken ? (
+                      <input key={`${k.id}-${veld}-${k[veld]}`} type="number" step="0.01" defaultValue={k[veld] ?? ""} placeholder="optioneel" onBlur={(e) => kassaBijwerken(k.id, apiVeld, e.target.value)} style={{ width: 90 }} />
+                    ) : <span className="money" style={{ fontWeight: 600 }}>{k[veld] ? euro(k[veld]) : "-"}</span>}
+                  </label>
+                ))}
+              </div>
+
+              {tellerOpen?.kassaId === k.id && (
                 <div style={{ background: "var(--surface-alt)", borderRadius: 14, padding: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-                    Inhoud na afloop — briefjes &amp; muntjes tellen
+                    {tellerOpen.veld === "wisselgeldStart" ? "Wisselgeld start" : "Inhoud na afloop"} — briefjes &amp; muntjes tellen
                   </div>
+                  {tellerOpen.veld === "wisselgeldStart" && kopieerBronnen.length > 0 && (
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+                      <select value={kopieerKeuze} onChange={(e) => setKopieerKeuze(e.target.value)} style={{ fontSize: 12 }}>
+                        <option value="">Kopieer van vorig jaar...</option>
+                        {kopieerBronnen.map((b) => <option key={b.id} value={b.id}>{b.evenementNaam} — {b.naam} ({euro(b.wisselgeld_start)})</option>)}
+                      </select>
+                      <button type="button" disabled={!kopieerKeuze} onClick={kopieerToepassen}>Overnemen</button>
+                    </div>
+                  )}
                   <div style={{ display: "flex", flexWrap: "wrap", gap: 16, marginBottom: 12 }}>
                     <div>
                       <div className="subtle" style={{ fontSize: 11, marginBottom: 4 }}>BRIEFJES</div>
@@ -661,74 +654,12 @@ export default function EvenementDetail({ params }) {
                 <option value="cash">Cash</option>
                 <option value="digitaal">Digitaal (SumUp/Payconiq)</option>
               </select>
-              {nieuweKassa.type === "cash" && (
-                <input type="number" step="0.01" placeholder="Wisselgeld start" value={nieuweKassa.wisselgeldStart} onChange={(e) => setNieuweKassa({ ...nieuweKassa, wisselgeldStart: e.target.value })} style={{ width: 130 }} />
-              )}
               <button className="btn-primary" onClick={kassaToevoegen}>Toevoegen</button>
               <button onClick={() => setToonNieuweKassa(false)}>Annuleren</button>
             </div>
-          ) : toonKopieren ? (
-            <div className="card" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-              {kopieerBronnen.length === 0 ? (
-                <p className="subtle" style={{ fontSize: 13 }}>Geen ander evenement met kassa's gevonden om van te kopiëren.</p>
-              ) : (
-                <>
-                  <select value={kopieerBron} onChange={(e) => setKopieerBron(e.target.value)} style={{ minWidth: 220 }}>
-                    <option value="">Kies een evenement...</option>
-                    {kopieerBronnen.map((b) => <option key={b.id} value={b.id}>{b.naam}{b.datum ? ` (${b.datum})` : ""}</option>)}
-                  </select>
-                  <button className="btn-primary" disabled={!kopieerBron} onClick={kassasKopieren}>Kopieer kassa-samenstelling</button>
-                </>
-              )}
-              <button onClick={() => { setToonKopieren(false); setKopieerBron(""); }}>Annuleren</button>
-            </div>
           ) : (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button onClick={() => setToonNieuweKassa(true)}>+ Kassa toevoegen</button>
-              {kassas.length === 0 && <button onClick={kopierenOpenen}>↺ Dupliceer van vorig jaar</button>}
-            </div>
+            <button onClick={() => setToonNieuweKassa(true)}>+ Kassa toevoegen</button>
           )
-        )}
-
-        {cashKassas.length > 0 && (
-          <div className="card" style={{ marginTop: 14 }}>
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Kassa-samenstelling — wat je vooraf klaarlegt</div>
-            <p className="subtle" style={{ fontSize: 12, marginBottom: 10 }}>Coupures per kassa; "Wisselgeld start" hierboven wordt hier automatisch uit opgeteld.</p>
-            <div className="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Coupure</th>
-                    {cashKassas.map((k) => <th key={k.id}>{k.naam}</th>)}
-                    {cashKassas.length > 1 && <th>Totaal stuks</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {ALLE_COUPURES.map((d) => (
-                    <tr key={d}>
-                      <td>€{d}</td>
-                      {cashKassas.map((k) => (
-                        <td key={k.id}>
-                          {magBewerken ? (
-                            <input type="number" min="0" step="1" style={{ width: 60 }} value={kasSamenstelling[k.id]?.[d] ?? ""} onChange={(e) => kasSamenstellingWijzigen(k.id, d, e.target.value)} />
-                          ) : (kasSamenstelling[k.id]?.[d] || 0)}
-                        </td>
-                      ))}
-                      {cashKassas.length > 1 && <td className="muted">{cashKassas.reduce((s, k) => s + Number(kasSamenstelling[k.id]?.[d] || 0), 0)}</td>}
-                    </tr>
-                  ))}
-                  <tr style={{ fontWeight: 700 }}>
-                    <td>Totaal</td>
-                    {cashKassas.map((k) => <td key={k.id} className="money">{euro(samenstellingTotaal(kasSamenstelling[k.id] || {}))}</td>)}
-                    {cashKassas.length > 1 && <td></td>}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-            {magBewerken && kasSamenstellingGewijzigd && (
-              <button className="btn-primary" style={{ marginTop: 10 }} onClick={kasSamenstellingOpslaan}>Samenstelling opslaan</button>
-            )}
-          </div>
         )}
       </div>
 

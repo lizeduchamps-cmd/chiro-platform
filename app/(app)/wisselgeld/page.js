@@ -180,7 +180,7 @@ export default function Wisselgeld() {
 
   const aanvraagIndienen = async () => {
     const a = nieuweAanvraag;
-    if (!a.afdeling || !a.datumNodig || !a.bedragGevraagd) return toast.error("Vul afdeling, datum en bedrag in.");
+    if (!a.afdeling || !a.datumNodig) return toast.error("Vul afdeling en datum in.");
     const geldigePrijslijnen = modus === "prijzen" ? prijslijnen.filter((r) => Number(r.prijs) > 0 && Number(r.aantalVerwacht) > 0) : null;
     const heeftCoupures = modus === "prijzen" && Object.values(coupures).some((n) => Number(n) > 0);
     const res = await fetch("/api/wisselgeld", {

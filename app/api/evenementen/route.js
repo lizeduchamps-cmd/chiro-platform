@@ -30,7 +30,7 @@ export async function GET(req) {
 // ...), zodat de lijst niet per evenement een apart request moet doen.
 async function metBalansTotalen(evenementen, evenementIds) {
   const [{ data: kassas }, { data: transacties }, { data: tickets }, { data: sponsors }, { data: kampTransacties }] = await Promise.all([
-    supabaseAdmin.from("evenement_kassas").select("evenement_id, type, wisselgeld_start, inhoud_einde").in("evenement_id", evenementIds),
+    supabaseAdmin.from("evenement_kassas").select("evenement_id, type, wisselgeld_start, inhoud_einde, digitaal_sumup, digitaal_bancontact, digitaal_kbc_qr").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_transacties").select("evenement_id, type_geldstroom, bedrag_totaal").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_tickets").select("evenement_id, prijs, aantal_verkocht").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_sponsors").select("evenement_id, bedrag").in("evenement_id", evenementIds),
@@ -45,7 +45,8 @@ async function metBalansTotalen(evenementen, evenementIds) {
       .filter((k) => k.evenement_id === e.id)
       .reduce((s, k) => {
         const eind = Number(k.inhoud_einde || 0);
-        return s + (k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind);
+        const digitaalExtra = Number(k.digitaal_sumup || 0) + Number(k.digitaal_bancontact || 0) + Number(k.digitaal_kbc_qr || 0);
+        return s + (k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind) + digitaalExtra;
       }, 0);
     const ticketOmzet = (tickets || []).filter((t) => t.evenement_id === e.id).reduce((s, t) => s + Number(t.prijs) * Number(t.aantal_verkocht), 0);
     const sponsorBedrag = (sponsors || []).filter((sp) => sp.evenement_id === e.id).reduce((s, sp) => s + Number(sp.bedrag), 0);

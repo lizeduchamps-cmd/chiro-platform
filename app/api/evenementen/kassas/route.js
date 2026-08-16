@@ -31,7 +31,7 @@ export async function POST(req) {
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
   const body = await req.json();
-  const { id, naam, wisselgeldStart, inhoudEinde, wisselgeldStartSamenstelling, inhoudEindeSamenstelling } = body;
+  const { id, naam, wisselgeldStart, inhoudEinde, wisselgeldStartSamenstelling, inhoudEindeSamenstelling, digitaalSumup, digitaalBancontact, digitaalKbcQr } = body;
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
 
   const evenementId = await evenementIdVanKassa(id);
@@ -50,6 +50,11 @@ export async function PATCH(req) {
   // totaalbedrag gewoon werken zonder samenstelling.
   if (wisselgeldStartSamenstelling !== undefined) updateFields.wisselgeld_start_samenstelling = wisselgeldStartSamenstelling;
   if (inhoudEindeSamenstelling !== undefined) updateFields.inhoud_einde_samenstelling = inhoudEindeSamenstelling;
+  // Digitale betalingen die naast deze kassa binnenkwamen (bv. SumUp aan de
+  // toog) — los van het type van de kassa, tellen mee bovenop de omzet.
+  if (digitaalSumup !== undefined) updateFields.digitaal_sumup = digitaalSumup === "" ? null : digitaalSumup;
+  if (digitaalBancontact !== undefined) updateFields.digitaal_bancontact = digitaalBancontact === "" ? null : digitaalBancontact;
+  if (digitaalKbcQr !== undefined) updateFields.digitaal_kbc_qr = digitaalKbcQr === "" ? null : digitaalKbcQr;
 
   const { error } = await supabaseAdmin.from("evenement_kassas").update(updateFields).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

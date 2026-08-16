@@ -32,7 +32,7 @@ export async function GET(req) {
     { data: sponsors, error: sponsorsError },
     { data: kampTransacties, error: kampError },
   ] = await Promise.all([
-    supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling, verwacht_bedrag").eq("evenement_id", evenementId),
+    supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling, verwacht_bedrag, digitaal_sumup, digitaal_bancontact, digitaal_kbc_qr").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_budgetten").select("id, hoofdcategorie, budget_toegewezen").eq("evenement_id", evenementId),
     supabaseAdmin.from("evenement_categorieen").select("id, naam").eq("evenement_id", evenementId).order("naam"),
     supabaseAdmin
@@ -72,12 +72,15 @@ export async function GET(req) {
   const kampUitgaven = (kampTransacties || []).filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag), 0);
 
   // Kassa-omzet: cash = geteld eindbedrag - klaargezet wisselgeld; digitaal = volledig eindbedrag.
+  // Daarbovenop tellen digitale betalingen (SumUp/Bancontact/KBC QR) die naast
+  // diezelfde kassa binnenkwamen altijd mee, los van het type van de kassa.
   // Tekort/overschot: enkel bepaald als er een verwacht_bedrag is ingevuld (de
   // leiding schat dit zelf in op basis van verkochte drank/tickets/...) en er
   // ook al effectief geteld is — anders is er niets om mee te vergelijken.
   const kassasMetOmzet = (kassas || []).map((k) => {
     const eind = Number(k.inhoud_einde || 0);
-    const omzet = k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind;
+    const digitaalExtra = Number(k.digitaal_sumup || 0) + Number(k.digitaal_bancontact || 0) + Number(k.digitaal_kbc_qr || 0);
+    const omzet = (k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind) + digitaalExtra;
     const omzetAfgerond = Math.round(omzet * 100) / 100;
     const heeftVergelijking = k.verwacht_bedrag !== null && k.verwacht_bedrag !== undefined && k.inhoud_einde !== null;
     const verschil = heeftVergelijking ? Math.round((omzetAfgerond - Number(k.verwacht_bedrag)) * 100) / 100 : null;

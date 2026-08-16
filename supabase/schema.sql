@@ -320,6 +320,12 @@ create table if not exists evenement_kassas (
   -- drank/tickets/... Vergeleken met de omzet hieronder om een kassa-tekort
   -- (of -overschot) op te sporen. Leeg = geen vergelijking, geen waarschuwing.
   verwacht_bedrag numeric(10,2),
+  -- Digitale betalingen die naast deze kassa binnenkwamen (bv. mensen die aan
+  -- de toog met SumUp betaalden i.p.v. cash) — tellen mee bovenop het geteld
+  -- cash-bedrag in de omzet, los van het type van de kassa zelf.
+  digitaal_sumup numeric(10,2),
+  digitaal_bancontact numeric(10,2),
+  digitaal_kbc_qr numeric(10,2),
   created_at timestamptz default now()
 );
 
@@ -430,7 +436,7 @@ create table if not exists wisselgeld_aanvragen (
   afdeling text not null,
   aanvrager_user_id uuid references users(id) on delete set null,
   datum_nodig date not null,
-  bedrag_gevraagd numeric(10,2) not null,
+  bedrag_gevraagd numeric(10,2),                -- optioneel: soms weet je dat nog niet bij het aanvragen
   samenstelling_cash text,                     -- vrije tekst, bv. '10x€5, 5x€10'
   doel_activiteit text,
   status text not null default 'Aangevraagd' check (status in ('Aangevraagd', 'Goedgekeurd', 'Klaargezet', 'Opgehaald')),

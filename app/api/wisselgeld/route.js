@@ -31,7 +31,7 @@ export async function GET(req) {
 export async function POST(req) {
   const session = await getServerSession(authOptions);
   const { werkjaarId, afdeling, datumNodig, bedragGevraagd, samenstellingCash, doelActiviteit, verkoopprijzen, samenstellingVoorstel } = await req.json();
-  if (!werkjaarId || !afdeling || !datumNodig || !bedragGevraagd) {
+  if (!werkjaarId || !afdeling || !datumNodig) {
     return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
   }
   if (!(await magAfdelingBewerken(session, afdeling))) {
@@ -49,7 +49,7 @@ export async function POST(req) {
       afdeling,
       aanvrager_user_id: session.user.userId || null,
       datum_nodig: datumNodig,
-      bedrag_gevraagd: Number(bedragGevraagd),
+      bedrag_gevraagd: bedragGevraagd ? Number(bedragGevraagd) : null,
       samenstelling_cash: samenstellingCash || null,
       doel_activiteit: doelActiviteit || null,
       verkoopprijzen: verkoopprijzen || null,
