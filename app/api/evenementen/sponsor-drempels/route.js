@@ -4,6 +4,10 @@ import { authOptions } from "@/lib/auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { magEvenementBewerken } from "@/lib/evenementPermissies";
 
+// Sponsordrempels (bv. €50/€100/€200 -> bijhorende tegenprestatie). De
+// tegenprestatie van een sponsor is de som van alle drempels die zijn
+// bedrag haalt, niet enkel de hoogste — die optelling gebeurt in
+// /api/evenementen/overzicht, hier enkel de ruwe drempel-rijen.
 export async function GET(req) {
   const session = await getServerSession(authOptions);
   if (!session) return NextResponse.json({ error: "Niet ingelogd" }, { status: 401 });
@@ -12,41 +16,46 @@ export async function GET(req) {
   if (!evenementId) return NextResponse.json({ error: "evenementId ontbreekt" }, { status: 400 });
 
   const { data, error } = await supabaseAdmin
-    .from("evenement_tickets")
-    .select("id, naam, prijs, aantal_verkocht")
+    .from("sponsor_drempels")
+    .select("id, drempelbedrag, gratis_tickets, drankbonnetjes")
     .eq("evenement_id", evenementId)
-    .order("created_at");
+    .order("drempelbedrag");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ tickets: data });
+  return NextResponse.json({ drempels: data });
 }
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  const { evenementId, naam, prijs, aantalVerkocht } = await req.json();
-  if (!evenementId || !naam || prijs === undefined) return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
+  const { evenementId, drempelbedrag, gratisTickets, drankbonnetjes } = await req.json();
+  if (!evenementId || drempelbedrag === undefined) return NextResponse.json({ error: "Drempelbedrag is verplicht" }, { status: 400 });
   if (!(await magEvenementBewerken(session, evenementId))) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const { data, error } = await supabaseAdmin
-    .from("evenement_tickets")
-    .insert({ evenement_id: evenementId, naam, prijs: Number(prijs), aantal_verkocht: Number(aantalVerkocht) || 0 })
-    .select("id, naam, prijs, aantal_verkocht")
+    .from("sponsor_drempels")
+    .insert({
+      evenement_id: evenementId,
+      drempelbedrag: Number(drempelbedrag),
+      gratis_tickets: Number(gratisTickets) || 0,
+      drankbonnetjes: Number(drankbonnetjes) || 0,
+    })
+    .select("id, drempelbedrag, gratis_tickets, drankbonnetjes")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ticket: data });
+  return NextResponse.json({ drempel: data });
 }
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  const { id, evenementId, naam, prijs, aantalVerkocht } = await req.json();
+  const { id, evenementId, drempelbedrag, gratisTickets, drankbonnetjes } = await req.json();
   if (!id || !evenementId) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
   if (!(await magEvenementBewerken(session, evenementId))) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const updateFields = {};
-  if (naam !== undefined) updateFields.naam = naam;
-  if (prijs !== undefined) updateFields.prijs = Number(prijs);
-  if (aantalVerkocht !== undefined) updateFields.aantal_verkocht = Number(aantalVerkocht) || 0;
+  if (drempelbedrag !== undefined) updateFields.drempelbedrag = Number(drempelbedrag);
+  if (gratisTickets !== undefined) updateFields.gratis_tickets = Number(gratisTickets) || 0;
+  if (drankbonnetjes !== undefined) updateFields.drankbonnetjes = Number(drankbonnetjes) || 0;
 
-  const { error } = await supabaseAdmin.from("evenement_tickets").update(updateFields).eq("id", id);
+  const { error } = await supabaseAdmin.from("sponsor_drempels").update(updateFields).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }
@@ -59,7 +68,7 @@ export async function DELETE(req) {
   if (!id || !evenementId) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
   if (!(await magEvenementBewerken(session, evenementId))) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
-  const { error } = await supabaseAdmin.from("evenement_tickets").delete().eq("id", id);
+  const { error } = await supabaseAdmin.from("sponsor_drempels").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });
 }

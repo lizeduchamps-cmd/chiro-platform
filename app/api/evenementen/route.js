@@ -13,7 +13,7 @@ export async function GET(req) {
 
   let query = supabaseAdmin
     .from("evenementen")
-    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
+    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan, ticketverkoop_online_bedrag")
     .order("datum", { ascending: false, nullsFirst: false });
   if (werkjaarId) query = query.eq("werkjaar_id", werkjaarId);
 
@@ -29,10 +29,10 @@ export async function GET(req) {
 // voor de lijstweergave: enkel de totalen (geen budget-burn-rate, kassa-detail,
 // ...), zodat de lijst niet per evenement een apart request moet doen.
 async function metBalansTotalen(evenementen, evenementIds) {
-  const [{ data: kassas }, { data: transacties }, { data: tickets }, { data: sponsors }, { data: kampTransacties }] = await Promise.all([
+  const [{ data: kassas }, { data: transacties }, { data: ticketverkopers }, { data: sponsors }, { data: kampTransacties }] = await Promise.all([
     supabaseAdmin.from("evenement_kassas").select("evenement_id, type, wisselgeld_start, inhoud_einde, digitaal_sumup, digitaal_bancontact, digitaal_kbc_qr").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_transacties").select("evenement_id, type_geldstroom, bedrag_totaal").in("evenement_id", evenementIds),
-    supabaseAdmin.from("evenement_tickets").select("evenement_id, prijs, aantal_verkocht").in("evenement_id", evenementIds),
+    supabaseAdmin.from("evenement_ticketverkopers").select("evenement_id, cash_ontvangen, overschrijving_ontvangen").in("evenement_id", evenementIds),
     supabaseAdmin.from("evenement_sponsors").select("evenement_id, bedrag").in("evenement_id", evenementIds),
     // Kamp (heeft_groepsbudgetten) houdt zijn kosten/inkomsten nog in een
     // eigen tabel bij (zie Kampkosten) i.p.v. evenement_transacties — hier
@@ -48,7 +48,10 @@ async function metBalansTotalen(evenementen, evenementIds) {
         const digitaalExtra = Number(k.digitaal_sumup || 0) + Number(k.digitaal_bancontact || 0) + Number(k.digitaal_kbc_qr || 0);
         return s + (k.type === "cash" ? eind - Number(k.wisselgeld_start || 0) : eind) + digitaalExtra;
       }, 0);
-    const ticketOmzet = (tickets || []).filter((t) => t.evenement_id === e.id).reduce((s, t) => s + Number(t.prijs) * Number(t.aantal_verkocht), 0);
+    const ticketverkoopFysiek = (ticketverkopers || [])
+      .filter((t) => t.evenement_id === e.id)
+      .reduce((s, t) => s + Number(t.cash_ontvangen || 0) + Number(t.overschrijving_ontvangen || 0), 0);
+    const ticketOmzet = Number(e.ticketverkoop_online_bedrag || 0) + ticketverkoopFysiek;
     const sponsorBedrag = (sponsors || []).filter((sp) => sp.evenement_id === e.id).reduce((s, sp) => s + Number(sp.bedrag), 0);
     const eigenTransacties = (transacties || []).filter((t) => t.evenement_id === e.id);
     const eigenKampTransacties = (kampTransacties || []).filter((t) => t.evenement_id === e.id);
@@ -101,7 +104,7 @@ export async function POST(req) {
 
 export async function PATCH(req) {
   const session = await getServerSession(authOptions);
-  const { id, naam, datum, status, heeftTicketverkoop, heeftSponsoring, heeftGroepsbudgetten, heeftRekeningScan } = await req.json();
+  const { id, naam, datum, status, heeftTicketverkoop, heeftSponsoring, heeftGroepsbudgetten, heeftRekeningScan, ticketverkoopOnlineBedrag, ticketPrijsJeugd, ticketPrijsVolwassen } = await req.json();
   if (!id) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
 
   if (!(await magEvenementBewerken(session, id))) {
@@ -115,6 +118,9 @@ export async function PATCH(req) {
   if (heeftTicketverkoop !== undefined) updateFields.heeft_ticketverkoop = !!heeftTicketverkoop;
   if (heeftSponsoring !== undefined) updateFields.heeft_sponsoring = !!heeftSponsoring;
   if (heeftGroepsbudgetten !== undefined) updateFields.heeft_groepsbudgetten = !!heeftGroepsbudgetten;
+  if (ticketverkoopOnlineBedrag !== undefined) updateFields.ticketverkoop_online_bedrag = ticketverkoopOnlineBedrag === "" ? null : Number(ticketverkoopOnlineBedrag);
+  if (ticketPrijsJeugd !== undefined) updateFields.ticket_prijs_jeugd = ticketPrijsJeugd === "" ? null : Number(ticketPrijsJeugd);
+  if (ticketPrijsVolwassen !== undefined) updateFields.ticket_prijs_volwassen = ticketPrijsVolwassen === "" ? null : Number(ticketPrijsVolwassen);
   if (heeftRekeningScan !== undefined) updateFields.heeft_rekening_scan = !!heeftRekeningScan;
 
   const { error } = await supabaseAdmin.from("evenementen").update(updateFields).eq("id", id);

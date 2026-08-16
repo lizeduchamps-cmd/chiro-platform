@@ -16,7 +16,7 @@ export async function GET(req) {
 
   const { data: evenement, error: evenementError } = await supabaseAdmin
     .from("evenementen")
-    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan")
+    .select("id, naam, datum, status, werkjaar_id, heeft_ticketverkoop, heeft_sponsoring, heeft_groepsbudgetten, heeft_rekening_scan, ticketverkoop_online_bedrag, ticket_prijs_jeugd, ticket_prijs_volwassen")
     .eq("id", evenementId)
     .maybeSingle();
   if (evenementError) return NextResponse.json({ error: evenementError.message }, { status: 500 });
@@ -28,8 +28,9 @@ export async function GET(req) {
     { data: categorieen, error: categorieenError },
     { data: transacties, error: transactiesError },
     { data: gekoppeldeTransacties, error: gekoppeldeError },
-    { data: tickets, error: ticketsError },
+    { data: ticketverkopers, error: ticketverkopersError },
     { data: sponsors, error: sponsorsError },
+    { data: sponsorDrempels, error: drempelsError },
     { data: kampTransacties, error: kampError },
   ] = await Promise.all([
     supabaseAdmin.from("evenement_kassas").select("id, naam, type, wisselgeld_start, inhoud_einde, wisselgeld_start_samenstelling, inhoud_einde_samenstelling, verwacht_bedrag, digitaal_sumup, digitaal_bancontact, digitaal_kbc_qr").eq("evenement_id", evenementId),
@@ -50,8 +51,9 @@ export async function GET(req) {
       .select("id, datum, soort, tegenpartij, vrije_mededeling, omschrijving, bedrag, categorieen(naam)")
       .eq("evenement_id", evenementId)
       .order("datum", { ascending: false }),
-    supabaseAdmin.from("evenement_tickets").select("id, naam, prijs, aantal_verkocht").eq("evenement_id", evenementId).order("created_at"),
-    supabaseAdmin.from("evenement_sponsors").select("id, naam, bedrag, opmerking").eq("evenement_id", evenementId).order("created_at"),
+    supabaseAdmin.from("evenement_ticketverkopers").select("id, naam, jeugd_meegenomen, volwassen_meegenomen, jeugd_teruggebracht, volwassen_teruggebracht, cash_ontvangen, overschrijving_ontvangen").eq("evenement_id", evenementId).order("created_at"),
+    supabaseAdmin.from("evenement_sponsors").select("id, naam, bedrag, opmerking, contact").eq("evenement_id", evenementId).order("created_at"),
+    supabaseAdmin.from("sponsor_drempels").select("id, drempelbedrag, gratis_tickets, drankbonnetjes").eq("evenement_id", evenementId).order("drempelbedrag"),
     // Kamp houdt zijn kosten/inkomsten nog bij in een eigen tabel (zie
     // Kampkosten) i.p.v. evenement_transacties — hier meetellen zodat de
     // balans klopt als je Kamp via deze algemene evenementpagina bekijkt.
@@ -62,11 +64,42 @@ export async function GET(req) {
   if (categorieenError) return NextResponse.json({ error: categorieenError.message }, { status: 500 });
   if (transactiesError) return NextResponse.json({ error: transactiesError.message }, { status: 500 });
   if (gekoppeldeError) return NextResponse.json({ error: gekoppeldeError.message }, { status: 500 });
-  if (ticketsError) return NextResponse.json({ error: ticketsError.message }, { status: 500 });
+  if (ticketverkopersError) return NextResponse.json({ error: ticketverkopersError.message }, { status: 500 });
   if (sponsorsError) return NextResponse.json({ error: sponsorsError.message }, { status: 500 });
+  if (drempelsError) return NextResponse.json({ error: drempelsError.message }, { status: 500 });
   if (kampError) return NextResponse.json({ error: kampError.message }, { status: 500 });
 
-  const ticketOmzet = (tickets || []).reduce((s, t) => s + Number(t.prijs) * Number(t.aantal_verkocht), 0);
+  // Per ticketverkoper: "nog niet afgerekend" zolang niet beide teruggebracht-
+  // aantallen zijn ingevuld — het ontvangen bedrag telt intussen al wel mee in
+  // de omzet, dat is los van de bandjes-boekhouding. Eens afgerekend: klopt/
+  // tekort/teveel op basis van verschuldigd (uitgegeven bandjes × prijs) t.o.v.
+  // ontvangen (cash + overschrijving).
+  const ticketverkopersMetStatus = (ticketverkopers || []).map((t) => {
+    const ontvangen = Math.round((Number(t.cash_ontvangen || 0) + Number(t.overschrijving_ontvangen || 0)) * 100) / 100;
+    const afgerekend = t.jeugd_teruggebracht !== null && t.jeugd_teruggebracht !== undefined && t.volwassen_teruggebracht !== null && t.volwassen_teruggebracht !== undefined;
+    if (!afgerekend) return { ...t, ontvangen, uitgegevenJeugd: null, uitgegevenVolwassen: null, verschuldigd: null, verschil: null, status: "nogNietAfgerekend" };
+
+    const uitgegevenJeugd = Number(t.jeugd_meegenomen) - Number(t.jeugd_teruggebracht);
+    const uitgegevenVolwassen = Number(t.volwassen_meegenomen) - Number(t.volwassen_teruggebracht);
+    const verschuldigd = Math.round((uitgegevenJeugd * Number(evenement.ticket_prijs_jeugd || 0) + uitgegevenVolwassen * Number(evenement.ticket_prijs_volwassen || 0)) * 100) / 100;
+    const verschil = Math.round((ontvangen - verschuldigd) * 100) / 100;
+    const status = Math.abs(verschil) < 0.01 ? "klopt" : verschil < 0 ? "tekort" : "teveel";
+    return { ...t, ontvangen, uitgegevenJeugd, uitgegevenVolwassen, verschuldigd, verschil, status };
+  });
+  const ticketverkoopFysiek = ticketverkopersMetStatus.reduce((s, t) => s + t.ontvangen, 0);
+  const ticketOmzet = Number(evenement.ticketverkoop_online_bedrag || 0) + ticketverkoopFysiek;
+
+  // Tegenprestatie van een sponsor = som van alle drempels die zijn bedrag
+  // haalt (niet enkel de hoogste) — bv. bij €250 en drempels op €50/€100/€200
+  // tellen alle drie mee.
+  const sponsorsMetTegenprestatie = (sponsors || []).map((sp) => {
+    const gehaald = (sponsorDrempels || []).filter((d) => Number(sp.bedrag) >= Number(d.drempelbedrag));
+    return {
+      ...sp,
+      gratisTickets: gehaald.reduce((s, d) => s + d.gratis_tickets, 0),
+      drankbonnetjes: gehaald.reduce((s, d) => s + d.drankbonnetjes, 0),
+    };
+  });
   const sponsorBedrag = (sponsors || []).reduce((s, sp) => s + Number(sp.bedrag), 0);
   const kampInkomsten = (kampTransacties || []).filter((t) => t.type_geldstroom === "inkomst").reduce((s, t) => s + Number(t.bedrag), 0);
   const kampUitgaven = (kampTransacties || []).filter((t) => t.type_geldstroom === "uitgave").reduce((s, t) => s + Number(t.bedrag), 0);
@@ -139,9 +172,11 @@ export async function GET(req) {
     categorieen,
     transacties,
     gekoppeldeTransacties: gekoppeldeTransacties || [],
-    tickets: tickets || [],
+    ticketverkopers: ticketverkopersMetStatus,
+    ticketverkoopOnlineBedrag: evenement.ticketverkoop_online_bedrag,
     ticketOmzet: Math.round(ticketOmzet * 100) / 100,
-    sponsors: sponsors || [],
+    sponsors: sponsorsMetTegenprestatie,
+    sponsorDrempels: sponsorDrempels || [],
     sponsorBedrag: Math.round(sponsorBedrag * 100) / 100,
     budgetBurnRate,
     nogTerugTeBetalen,

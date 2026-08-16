@@ -13,7 +13,7 @@ export async function GET(req) {
 
   const { data, error } = await supabaseAdmin
     .from("evenement_sponsors")
-    .select("id, naam, bedrag, opmerking")
+    .select("id, naam, bedrag, opmerking, contact")
     .eq("evenement_id", evenementId)
     .order("created_at");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -22,17 +22,34 @@ export async function GET(req) {
 
 export async function POST(req) {
   const session = await getServerSession(authOptions);
-  const { evenementId, naam, bedrag, opmerking } = await req.json();
+  const { evenementId, naam, bedrag, opmerking, contact } = await req.json();
   if (!evenementId || !naam || bedrag === undefined) return NextResponse.json({ error: "Verplichte velden ontbreken" }, { status: 400 });
   if (!(await magEvenementBewerken(session, evenementId))) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
 
   const { data, error } = await supabaseAdmin
     .from("evenement_sponsors")
-    .insert({ evenement_id: evenementId, naam, bedrag: Number(bedrag), opmerking: opmerking || null })
-    .select("id, naam, bedrag, opmerking")
+    .insert({ evenement_id: evenementId, naam, bedrag: Number(bedrag), opmerking: opmerking || null, contact: contact || null })
+    .select("id, naam, bedrag, opmerking, contact")
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ sponsor: data });
+}
+
+export async function PATCH(req) {
+  const session = await getServerSession(authOptions);
+  const { id, evenementId, naam, bedrag, opmerking, contact } = await req.json();
+  if (!id || !evenementId) return NextResponse.json({ error: "id ontbreekt" }, { status: 400 });
+  if (!(await magEvenementBewerken(session, evenementId))) return NextResponse.json({ error: "Geen toegang" }, { status: 403 });
+
+  const updateFields = {};
+  if (naam !== undefined) updateFields.naam = naam;
+  if (bedrag !== undefined) updateFields.bedrag = Number(bedrag);
+  if (opmerking !== undefined) updateFields.opmerking = opmerking || null;
+  if (contact !== undefined) updateFields.contact = contact || null;
+
+  const { error } = await supabaseAdmin.from("evenement_sponsors").update(updateFields).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }
 
 export async function DELETE(req) {

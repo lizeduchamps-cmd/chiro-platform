@@ -89,6 +89,12 @@ create table if not exists evenementen (
   heeft_sponsoring boolean not null default false,
   heeft_groepsbudgetten boolean not null default false,
   heeft_rekening_scan boolean not null default false,
+  -- Ticketverkoop: online is één manueel ingegeven totaalbedrag (opgezocht
+  -- bij bv. Tickoweb); de bandjesprijzen gelden voor de fysieke verkoop
+  -- hieronder en zijn per jaar aanpasbaar, dus hier op het evenement zelf.
+  ticketverkoop_online_bedrag numeric(10,2),
+  ticket_prijs_jeugd numeric(10,2),
+  ticket_prijs_volwassen numeric(10,2),
   created_at timestamptz default now()
 );
 
@@ -407,6 +413,38 @@ create table if not exists evenement_sponsors (
   naam text not null,
   bedrag numeric(10,2) not null,
   opmerking text,
+  contact text,
+  created_at timestamptz default now()
+);
+
+-- Fysieke ticketverkoop (naast het online-totaal hierboven): vrij te typen
+-- naam per verkoper i.p.v. gekoppeld aan Gebruikers & rollen — leden en
+-- oud-leiding die tickets verkopen staan daar niet in. Aantal bandjes
+-- meegenomen/teruggebracht per soort (jeugd/30+); "nog niet afgerekend" =
+-- één van beide teruggebracht-velden is nog leeg.
+create table if not exists evenement_ticketverkopers (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  naam text not null,
+  jeugd_meegenomen integer not null default 5,
+  volwassen_meegenomen integer not null default 5,
+  jeugd_teruggebracht integer,
+  volwassen_teruggebracht integer,
+  cash_ontvangen numeric(10,2),
+  overschrijving_ontvangen numeric(10,2),
+  created_at timestamptz default now()
+);
+
+-- Sponsordrempels: per evenement aanpasbaar (bv. €50/€100/€200), tegen-
+-- prestatie is de som van alle drempels die een sponsor haalt met zijn
+-- bedrag — niet enkel de hoogste. Los van evenement_sponsors gehouden zodat
+-- de drempeltabel dupliceerbaar is naar een volgend jaar.
+create table if not exists sponsor_drempels (
+  id uuid primary key default gen_random_uuid(),
+  evenement_id uuid references evenementen(id) on delete cascade,
+  drempelbedrag numeric(10,2) not null,
+  gratis_tickets integer not null default 0,
+  drankbonnetjes integer not null default 0,
   created_at timestamptz default now()
 );
 
