@@ -163,15 +163,15 @@ export default function Documenten() {
       <div className="card" style={{ padding: 0 }}>
         {documenten.length === 0 && <p className="muted" style={{ padding: 24, textAlign: "center" }}>Nog geen documenten.</p>}
         {documenten.map((d, i) => (
-          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={d.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
               <Link href={`/documenten/${d.id}`} className="link" style={{ fontWeight: 700, fontSize: 15, textDecoration: "none" }}>{d.titel}</Link>
               <div className="muted" style={{ fontSize: 12 }}>{gekoppeldLabel(d)} · {new Date(d.created_at).toLocaleDateString("nl-BE")}</div>
             </div>
-            <span className={`badge ${d.status === "Verwerkt" ? "badge-success" : "badge-warning"}`}>{d.status}</span>
-            <div className="money" style={{ fontWeight: 700, width: 90, textAlign: "right" }}>{euro(d.totaalbedrag)}</div>
+            <span className={`badge ${d.status === "Verwerkt" ? "badge-success" : "badge-warning"}`} style={{ flexShrink: 0 }}>{d.status}</span>
+            <div className="money" style={{ fontWeight: 700, flexShrink: 0, textAlign: "right" }}>{euro(d.totaalbedrag)}</div>
             {magUploaden && (
-              <button className="btn-danger" onClick={() => documentVerwijderen(d)}>🗑️</button>
+              <button className="btn-danger" style={{ flexShrink: 0 }} onClick={() => documentVerwijderen(d)}>🗑️</button>
             )}
           </div>
         ))}

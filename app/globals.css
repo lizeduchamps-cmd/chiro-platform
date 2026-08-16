@@ -41,6 +41,10 @@
   box-sizing: border-box;
 }
 
+html, body {
+  overflow-x: hidden;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -687,6 +691,31 @@ tbody tr:hover {
   }
   .toast {
     width: auto;
+  }
+
+  /* Duimvriendelijke tikdoelen (~44px) + 16px invoertekst, zodat iOS Safari
+     niet automatisch inzoomt bij het focussen van een veld. */
+  button {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  input[type="checkbox"],
+  input[type="radio"] {
+    min-height: 0;
+    width: 22px;
+    height: 22px;
+  }
+  .btn-danger,
+  .btn-plain {
+    min-width: 44px;
   }
 }
 

@@ -67,12 +67,12 @@ function AanvraagKaart({ a, magActie, isFinancien, volgende, onStatusVooruit, on
 
   return (
     <div className="card" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>{a.afdeling}</div>
           <div className="muted" style={{ fontSize: 14 }}>{a.doel_activiteit || "Geen doel opgegeven"} · nodig op {a.datum_nodig}</div>
         </div>
-        <span className={`badge ${STATUS_BADGE[a.status] || "badge-neutral"}`}>{a.status}</span>
+        <span className={`badge ${STATUS_BADGE[a.status] || "badge-neutral"}`} style={{ flexShrink: 0 }}>{a.status}</span>
       </div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
         <div>
@@ -81,7 +81,7 @@ function AanvraagKaart({ a, magActie, isFinancien, volgende, onStatusVooruit, on
           {a.samenstelling_voorstel && <div className="subtle" style={{ fontSize: 13 }}>Voorstel: {coupureSamenvatting(a.samenstelling_voorstel)}</div>}
           {!a.samenstelling_voorstel && a.samenstelling_cash && <div className="subtle" style={{ fontSize: 13 }}>{a.samenstelling_cash}</div>}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
           <span className="subtle" style={{ fontSize: 13 }}>{a.aanvraag_code}</span>
           {isFinancien && <button className="btn-plain link" style={{ fontSize: 13 }} onClick={() => setWijzigCoupures(!wijzigCoupures)}>{wijzigCoupures ? "Sluiten" : "Coupures wijzigen"}</button>}
           {magActie && volgende && <button className="btn-primary" onClick={() => onStatusVooruit(a)}>{volgende} →</button>}

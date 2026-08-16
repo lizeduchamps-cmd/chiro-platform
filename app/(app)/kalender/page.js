@@ -224,6 +224,7 @@ export default function Kalender() {
             <button onClick={() => maandWisselen(1)}>Volgende →</button>
           </div>
 
+          <p className="subtle" style={{ fontSize: 12, marginBottom: 8 }}>Scroll opzij voor de volledige week →</p>
           <div className="table-wrap" style={{ overflowX: "auto" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(120px, 1fr))", minWidth: 840 }}>
               {DAG_NAMEN.map((d) => (

@@ -444,38 +444,39 @@ export default function Kasboek() {
           const open = bewerkId === t.id;
           return (
             <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", background: geselecteerd.has(t.id) ? "var(--primary-tint)" : undefined }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px" }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px", flexWrap: "wrap" }}>
                 {magBewerken && (
-                  <input type="checkbox" checked={geselecteerd.has(t.id)} onChange={() => toggleSelectie(t.id)} />
+                  <input type="checkbox" checked={geselecteerd.has(t.id)} onChange={() => toggleSelectie(t.id)} style={{ flexShrink: 0, marginTop: 3 }} />
                 )}
-                <div className="money muted" style={{ width: 60, fontSize: 13, flexShrink: 0 }}>
-                  {new Date(t.datum + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short" })}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>{t.tegenpartij || t.omschrijving || "-"}</div>
                   <div className="muted" style={{ fontSize: 12 }}>
-                    {t.vrije_mededeling || "Geen mededeling"}
+                    {new Date(t.datum + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short" })} · {t.vrije_mededeling || "Geen mededeling"}
                     {t.rekening_type === "spaar" && " · Spaar"}
                     {t.soort === "interne_transactie" && ` → ${t.interne_bestemming_rekening === "zicht" ? "Zicht" : "Spaar"}`}
                   </div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                    {!t.categorie_id ? (
+                      <span className="badge badge-warning">Nog aanduiden</span>
+                    ) : (
+                      <>
+                        <span className="badge badge-neutral">{t.categorieen?.naam || "-"}</span>
+                        {t.categorie_zekerheid === "waarschijnlijk" && <span className="badge badge-warning">Waarschijnlijk</span>}
+                        {t.categorie_zekerheid === "onzeker" && <span className="badge badge-danger">Onzeker</span>}
+                      </>
+                    )}
+                  </div>
                 </div>
-                {!t.categorie_id ? (
-                  <span className="badge badge-warning" style={{ whiteSpace: "nowrap" }}>Nog aanduiden</span>
-                ) : (
-                  <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <span className="badge badge-neutral" style={{ whiteSpace: "nowrap" }}>{t.categorieen?.naam || "-"}</span>
-                    {t.categorie_zekerheid === "waarschijnlijk" && <span className="badge badge-warning" style={{ whiteSpace: "nowrap" }}>Waarschijnlijk</span>}
-                    {t.categorie_zekerheid === "onzeker" && <span className="badge badge-danger" style={{ whiteSpace: "nowrap" }}>Onzeker</span>}
-                  </span>
-                )}
-                <div className={`money ${teken < 0 ? "amount-neg" : ""}`} style={{ width: 100, textAlign: "right", fontWeight: 700, fontSize: 15, color: teken > 0 ? "var(--success-text)" : undefined }}>
-                  {teken === 0 ? "" : teken > 0 ? "+" : "-"}{euro(t.bedrag)}
+                <div style={{ textAlign: "right", flexShrink: 0 }}>
+                  <div className={`money ${teken < 0 ? "amount-neg" : ""}`} style={{ fontWeight: 700, fontSize: 15, color: teken > 0 ? "var(--success-text)" : undefined }}>
+                    {teken === 0 ? "" : teken > 0 ? "+" : "-"}{euro(t.bedrag)}
+                  </div>
+                  {magBewerken && (
+                    <button className="btn-plain link" style={{ fontSize: 13, marginTop: 2 }} onClick={() => setBewerkId(open ? null : t.id)}>
+                      {open ? "Sluiten" : "Wijzig"}
+                    </button>
+                  )}
                 </div>
-                {magBewerken && (
-                  <button className="btn-plain link" style={{ fontSize: 14, whiteSpace: "nowrap" }} onClick={() => setBewerkId(open ? null : t.id)}>
-                    {open ? "Sluiten" : "Wijzig"}
-                  </button>
-                )}
               </div>
               {open && (
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end", padding: "0 18px 18px", marginLeft: magBewerken ? 34 : 0, flexWrap: "wrap" }}>

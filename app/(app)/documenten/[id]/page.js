@@ -445,14 +445,14 @@ export default function DocumentDetail({ params }) {
       <div className="card" style={{ padding: 0, marginBottom: magBewerken && !isVerwerkt ? 16 : 20 }}>
         {regels.length === 0 && <p className="muted" style={{ padding: 24, textAlign: "center" }}>Nog geen regels.</p>}
         {regels.map((r, i) => (
-          <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={r.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "12px 18px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 160 }}>
               <div style={{ fontWeight: 600, fontSize: 15 }}>{r.omschrijving}</div>
               <div className="muted" style={{ fontSize: 12 }}>{bestemmingLabel(r)}</div>
             </div>
-            <div className="money" style={{ fontWeight: 700, width: 90, textAlign: "right" }}>{euro(r.bedrag)}</div>
+            <div className="money" style={{ fontWeight: 700, flexShrink: 0, textAlign: "right" }}>{euro(r.bedrag)}</div>
             {magBewerken && !isVerwerkt && (
-              <button className="btn-danger" onClick={() => regelVerwijderen(r)}>🗑️</button>
+              <button className="btn-danger" style={{ flexShrink: 0 }} onClick={() => regelVerwijderen(r)}>🗑️</button>
             )}
           </div>
         ))}

@@ -98,7 +98,7 @@ function GebruikerRij({ u, alle, bewerkOpen, onToggleBewerk, pickerOpen, onToggl
 function Sectie({ titel, actie, leden, leeg, ctx }) {
   return (
     <div style={{ marginBottom: 18 }}>
-      <div className="eyebrow" style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="eyebrow" style={{ marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
         <span>{titel}</span>
         {actie}
       </div>

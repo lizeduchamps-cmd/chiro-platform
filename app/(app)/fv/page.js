@@ -552,8 +552,8 @@ export default function FinancieelVerslag() {
                       ) : (
                         <div className="card" style={{ padding: 0, marginBottom: 8 }}>
                           {plakPreview.map((r, i) => (
-                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                              <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ flex: 1, borderColor: r.userId ? undefined : "var(--danger)" }}>
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap" }}>
+                              <select value={r.userId} onChange={(e) => plakRijWijzigen(i, "userId", e.target.value)} style={{ flex: 1, minWidth: 140, borderColor: r.userId ? undefined : "var(--danger)" }}>
                                 <option value="">{r.naam} (niet gevonden)</option>
                                 {overzicht.personen.map((p) => <option key={p.user.id} value={p.user.id}>{p.user.naam}</option>)}
                               </select>

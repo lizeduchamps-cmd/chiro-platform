@@ -170,7 +170,7 @@ export default function Evenementen() {
 
       {evenementen.length > 0 && (
         <>
-          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
             {TABS.map((t) => {
               const aantal = evenementen.filter((e) => e.status === t.key).length;
               return (

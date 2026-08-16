@@ -99,23 +99,24 @@ function parseKbcCsv(text, regels) {
 function TransactieRij({ t, geselecteerd, onToggleSelect, categorieNamen, onCategorie, onVerwijder, open, onToggleOpen, altijdOpen }) {
   return (
     <div>
-      <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px" }}>
-        <input type="checkbox" checked={geselecteerd} onChange={onToggleSelect} />
-        <div className="money muted" style={{ width: 56, fontSize: 13, flexShrink: 0 }}>
-          {t.datum ? new Date(t.datum + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short" }) : "-"}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", flexWrap: "wrap" }}>
+        <input type="checkbox" checked={geselecteerd} onChange={onToggleSelect} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1, minWidth: 160 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>{t.tegenpartij}</div>
-          <div className="muted" style={{ fontSize: 12 }}>{t.vrijeMededeling || t.omschrijving || "Geen mededeling"}</div>
+          <div className="muted" style={{ fontSize: 12 }}>
+            {t.datum ? new Date(t.datum + "T00:00:00").toLocaleDateString("nl-BE", { day: "numeric", month: "short" }) : "-"} · {t.vrijeMededeling || t.omschrijving || "Geen mededeling"}
+          </div>
         </div>
-        <div className={`money ${t.bedrag < 0 ? "amount-neg" : ""}`} style={{ width: 100, textAlign: "right", fontWeight: 700, fontSize: 15, color: t.bedrag > 0 ? "var(--success-text)" : undefined }}>
-          {euro(t.bedrag)}
+        <div style={{ textAlign: "right", flexShrink: 0 }}>
+          <div className={`money ${t.bedrag < 0 ? "amount-neg" : ""}`} style={{ fontWeight: 700, fontSize: 15, color: t.bedrag > 0 ? "var(--success-text)" : undefined }}>
+            {euro(t.bedrag)}
+          </div>
+          {altijdOpen ? (
+            <button className="btn-danger" onClick={onVerwijder} title="Verwijderen">🗑️</button>
+          ) : (
+            <button className="btn-plain link" style={{ fontSize: 13, marginTop: 2 }} onClick={onToggleOpen}>{open ? "Sluiten" : "Wijzig"}</button>
+          )}
         </div>
-        {altijdOpen ? (
-          <button className="btn-danger" onClick={onVerwijder} title="Verwijderen">🗑️</button>
-        ) : (
-          <button className="btn-plain link" style={{ fontSize: 14 }} onClick={onToggleOpen}>{open ? "Sluiten" : "Wijzig"}</button>
-        )}
       </div>
       {(altijdOpen || open) && (
         <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "0 18px 16px", marginLeft: 34, flexWrap: "wrap" }}>
@@ -315,12 +316,16 @@ export default function CsvUpload() {
           ) : (
             <div>
               {historiek.map((h, i) => (
-                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}>
-                  <div className="subtle" style={{ width: 130 }}>{new Date(h.created_at).toLocaleString("nl-BE")}</div>
-                  <div className="muted" style={{ flex: 1 }}>{h.bestandsnaam || "-"} · {h.users?.naam || "-"}</div>
-                  <div className="money">{h.aantal_in_bestand} in bestand</div>
-                  <div className="money" style={{ color: "var(--success-text)" }}>+{h.aantal_nieuw}</div>
-                  {h.aantal_duplicaten > 0 && <div className="money amount-neg">{h.aantal_duplicaten} dubbel</div>}
+                <div key={h.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 140 }}>
+                    <div className="muted">{h.bestandsnaam || "-"} · {h.users?.naam || "-"}</div>
+                    <div className="subtle" style={{ fontSize: 11 }}>{new Date(h.created_at).toLocaleString("nl-BE")}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, flexShrink: 0, flexWrap: "wrap" }}>
+                    <div className="money">{h.aantal_in_bestand} in bestand</div>
+                    <div className="money" style={{ color: "var(--success-text)" }}>+{h.aantal_nieuw}</div>
+                    {h.aantal_duplicaten > 0 && <div className="money amount-neg">{h.aantal_duplicaten} dubbel</div>}
+                  </div>
                 </div>
               ))}
             </div>
@@ -336,9 +341,9 @@ export default function CsvUpload() {
           </p>
           <div style={{ maxHeight: 220, overflowY: "auto", marginBottom: 12 }}>
             {regels.map((r, i) => (
-              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                <span><strong>"{r.bevat_tekst}"</strong> → {r.categorieen?.naam}</span>
-                <button className="btn-danger" onClick={() => regelVerwijderen(r)}>🗑️</button>
+              <div key={r.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 13, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", flexWrap: "wrap", gap: 8 }}>
+                <span style={{ minWidth: 0 }}><strong>"{r.bevat_tekst}"</strong> → {r.categorieen?.naam}</span>
+                <button className="btn-danger" style={{ flexShrink: 0 }} onClick={() => regelVerwijderen(r)}>🗑️</button>
               </div>
             ))}
           </div>

@@ -619,10 +619,10 @@ export default function EvenementDetail({ params }) {
                   Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie. Ze tellen niet mee in de balans hierboven — die blijft uitsluitend wat de groep zelf via kassa's/transacties bijhoudt.
                 </p>
                 {gekoppeldeTransacties.map((t, i) => (
-                  <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14 }}>
-                    <div className="subtle money">{t.datum}</div>
-                    <div className="muted" style={{ flex: 1 }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</div>
-                    <div className={`money ${t.soort === "uitgave" ? "amount-neg" : ""}`} style={{ fontWeight: 700 }}>{t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}</div>
+                  <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14, flexWrap: "wrap" }}>
+                    <div className="subtle money" style={{ flexShrink: 0 }}>{t.datum}</div>
+                    <div className="muted" style={{ flex: 1, minWidth: 140 }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</div>
+                    <div className={`money ${t.soort === "uitgave" ? "amount-neg" : ""}`} style={{ fontWeight: 700, flexShrink: 0 }}>{t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}</div>
                   </div>
                 ))}
               </div>
@@ -728,25 +728,24 @@ export default function EvenementDetail({ params }) {
                 const open = bewerkId === t.id;
                 return (
                   <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default" }} onClick={() => rijOpenen(t)}>
-                      <div className="money muted" style={{ width: 60, fontSize: 13, flexShrink: 0 }}>{t.datum}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default", flexWrap: "wrap" }} onClick={() => rijOpenen(t)}>
+                      <div style={{ flex: 1, minWidth: 160 }}>
                         <div style={{ fontWeight: 600, fontSize: 15 }}>
                           {t.omschrijving}
                           {t.waar && <span className="subtle"> · {t.waar}</span>}
                           {t.hoeveelheid ? <span className="subtle"> · {t.hoeveelheid}×</span> : ""}
                         </div>
                         <div className="muted" style={{ fontSize: 12 }}>
-                          {t.transactie_code}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}
+                          {t.datum} · {t.transactie_code}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}
                           {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" className="link" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
                         </div>
                       </div>
-                      <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
-                      <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ width: 90, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
+                      <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`} style={{ flexShrink: 0 }}>{t.status}</span>
+                      <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ flexShrink: 0, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
                         {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag_totaal)}
                       </div>
                       {magBewerken && (
-                        <button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
+                        <button className="btn-danger" style={{ flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
                       )}
                     </div>
                     {open && bewerkVeld && (
@@ -1188,8 +1187,8 @@ function AfdelingDetail({ groepsbudgetId }) {
         </p>
         {transacties.length === 0 && <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Nog geen uitgaven.</p>}
         {transacties.map((t, i) => (
-          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ fontWeight: 600 }}>
                 {t.omschrijving}
                 {t.users?.naam && <span className="subtle"> · {t.users.naam}</span>}
@@ -1197,8 +1196,8 @@ function AfdelingDetail({ groepsbudgetId }) {
               </div>
               <div className="muted" style={{ fontSize: 11 }}>{t.transactie_code} · {t.datum}</div>
             </div>
-            <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
-            <div className="money" style={{ fontWeight: 700, width: 80, textAlign: "right" }}>{euro(t.bedrag)}</div>
+            <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`} style={{ flexShrink: 0 }}>{t.status}</span>
+            <div className="money" style={{ fontWeight: 700, flexShrink: 0, textAlign: "right" }}>{euro(t.bedrag)}</div>
           </div>
         ))}
       </div>
@@ -1209,13 +1208,13 @@ function AfdelingDetail({ groepsbudgetId }) {
         </div>
         {wisselgeldAanvragen.length === 0 && <p className="muted" style={{ fontSize: 13, fontStyle: "italic" }}>Nog geen aanvragen.</p>}
         {wisselgeldAanvragen.map((w, i) => (
-          <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
+          <div key={w.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 13, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 140 }}>
               <div style={{ fontWeight: 600 }}>{w.doel_activiteit || "-"}</div>
               <div className="muted" style={{ fontSize: 11 }}>{w.aanvraag_code} · nodig op {w.datum_nodig}</div>
             </div>
-            <span className="badge badge-neutral">{w.status}</span>
-            <div className="money" style={{ fontWeight: 700, width: 80, textAlign: "right" }}>{euro(w.bedrag_gevraagd)}</div>
+            <span className="badge badge-neutral" style={{ flexShrink: 0 }}>{w.status}</span>
+            <div className="money" style={{ fontWeight: 700, flexShrink: 0, textAlign: "right" }}>{euro(w.bedrag_gevraagd)}</div>
           </div>
         ))}
       </div>
@@ -1486,10 +1485,10 @@ function KampKostenoverzicht({ werkjaarId, gekoppeldeTransacties, gebruikers, ma
             Deze banktransacties staan al in het Kasboek en zijn hieraan getagd, puur ter referentie. Ze tellen niet mee in de balans hierboven.
           </p>
           {gekoppeldeTransacties.map((t, i) => (
-            <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14 }}>
-              <div className="subtle money">{t.datum}</div>
-              <div className="muted" style={{ flex: 1 }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</div>
-              <div className={`money ${t.soort === "uitgave" ? "amount-neg" : ""}`} style={{ fontWeight: 700 }}>{t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}</div>
+            <div key={t.id} style={{ display: "flex", alignItems: "baseline", gap: 10, padding: "8px 0", borderTop: i > 0 ? "1px solid var(--border-soft)" : "none", fontSize: 14, flexWrap: "wrap" }}>
+              <div className="subtle money" style={{ flexShrink: 0 }}>{t.datum}</div>
+              <div className="muted" style={{ flex: 1, minWidth: 140 }}>{t.tegenpartij || t.vrije_mededeling || t.omschrijving || "-"} {t.categorieen?.naam && `· ${t.categorieen.naam}`}</div>
+              <div className={`money ${t.soort === "uitgave" ? "amount-neg" : ""}`} style={{ fontWeight: 700, flexShrink: 0 }}>{t.soort === "uitgave" ? "-" : "+"}{euro(t.bedrag)}</div>
             </div>
           ))}
         </div>
@@ -1550,20 +1549,20 @@ function KampKostenoverzicht({ werkjaarId, gekoppeldeTransacties, gebruikers, ma
           const open = bewerkId === t.id;
           return (
             <div key={t.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default" }} onClick={() => rijOpenen(t)}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "14px 18px", cursor: magBewerken ? "pointer" : "default", flexWrap: "wrap" }} onClick={() => rijOpenen(t)}>
+                <div style={{ flex: 1, minWidth: 160 }}>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>
                     {t.omschrijving}
                     {t.bewijsstuk_url && <> · <a href={t.bewijsstuk_url} target="_blank" rel="noreferrer" className="link" onClick={(e) => e.stopPropagation()}>bonnetje</a></>}
                   </div>
                   <div className="muted" style={{ fontSize: 12 }}>{t.transactie_code} · {t.datum}{t.hoofdcategorie ? ` · ${t.hoofdcategorie}` : ""}</div>
                 </div>
-                <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`}>{t.status}</span>
-                <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ width: 90, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
+                <span className={`badge ${STATUS_BADGE[t.status] || "badge-neutral"}`} style={{ flexShrink: 0 }}>{t.status}</span>
+                <div className={`money ${t.type_geldstroom === "uitgave" ? "amount-neg" : ""}`} style={{ flexShrink: 0, textAlign: "right", fontWeight: 700, color: t.type_geldstroom !== "uitgave" ? "var(--success-text)" : undefined }}>
                   {t.type_geldstroom === "uitgave" ? "-" : "+"}{euro(t.bedrag)}
                 </div>
                 {magBewerken && (
-                  <button className="btn-danger" onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
+                  <button className="btn-danger" style={{ flexShrink: 0 }} onClick={(e) => { e.stopPropagation(); transactieVerwijderen(t); }}>🗑️</button>
                 )}
               </div>
               {open && bewerkVeld && (

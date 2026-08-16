@@ -393,7 +393,7 @@ export default function Bestellingen() {
           </div>
         </div>
 
-        <div style={{ flex: 1, minWidth: 320 }}>
+        <div style={{ flex: 1, minWidth: 260 }}>
           {!overzicht ? (
             <p className="muted" style={{ fontStyle: "italic" }}>Kies of maak een bestelling om regels toe te voegen.</p>
           ) : (

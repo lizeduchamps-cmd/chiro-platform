@@ -238,14 +238,14 @@ export default function Streepjes() {
           const open = bewerkId === u.id;
           return (
             <div key={u.id} style={{ borderTop: i > 0 ? "1px solid var(--border-soft)" : "none" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 18px" }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: 140 }}>
                   <div style={{ fontWeight: 600, fontSize: 15 }}>{u.naam}</div>
                   <div className="muted" style={{ fontSize: 12 }}>{u.fysieke_streepjes || 0} op papier · {euro(online)} online</div>
                 </div>
-                <div className="money" style={{ fontWeight: 700, fontSize: 16, width: 90, textAlign: "right", color: totaalP > 0 ? "var(--danger-deep)" : "var(--text-subtle)" }}>{euro(totaalP)}</div>
+                <div className="money" style={{ fontWeight: 700, fontSize: 16, flexShrink: 0, textAlign: "right", color: totaalP > 0 ? "var(--danger-deep)" : "var(--text-subtle)" }}>{euro(totaalP)}</div>
                 {magBewerken && (
-                  <button className="btn-plain link" style={{ fontSize: 14 }} onClick={() => setBewerkId(open ? null : u.id)}>{open ? "Klaar" : "Wijzig"}</button>
+                  <button className="btn-plain link" style={{ fontSize: 14, flexShrink: 0 }} onClick={() => setBewerkId(open ? null : u.id)}>{open ? "Klaar" : "Wijzig"}</button>
                 )}
               </div>
               {open && magBewerken && (
