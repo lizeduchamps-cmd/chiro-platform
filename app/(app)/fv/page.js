@@ -584,6 +584,34 @@ export default function FinancieelVerslag() {
                   )}
                 </div>
               )}
+
+              {kmBewerkOpen && (
+                <div className="card" style={{ marginTop: 12 }}>
+                  <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Km-vergoeding aanpassen</div>
+                  <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+                    Geldt voor deze FV-maand (dieselprijs verandert soms tijdens het jaar). Nieuw tarief telt enkel voor kilometers die je vanaf nu toevoegt.
+                  </p>
+                  <div className="grid-2" style={{ marginBottom: 10 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>
+                      Dieselprijs (€/L)
+                      <input type="number" step="0.01" value={kmBewerk.dieselprijs} onChange={(e) => setKmBewerk({ ...kmBewerk, dieselprijs: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+                    </label>
+                    <label style={{ fontSize: 13, fontWeight: 600 }}>
+                      Gem. verbruik (L/100km)
+                      <input type="number" step="0.1" value={kmBewerk.verbruik} onChange={(e) => setKmBewerk({ ...kmBewerk, verbruik: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+                    </label>
+                  </div>
+                  <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
+                    {parseFloat(kmBewerk.dieselprijs) && parseFloat(kmBewerk.verbruik)
+                      ? `Nieuwe km-vergoeding: €${Math.round(((parseFloat(kmBewerk.dieselprijs) * parseFloat(kmBewerk.verbruik)) / 100) * 1000) / 1000}/km`
+                      : "vul dieselprijs en verbruik in"}
+                  </p>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn-primary" onClick={kmVergoedingOpslaan}>Opslaan</button>
+                    <button onClick={() => setKmBewerkOpen(false)}>Annuleren</button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -625,34 +653,6 @@ export default function FinancieelVerslag() {
               )}
             </div>
           </div>
-
-          {kmBewerkOpen && (
-            <div className="no-print card" style={{ marginBottom: 20 }}>
-              <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Km-vergoeding aanpassen</div>
-              <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-                Geldt voor deze FV-maand (dieselprijs verandert soms tijdens het jaar). Nieuw tarief telt enkel voor kilometers die je vanaf nu toevoegt.
-              </p>
-              <div className="grid-2" style={{ marginBottom: 10 }}>
-                <label style={{ fontSize: 13, fontWeight: 600 }}>
-                  Dieselprijs (€/L)
-                  <input type="number" step="0.01" value={kmBewerk.dieselprijs} onChange={(e) => setKmBewerk({ ...kmBewerk, dieselprijs: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
-                </label>
-                <label style={{ fontSize: 13, fontWeight: 600 }}>
-                  Gem. verbruik (L/100km)
-                  <input type="number" step="0.1" value={kmBewerk.verbruik} onChange={(e) => setKmBewerk({ ...kmBewerk, verbruik: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
-                </label>
-              </div>
-              <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
-                {parseFloat(kmBewerk.dieselprijs) && parseFloat(kmBewerk.verbruik)
-                  ? `Nieuwe km-vergoeding: €${Math.round(((parseFloat(kmBewerk.dieselprijs) * parseFloat(kmBewerk.verbruik)) / 100) * 1000) / 1000}/km`
-                  : "vul dieselprijs en verbruik in"}
-              </p>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-primary" onClick={kmVergoedingOpslaan}>Opslaan</button>
-                <button onClick={() => setKmBewerkOpen(false)}>Annuleren</button>
-              </div>
-            </div>
-          )}
 
           {overzicht.personen.length === 0 && (
             <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
