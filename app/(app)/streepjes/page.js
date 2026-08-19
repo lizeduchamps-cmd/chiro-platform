@@ -1,6 +1,8 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonTable } from "@/components/Skeleton";
 
@@ -39,6 +41,7 @@ function parseCSVLine(line, delimiter) {
 export default function Streepjes() {
   const { data: session } = useSession();
   const toast = useToast();
+  const vanFv = useSearchParams().get("van") === "fv";
   const [users, setUsers] = useState([]);
   const [prijsPerStreepje, setPrijsPerStreepje] = useState(0.25);
   const [loading, setLoading] = useState(true);
@@ -178,6 +181,9 @@ export default function Streepjes() {
 
   return (
     <div style={{ padding: 32, maxWidth: 900 }}>
+      {vanFv && (
+        <Link href="/fv" className="link" style={{ fontSize: 13, display: "inline-block", marginBottom: 8 }}>← Financieel Verslag</Link>
+      )}
       <h1 style={{ fontSize: 30, fontWeight: 800 }}>Streepjes &amp; online drank</h1>
       <p className="muted" style={{ fontSize: 15, marginTop: 6, marginBottom: 20 }}>
         Streepjes op papier vul je hier in, online streepjes komen uit het logboek van de Discord-bot.

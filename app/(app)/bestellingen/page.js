@@ -1,6 +1,8 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { parseNaamRegels, vindGebruiker, splitProducten } from "@/lib/smartPaste";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
@@ -13,6 +15,7 @@ export default function Bestellingen() {
   const { data: session } = useSession();
   const toast = useToast();
   const confirm = useConfirm();
+  const vanFv = useSearchParams().get("van") === "fv";
   const [bestellingen, setBestellingen] = useState([]);
   const [bestellingId, setBestellingId] = useState(null);
   const [overzicht, setOverzicht] = useState(null);
@@ -323,6 +326,9 @@ export default function Bestellingen() {
 
   return (
     <div style={{ padding: 32, maxWidth: 1100 }}>
+      {vanFv && (
+        <Link href="/fv" className="link" style={{ fontSize: 13, display: "inline-block", marginBottom: 8 }}>← Financieel Verslag</Link>
+      )}
       <h1 style={{ fontSize: 30, fontWeight: 800 }}>Bestellingen</h1>
       <p className="muted" style={{ fontSize: 15, marginTop: 6, marginBottom: 20 }}>
         Splits een rekening (frituur, pizza, leefweek, ...) per persoon op en verdeel het automatisch over hun Financieel Verslag. Gebruik "Regel toevoegen" of "Slim plakken" als iedereen iets anders koos, of "Gelijk verdelen" als iedereen evenveel betaalt (bv. leefweek).

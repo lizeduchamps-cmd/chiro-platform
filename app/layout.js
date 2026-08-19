@@ -6,6 +6,16 @@ export const metadata = {
   description: "Financiënplatform voor Chiro Hoepertingen",
 };
 
+// viewport-fit=cover is vereist opdat env(safe-area-inset-bottom) in
+// globals.css (onderste tabbalk) effectief iets anders dan 0 teruggeeft —
+// zonder dit blijft de balk te dicht bij de rand op telefoons met een
+// home-indicator, ongeacht hoeveel padding de CSS zelf toevoegt.
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
 export default function RootLayout({ children }) {
   return (
     <html lang="nl">

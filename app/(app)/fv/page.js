@@ -69,6 +69,13 @@ const STREEPJES_ICOON = (
     <path d="M5 8l14 6" />
   </svg>
 );
+const TARIEF_ICOON = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 7h10M17 7h3M4 17h3M10 17h10" />
+    <circle cx="14" cy="7" r="2.3" />
+    <circle cx="7" cy="17" r="2.3" />
+  </svg>
+);
 
 // Eén persoonskaart: regels ingeklapt achter "Details (N)", gegroepeerd per
 // soort. Enkel wie mag bewerken ziet de 4 sneltoevoegknoppen.
@@ -90,7 +97,7 @@ function PersoonKaart({
           <div style={{ fontWeight: 700, fontSize: groot ? 17 : 15 }}>
             {p.user.naam}{jezelf && <span className="muted" style={{ fontWeight: 600, fontSize: 14 }}> — jij</span>}
           </div>
-          <div className="subtle" style={{ fontSize: 13 }}>{p.user.type}{p.user.groep ? ` · ${p.user.groep}` : ""}</div>
+          <div className="subtle" style={{ fontSize: 13 }}>{p.user.type}{p.user.groep && p.user.groep !== p.user.type ? ` — leidt ${p.user.groep}` : ""}</div>
           {terugTeKrijgen && (
             <div className="subtle" style={{ fontSize: 13 }}>
               {p.user.iban ? `Terug te storten naar ${p.user.iban}` : "Geen IBAN bekend voor terugbetaling"}
@@ -410,7 +417,7 @@ export default function FinancieelVerslag() {
 
   useEffect(() => {
     if (!printGroep) return;
-    const timer = setTimeout(() => window.print(), 50);
+    const timer = setTimeout(() => window.print(), 200);
     return () => clearTimeout(timer);
   }, [printGroep]);
 
@@ -509,19 +516,23 @@ export default function FinancieelVerslag() {
         <div className={printGroep ? "no-print" : undefined}>
           {magBewerken && (
             <div className="no-print" style={{ marginBottom: 20 }}>
-              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(3, 1fr)", maxWidth: 300 }}>
+              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(4, 1fr)", maxWidth: 380 }}>
                 <button className="quick-action btn-plain" onClick={() => setPlakOpen((v) => !v)}>
                   <span className="quick-action-icon">{KM_ICOON}</span>
                   <span className="quick-action-label">Km</span>
                 </button>
-                <Link href="/bestellingen" className="quick-action">
+                <Link href="/bestellingen?van=fv" className="quick-action">
                   <span className="quick-action-icon">{BESTELLING_ICOON}</span>
                   <span className="quick-action-label">Bestelling</span>
                 </Link>
-                <Link href="/streepjes" className="quick-action">
+                <Link href="/streepjes?van=fv" className="quick-action">
                   <span className="quick-action-icon">{STREEPJES_ICOON}</span>
                   <span className="quick-action-label">Streepjes</span>
                 </Link>
+                <button className="quick-action btn-plain" onClick={() => (kmBewerkOpen ? setKmBewerkOpen(false) : kmBewerkOpenen())}>
+                  <span className="quick-action-icon">{TARIEF_ICOON}</span>
+                  <span className="quick-action-label">Tarief</span>
+                </button>
               </div>
 
               {plakOpen && (
@@ -576,6 +587,16 @@ export default function FinancieelVerslag() {
             </div>
           )}
 
+          {totaalNogNietBetaald > 0 && (
+            <div className="no-print card card-warning" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
+              <span className="badge badge-warning" style={{ alignSelf: "flex-start" }}>Nog na te kijken</span>
+              <div style={{ fontSize: 18, fontWeight: 700 }}>{totaalNogNietBetaald} perso{totaalNogNietBetaald > 1 ? "nen hebben" : "on heeft"} nog niet betaald</div>
+              <button onClick={() => setAlleenOpenstaand((v) => !v)} style={{ alignSelf: "flex-start" }}>
+                {alleenOpenstaand ? "✕ Toon iedereen" : "Toon enkel wie nog niet betaalde"}
+              </button>
+            </div>
+          )}
+
           {eigenPersoon && (
             <PersoonKaart
               p={eigenPersoon}
@@ -599,10 +620,8 @@ export default function FinancieelVerslag() {
               <div style={{ fontSize: 22, fontWeight: 800 }}>{maandLabel(overzicht.fvMaand.maand)}</div>
               {overzicht.fvMaand.betaaldeadline && <div className="muted" style={{ fontSize: 14 }}>Betaaldeadline {overzicht.fvMaand.betaaldeadline}</div>}
               {overzicht.fvMaand.km_tarief_leiding && <div className="muted" style={{ fontSize: 14 }}>Km-vergoeding €{overzicht.fvMaand.km_tarief_leiding}/km</div>}
-              {magBewerken && !kmBewerkOpen && (
-                <button className="no-print btn-plain link" style={{ fontSize: 14 }} onClick={kmBewerkOpenen}>
-                  {overzicht.fvMaand.km_tarief_leiding ? "Aanpassen" : "Km-vergoeding instellen"}
-                </button>
+              {magBewerken && !overzicht.fvMaand.km_tarief_leiding && !kmBewerkOpen && (
+                <span className="subtle" style={{ fontSize: 14 }}>Nog geen km-vergoeding — via "Tarief" bovenaan instellen</span>
               )}
             </div>
           </div>
@@ -637,16 +656,6 @@ export default function FinancieelVerslag() {
 
           {overzicht.personen.length === 0 && (
             <p className="muted" style={{ fontStyle: "italic" }}>Nog niemand op dit FV-overzicht.</p>
-          )}
-
-          {totaalNogNietBetaald > 0 && (
-            <div className="no-print card card-warning" style={{ marginBottom: 20, display: "flex", flexDirection: "column", gap: 10 }}>
-              <span className="badge badge-warning" style={{ alignSelf: "flex-start" }}>Nog na te kijken</span>
-              <div style={{ fontSize: 18, fontWeight: 700 }}>{totaalNogNietBetaald} perso{totaalNogNietBetaald > 1 ? "nen hebben" : "on heeft"} nog niet betaald</div>
-              <button onClick={() => setAlleenOpenstaand((v) => !v)} style={{ alignSelf: "flex-start" }}>
-                {alleenOpenstaand ? "✕ Toon iedereen" : "Toon enkel wie nog niet betaalde"}
-              </button>
-            </div>
           )}
 
           {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((groep) => {
@@ -697,7 +706,7 @@ export default function FinancieelVerslag() {
           {overzicht.personen.filter((p) => fvGroep(p.user) === printGroep).map((p, i, arr) => (
             <div key={p.user.id} style={{ pageBreakAfter: i < arr.length - 1 ? "always" : "auto", paddingBottom: 24 }}>
               <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{p.user.naam}</h2>
-              <p style={{ fontSize: 13, marginBottom: 12 }}>{p.user.type}{p.user.groep ? ` · ${p.user.groep}` : ""}</p>
+              <p style={{ fontSize: 13, marginBottom: 12 }}>{p.user.type}{p.user.groep && p.user.groep !== p.user.type ? ` — leidt ${p.user.groep}` : ""}</p>
               {p.regels.length === 0 ? (
                 <p style={{ fontStyle: "italic", fontSize: 14 }}>Geen regels.</p>
               ) : (
