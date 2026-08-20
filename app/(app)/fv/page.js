@@ -1,10 +1,12 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import Link from "next/link";
 import { parseNaamRegels, vindGebruiker, haalKmEruit } from "@/lib/smartPaste";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
+import PageHeader from "@/components/PageHeader";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -412,14 +414,18 @@ export default function FinancieelVerslag() {
   // PDF per groep: leunt op de browser-eigen "Opslaan als PDF" in het
   // printdialoog (zoals de oude "Afdrukken / PDF"-knop al deed), maar toont
   // enkel de gekozen groep met alle personen + hun volledige regel-per-regel
-  // afrekening (zie .print-only), i.p.v. het huidige scherm.
-  const pdfExporteren = (groep) => setPrintGroep(groep);
-
-  useEffect(() => {
-    if (!printGroep) return;
-    const timer = setTimeout(() => window.print(), 200);
-    return () => clearTimeout(timer);
-  }, [printGroep]);
+  // afrekening (zie .print-only), i.p.v. het huidige scherm. window.print()
+  // moet hier synchroon binnen de klik-handler blijven (mobiele Safari
+  // weigert het anders stilzwijgend) — en flushSync dwingt React om de
+  // .print-only-inhoud voor die printGroep al écht in de DOM te zetten
+  // vóórdat print() de pagina "fotografeert". Met een setTimeout ertussen
+  // (de vorige aanpak) kon print() nog de oude, ingeklapte weergave
+  // vastleggen als React nog niet had bijgewerkt — dat was vermoedelijk
+  // precies waarom de PDF enkel totalen toonde.
+  const pdfExporteren = (groep) => {
+    flushSync(() => setPrintGroep(groep));
+    window.print();
+  };
 
   useEffect(() => {
     const afterPrint = () => setPrintGroep(null);
@@ -444,19 +450,13 @@ export default function FinancieelVerslag() {
 
   return (
     <div style={{ padding: 32, maxWidth: 1000 }}>
-      <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
-        <div>
-          <h1 style={{ fontSize: 30, fontWeight: 800 }}>Financieel Verslag</h1>
-          <p className="muted" style={{ fontSize: 15, marginTop: 6 }}>Wat je deze maand moet betalen of terugkrijgt. Details staan onder elk bedrag.</p>
-        </div>
+      <PageHeader title="Financieel Verslag" subtitle="Wat je deze maand moet betalen of terugkrijgt. Details staan onder elk bedrag.">
         {overzicht && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((g) => (
-              <button key={g} onClick={() => pdfExporteren(g)}>PDF: {g}</button>
-            ))}
-          </div>
+          GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((g) => (
+            <button key={g} onClick={() => pdfExporteren(g)}>PDF: {g}</button>
+          ))
         )}
-      </div>
+      </PageHeader>
 
       <div className="no-print" style={{ display: "flex", gap: 10, alignItems: "center", margin: "16px 0 20px", flexWrap: "wrap" }}>
         <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>

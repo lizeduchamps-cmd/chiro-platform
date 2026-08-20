@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { parseNaamRegels, vindGebruiker, splitProducten } from "@/lib/smartPaste";
 import { useToast, useConfirm } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
+import PageHeader from "@/components/PageHeader";
 
 function euro(n) {
   return Number(n || 0).toLocaleString("nl-BE", { style: "currency", currency: "EUR" });
@@ -329,10 +330,7 @@ export default function Bestellingen() {
       {vanFv && (
         <Link href="/fv" className="link" style={{ fontSize: 13, display: "inline-block", marginBottom: 8 }}>← Financieel Verslag</Link>
       )}
-      <h1 style={{ fontSize: 30, fontWeight: 800 }}>Bestellingen</h1>
-      <p className="muted" style={{ fontSize: 15, marginTop: 6, marginBottom: 20 }}>
-        Splits een rekening (frituur, pizza, leefweek, ...) per persoon op en verdeel het automatisch over hun Financieel Verslag. Gebruik "Regel toevoegen" of "Slim plakken" als iedereen iets anders koos, of "Gelijk verdelen" als iedereen evenveel betaalt (bv. leefweek).
-      </p>
+      <PageHeader title="Bestellingen" subtitle="Splits een rekening per persoon op en verdeel automatisch over het Financieel Verslag." />
 
       {magBewerken && openstaandeBestellingen.length > 0 && (
         <div className="card card-lg" style={{ marginBottom: 20, background: "var(--primary)", color: "white", border: "none" }}>
@@ -357,7 +355,7 @@ export default function Bestellingen() {
       )}
 
       <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ width: 270, flexShrink: 0 }}>
+        <div className="bestellingen-sidebar">
           {magBewerken && (
             <div className="card" style={{ marginBottom: 16 }}>
               <div style={{ fontWeight: 700, marginBottom: 10, fontSize: 15 }}>Nieuwe bestelling</div>
