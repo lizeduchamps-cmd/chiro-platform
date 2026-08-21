@@ -188,7 +188,7 @@ export default function FinancieelVerslag() {
     betaaldeadline: "",
   });
   const [kmBewerkOpen, setKmBewerkOpen] = useState(false);
-  const [kmBewerk, setKmBewerk] = useState({ dieselprijs: "", verbruik: "7" });
+  const [kmBewerk, setKmBewerk] = useState({ dieselprijs: "", verbruik: "7", rekeningnummer: "" });
   const [nieuweRegel, setNieuweRegel] = useState({});
   const [plakOpen, setPlakOpen] = useState(false);
   const [plakTekst, setPlakTekst] = useState("");
@@ -276,13 +276,18 @@ export default function FinancieelVerslag() {
 
   // Dieselprijs verandert soms tijdens het jaar — laat toe de km-vergoeding
   // van een bestaande FV-maand achteraf te herberekenen, niet enkel bij aanmaken.
-  const kmBewerkOpenen = () => {
+  const kmBewerkOpenen = async () => {
     const huidigeDiesel = overzicht?.fvMaand?.dieselprijs;
     const huidigTarief = overzicht?.fvMaand?.km_tarief_leiding;
     // Verbruik zelf wordt niet opgeslagen (enkel het resultaat), dus reken
     // het terug uit tarief = diesel × verbruik ÷ 100 als beide gekend zijn.
     const verbruik = huidigeDiesel && huidigTarief ? Math.round(((huidigTarief * 100) / huidigeDiesel) * 10) / 10 : 7;
-    setKmBewerk({ dieselprijs: huidigeDiesel ? String(huidigeDiesel) : "", verbruik: String(verbruik) });
+    const instellingenData = await fetch("/api/instellingen").then((r) => r.json());
+    setKmBewerk({
+      dieselprijs: huidigeDiesel ? String(huidigeDiesel) : "",
+      verbruik: String(verbruik),
+      rekeningnummer: instellingenData.instellingen?.chiro_rekeningnummer || "",
+    });
     setKmBewerkOpen(true);
   };
 
@@ -298,6 +303,11 @@ export default function FinancieelVerslag() {
     });
     const data = await res.json();
     if (data.error) return toast.error(data.error);
+    await fetch("/api/instellingen", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "chiro_rekeningnummer", waarde: kmBewerk.rekeningnummer.trim() }),
+    });
     setKmBewerkOpen(false);
     ladenOverzicht(fvMaandId);
     toast.success(`Km-vergoeding bijgewerkt naar €${tarief}/km`);
@@ -564,6 +574,10 @@ export default function FinancieelVerslag() {
                       <input type="number" step="0.1" value={kmBewerk.verbruik} onChange={(e) => setKmBewerk({ ...kmBewerk, verbruik: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
                     </label>
                   </div>
+                  <label style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 10 }}>
+                    Rekeningnummer Chiro (IBAN)
+                    <input placeholder="BE.. .... .... ...." value={kmBewerk.rekeningnummer} onChange={(e) => setKmBewerk({ ...kmBewerk, rekeningnummer: e.target.value })} style={{ display: "block", width: "100%", marginTop: 4 }} />
+                  </label>
                   <p className="muted" style={{ fontSize: 13, marginBottom: 10 }}>
                     {parseFloat(kmBewerk.dieselprijs) && parseFloat(kmBewerk.verbruik)
                       ? `Nieuwe km-vergoeding: €${Math.round(((parseFloat(kmBewerk.dieselprijs) * parseFloat(kmBewerk.verbruik)) / 100) * 1000) / 1000}/km`
