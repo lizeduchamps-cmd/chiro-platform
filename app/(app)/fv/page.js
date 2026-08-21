@@ -79,25 +79,8 @@ function PersoonKaart({
 
   return (
     <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: groot ? 17 : 15 }}>
-            {p.user.naam}{jezelf && <span className="muted" style={{ fontWeight: 600, fontSize: 14 }}> — jij</span>}
-          </div>
-          <div className="subtle" style={{ fontSize: 13 }}>{p.user.type}{p.user.groep && p.user.groep !== p.user.type ? ` — leidt ${p.user.groep}` : ""}</div>
-          {terugTeKrijgen && (
-            <div className="subtle" style={{ fontSize: 13 }}>
-              {p.user.iban ? `Terug te storten naar ${p.user.iban}` : "Geen IBAN bekend voor terugbetaling"}
-            </div>
-          )}
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <div style={{ textAlign: "right" }}>
-            <div className="muted" style={{ fontSize: 13 }}>{terugTeKrijgen ? "Terug te krijgen" : "Te betalen"}</div>
-            <div className="money" style={{ fontSize: groot ? 26 : 18, fontWeight: 700, color: klaar ? undefined : terugTeKrijgen ? "var(--success-text)" : "var(--danger-deep)" }}>
-              {euro(Math.abs(p.totaal))}
-            </div>
-          </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button
             className={`no-print badge ${klaar ? "badge-success" : "badge-danger"}`}
             onClick={() => magBewerken && onStatusToggle(p.user.id, p.status)}
@@ -107,6 +90,22 @@ function PersoonKaart({
             {klaar ? "Betaald" : "Openstaand"}
           </button>
         </div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 700, fontSize: groot ? 17 : 15 }}>
+            {p.user.naam}{jezelf && <span className="muted" style={{ fontWeight: 600, fontSize: 14 }}> — jij</span>}
+          </div>
+          <div style={{ fontSize: groot ? 16 : 14 }}>
+            <span className="muted">{terugTeKrijgen ? "Terug te krijgen" : "Te betalen"} </span>
+            <span className="money" style={{ fontWeight: 700, color: klaar ? undefined : terugTeKrijgen ? "var(--success-text)" : "var(--danger-deep)" }}>
+              {euro(Math.abs(p.totaal))}
+            </span>
+          </div>
+        </div>
+        {terugTeKrijgen && (
+          <div className="subtle" style={{ fontSize: 13 }}>
+            {p.user.iban ? `Terug te storten naar ${p.user.iban}` : "Geen IBAN bekend voor terugbetaling"}
+          </div>
+        )}
       </div>
 
       <button className="no-print btn-plain link" style={{ fontSize: 14, alignSelf: "flex-start" }} onClick={onToggleOpen}>
@@ -470,25 +469,33 @@ export default function FinancieelVerslag() {
         )
       ) : (
         <div>
-          {magBewerken && (
+          {overzicht && (
             <div className="no-print" style={{ marginBottom: 20 }}>
-              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(4, 1fr)", maxWidth: 380 }}>
-                <button className="quick-action btn-plain" onClick={() => setPlakOpen((v) => !v)}>
-                  <span className="quick-action-icon">{KM_ICOON}</span>
-                  <span className="quick-action-label">Km</span>
-                </button>
-                <button className="quick-action btn-plain" onClick={() => (kmBewerkOpen ? setKmBewerkOpen(false) : kmBewerkOpenen())}>
-                  <span className="quick-action-icon">{TARIEF_ICOON}</span>
-                  <span className="quick-action-label">Tarief</span>
-                </button>
-                <Link href="/bestellingen?van=fv" className="quick-action">
-                  <span className="quick-action-icon">{BESTELLING_ICOON}</span>
-                  <span className="quick-action-label">Bestelling</span>
-                </Link>
-                <Link href="/streepjes?van=fv" className="quick-action">
-                  <span className="quick-action-icon">{STREEPJES_ICOON}</span>
-                  <span className="quick-action-label">Streepjes</span>
-                </Link>
+              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(5, 1fr)", maxWidth: 470 }}>
+                {magBewerken && (
+                  <>
+                    <button className="quick-action btn-plain" onClick={() => setPlakOpen((v) => !v)}>
+                      <span className="quick-action-icon">{KM_ICOON}</span>
+                      <span className="quick-action-label">Km</span>
+                    </button>
+                    <button className="quick-action btn-plain" onClick={() => (kmBewerkOpen ? setKmBewerkOpen(false) : kmBewerkOpenen())}>
+                      <span className="quick-action-icon">{TARIEF_ICOON}</span>
+                      <span className="quick-action-label">Tarief</span>
+                    </button>
+                    <Link href="/bestellingen?van=fv" className="quick-action">
+                      <span className="quick-action-icon">{BESTELLING_ICOON}</span>
+                      <span className="quick-action-label">Bestelling</span>
+                    </Link>
+                    <Link href="/streepjes?van=fv" className="quick-action">
+                      <span className="quick-action-icon">{STREEPJES_ICOON}</span>
+                      <span className="quick-action-label">Streepjes</span>
+                    </Link>
+                  </>
+                )}
+                <a href={`/api/fv/export?fvMaandId=${fvMaandId}`} className="quick-action">
+                  <span className="quick-action-icon">{EXPORT_ICOON}</span>
+                  <span className="quick-action-label">Excel</span>
+                </a>
               </div>
 
               {plakOpen && (
@@ -568,17 +575,6 @@ export default function FinancieelVerslag() {
                   </div>
                 </div>
               )}
-            </div>
-          )}
-
-          {overzicht && (
-            <div className="no-print" style={{ marginBottom: 20 }}>
-              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(4, 1fr)", maxWidth: 380 }}>
-                <a href={`/api/fv/export?fvMaandId=${fvMaandId}`} className="quick-action">
-                  <span className="quick-action-icon">{EXPORT_ICOON}</span>
-                  <span className="quick-action-label">Excel</span>
-                </a>
-              </div>
             </div>
           )}
 
