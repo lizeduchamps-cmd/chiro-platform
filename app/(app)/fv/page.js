@@ -1,9 +1,10 @@
 "use client";
 import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
-import { flushSync } from "react-dom";
 import Link from "next/link";
 import { parseNaamRegels, vindGebruiker, haalKmEruit } from "@/lib/smartPaste";
+import { GROEP_VOLGORDE, fvGroep } from "@/lib/fvGroep";
+import { SOORTEN } from "@/lib/fvSoorten";
 import { useToast } from "@/components/NotifyProvider";
 import { SkeletonCard } from "@/components/Skeleton";
 import PageHeader from "@/components/PageHeader";
@@ -22,28 +23,6 @@ function huidigeMaandString() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
-
-// FV-groepering op basis van type (niet groep!): groep is enkel de afdeling
-// die iemand leidt (bv. een Leiding-lid dat de Aspi's leidt heeft groep='Aspi'
-// maar hoort wel degelijk bij "Leiding"). Enkel wie zelf type='Aspi' is,
-// hoort in de Aspi-groep.
-const GROEP_VOLGORDE = ["Leiding", "Logistiek", "Aspi"];
-function fvGroep(user) {
-  if (user.type === "Aspi") return "Aspi";
-  if (user.type === "Logistiek") return "Logistiek";
-  return "Leiding";
-}
-
-// De 4 soorten regels — vaste volgorde, gebruikt om bestaande regels
-// gegroepeerd te tonen (Details-lijst en PDF-export). Enkel "handmatig" heeft
-// nog een sneltoevoegknop per persoon; km/bestelling/streepjes gaan bovenaan
-// de pagina via de bulk-tools.
-const SOORTEN = [
-  { bron: "bestelling", label: "Bestellingen" },
-  { bron: "kilometers", label: "Kilometers" },
-  { bron: "streepjes_bot", label: "Streepjes" },
-  { bron: "handmatig", label: "Handmatig" },
-];
 
 function perSoortVoorPersoon(p) {
   return SOORTEN.map((s) => ({ ...s, regels: p.regels.filter((r) => r.bron === s.bron) })).filter((s) => s.regels.length > 0);
@@ -76,6 +55,12 @@ const TARIEF_ICOON = (
     <path d="M4 7h10M17 7h3M4 17h3M10 17h10" />
     <circle cx="14" cy="7" r="2.3" />
     <circle cx="7" cy="17" r="2.3" />
+  </svg>
+);
+const EXPORT_ICOON = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 4v10m0 0l-4-4m4 4l4-4" />
+    <path d="M5 16v3a2 2 0 002 2h10a2 2 0 002-2v-3" />
   </svg>
 );
 
@@ -214,7 +199,6 @@ export default function FinancieelVerslag() {
   const [openKaarten, setOpenKaarten] = useState(new Set());
   const [veldOpenPerPersoon, setVeldOpenPerPersoon] = useState({});
   const [alleenOpenstaand, setAlleenOpenstaand] = useState(false);
-  const [printGroep, setPrintGroep] = useState(null);
 
   const magBewerken = session?.user?.platformRecht === "admin" || session?.user?.platformRecht === "financieel_verantwoordelijke";
 
@@ -411,28 +395,6 @@ export default function FinancieelVerslag() {
     ladenOverzicht(fvMaandId);
   };
 
-  // PDF per groep: leunt op de browser-eigen "Opslaan als PDF" in het
-  // printdialoog (zoals de oude "Afdrukken / PDF"-knop al deed), maar toont
-  // enkel de gekozen groep met alle personen + hun volledige regel-per-regel
-  // afrekening (zie .print-only), i.p.v. het huidige scherm. window.print()
-  // moet hier synchroon binnen de klik-handler blijven (mobiele Safari
-  // weigert het anders stilzwijgend) — en flushSync dwingt React om de
-  // .print-only-inhoud voor die printGroep al écht in de DOM te zetten
-  // vóórdat print() de pagina "fotografeert". Met een setTimeout ertussen
-  // (de vorige aanpak) kon print() nog de oude, ingeklapte weergave
-  // vastleggen als React nog niet had bijgewerkt — dat was vermoedelijk
-  // precies waarom de PDF enkel totalen toonde.
-  const pdfExporteren = (groep) => {
-    flushSync(() => setPrintGroep(groep));
-    window.print();
-  };
-
-  useEffect(() => {
-    const afterPrint = () => setPrintGroep(null);
-    window.addEventListener("afterprint", afterPrint);
-    return () => window.removeEventListener("afterprint", afterPrint);
-  }, []);
-
   // Belangrijk: deze check staat pas ná alle bovenstaande functiedefinities.
   // Stond die ertussenin (zoals eerder), dan bestonden functies zoals
   // ladenOverzicht soms nog niet op het moment dat een useEffect ze probeerde
@@ -450,13 +412,7 @@ export default function FinancieelVerslag() {
 
   return (
     <div style={{ padding: 32, maxWidth: 1000 }}>
-      <PageHeader title="Financieel Verslag" subtitle="Wat je deze maand moet betalen of terugkrijgt. Details staan onder elk bedrag.">
-        {overzicht && (
-          GROEP_VOLGORDE.filter((g) => overzicht.personen.some((p) => fvGroep(p.user) === g)).map((g) => (
-            <button key={g} onClick={() => pdfExporteren(g)}>PDF: {g}</button>
-          ))
-        )}
-      </PageHeader>
+      <PageHeader title="Financieel Verslag" subtitle="Wat je deze maand moet betalen of terugkrijgt. Details staan onder elk bedrag." />
 
       <div className="no-print" style={{ display: "flex", gap: 10, alignItems: "center", margin: "16px 0 20px", flexWrap: "wrap" }}>
         <select value={werkjaarId || ""} onChange={(e) => setWerkjaarId(e.target.value)} style={{ fontWeight: 600 }}>
@@ -513,13 +469,17 @@ export default function FinancieelVerslag() {
           </div>
         )
       ) : (
-        <div className={printGroep ? "no-print" : undefined}>
+        <div>
           {magBewerken && (
             <div className="no-print" style={{ marginBottom: 20 }}>
               <div className="quick-actions" style={{ gridTemplateColumns: "repeat(4, 1fr)", maxWidth: 380 }}>
                 <button className="quick-action btn-plain" onClick={() => setPlakOpen((v) => !v)}>
                   <span className="quick-action-icon">{KM_ICOON}</span>
                   <span className="quick-action-label">Km</span>
+                </button>
+                <button className="quick-action btn-plain" onClick={() => (kmBewerkOpen ? setKmBewerkOpen(false) : kmBewerkOpenen())}>
+                  <span className="quick-action-icon">{TARIEF_ICOON}</span>
+                  <span className="quick-action-label">Tarief</span>
                 </button>
                 <Link href="/bestellingen?van=fv" className="quick-action">
                   <span className="quick-action-icon">{BESTELLING_ICOON}</span>
@@ -529,10 +489,6 @@ export default function FinancieelVerslag() {
                   <span className="quick-action-icon">{STREEPJES_ICOON}</span>
                   <span className="quick-action-label">Streepjes</span>
                 </Link>
-                <button className="quick-action btn-plain" onClick={() => (kmBewerkOpen ? setKmBewerkOpen(false) : kmBewerkOpenen())}>
-                  <span className="quick-action-icon">{TARIEF_ICOON}</span>
-                  <span className="quick-action-label">Tarief</span>
-                </button>
               </div>
 
               {plakOpen && (
@@ -612,6 +568,17 @@ export default function FinancieelVerslag() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {overzicht && (
+            <div className="no-print" style={{ marginBottom: 20 }}>
+              <div className="quick-actions" style={{ gridTemplateColumns: "repeat(4, 1fr)", maxWidth: 380 }}>
+                <a href={`/api/fv/export?fvMaandId=${fvMaandId}`} className="quick-action">
+                  <span className="quick-action-icon">{EXPORT_ICOON}</span>
+                  <span className="quick-action-label">Excel</span>
+                </a>
+              </div>
             </div>
           )}
 
@@ -699,40 +666,6 @@ export default function FinancieelVerslag() {
         </div>
       )}
 
-      {printGroep && overzicht && (
-        <div className="print-only">
-          <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{printGroep} — {maandLabel(overzicht.fvMaand.maand)}</h1>
-          {overzicht.fvMaand.betaaldeadline && <p style={{ marginBottom: 20 }}>Betaaldeadline {overzicht.fvMaand.betaaldeadline}</p>}
-          {overzicht.personen.filter((p) => fvGroep(p.user) === printGroep).map((p, i, arr) => (
-            <div key={p.user.id} style={{ pageBreakAfter: i < arr.length - 1 ? "always" : "auto", paddingBottom: 24 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 2 }}>{p.user.naam}</h2>
-              <p style={{ fontSize: 13, marginBottom: 12 }}>{p.user.type}{p.user.groep && p.user.groep !== p.user.type ? ` — leidt ${p.user.groep}` : ""}</p>
-              {p.regels.length === 0 ? (
-                <p style={{ fontStyle: "italic", fontSize: 14 }}>Geen regels.</p>
-              ) : (
-                perSoortVoorPersoon(p).map((s) => (
-                  <div key={s.bron} style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 2 }}>{s.label}</div>
-                    {s.regels.map((r) => (
-                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderTop: "1px solid #ccc", fontSize: 14 }}>
-                        <span>{r.omschrijving}</span>
-                        <span>{r.bedrag < 0 ? "−" : ""}{euro(Math.abs(r.bedrag))}</span>
-                      </div>
-                    ))}
-                  </div>
-                ))
-              )}
-              <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderTop: "2px solid #000", fontWeight: 700, fontSize: 15 }}>
-                <span>{p.totaal < 0 ? "Terug te krijgen" : "Te betalen"}</span>
-                <span>{euro(Math.abs(p.totaal))}</span>
-              </div>
-              {p.totaal < 0 && (
-                <p style={{ fontSize: 12, marginTop: 4 }}>{p.user.iban ? `Terug te storten naar ${p.user.iban}` : "Geen IBAN bekend voor terugbetaling"}</p>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }
