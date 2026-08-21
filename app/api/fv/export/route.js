@@ -32,6 +32,7 @@ const BLAUW = { type: "pattern", pattern: "solid", fgColor: { argb: "FFA3C8E9" }
 const DUN = { style: "thin", color: { argb: "FF000000" } };
 const KADER = { top: DUN, bottom: DUN, left: DUN, right: DUN };
 const EUROFMT = '_ "€" * #,##0.00_ ;_ "€" * -#,##0.00_ ;_ "€" * "-"??_ ;_ @_ ';
+const WIT_VET = { bold: true, color: { argb: "FFFFFFFF" } };
 
 // Bouwt het Excel-bestand rechtstreeks uit de databasegegevens (nooit een
 // schermafdruk) — één bestand met een tabblad per groep (Leiding/Logistiek/
@@ -68,9 +69,9 @@ export async function GET(req) {
     sheet.columns = [{ width: 27 }, { width: 31 }, { width: 24 }, { width: 9 }, { width: 9 }, { width: 41 }];
 
     // Rij 1-4: kopband (groepsnaam/deadline/rekeningnummer + km-vergoeding).
-    setCel(sheet, "A1", groep, { font: { bold: true }, fill: NAVY });
-    setCel(sheet, "B1", `DEADLINE: ${deadlineKort(fvMaand.betaaldeadline)}`, { font: { bold: true }, fill: NAVY });
-    setCel(sheet, "C1", `BE: ${instellingenData}`, { font: { bold: true }, fill: NAVY });
+    setCel(sheet, "A1", groep, { font: WIT_VET, fill: NAVY });
+    setCel(sheet, "B1", `DEADLINE: ${deadlineKort(fvMaand.betaaldeadline)}`, { font: WIT_VET, fill: NAVY });
+    setCel(sheet, "C1", `BE: ${instellingenData}`, { font: WIT_VET, fill: NAVY });
 
     const kmTarief = Number(groep === "Logistiek" ? fvMaand.km_tarief_logistiek : fvMaand.km_tarief_leiding) || 0;
     const diesel = Number(fvMaand.dieselprijs) || 0;
@@ -91,9 +92,9 @@ export async function GET(req) {
         setCel(sheet, `B${rij}`, p.user.iban || "", { numFmt: "@" });
         rij++;
 
-        setCel(sheet, `A${rij}`, "Omschrijving", { font: { bold: true }, fill: NAVY, border: KADER, numFmt: "@" });
-        setCel(sheet, `B${rij}`, "Betalen", { font: { bold: true }, fill: NAVY, border: KADER, numFmt: EUROFMT });
-        setCel(sheet, `C${rij}`, "Opmerking", { font: { bold: true }, fill: NAVY, border: KADER });
+        setCel(sheet, `A${rij}`, "Omschrijving", { font: WIT_VET, fill: NAVY, border: KADER, numFmt: "@" });
+        setCel(sheet, `B${rij}`, "Betalen", { font: WIT_VET, fill: NAVY, border: KADER, numFmt: EUROFMT });
+        setCel(sheet, `C${rij}`, "Opmerking", { font: WIT_VET, fill: NAVY, border: KADER });
         rij++;
 
         const eersteRegelRij = rij;

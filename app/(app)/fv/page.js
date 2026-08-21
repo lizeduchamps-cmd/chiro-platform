@@ -78,9 +78,12 @@ function PersoonKaart({
   const perSoort = perSoortVoorPersoon(p);
 
   return (
-    <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 6, padding: groot ? 18 : 16 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+    <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 4, padding: groot ? 18 : 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 700, fontSize: groot ? 17 : 15 }}>
+            {p.user.naam}{jezelf && <span className="muted" style={{ fontWeight: 600, fontSize: 14 }}> — jij</span>}
+          </div>
           <button
             className={`no-print badge ${klaar ? "badge-success" : "badge-danger"}`}
             onClick={() => magBewerken && onStatusToggle(p.user.id, p.status)}
@@ -90,16 +93,10 @@ function PersoonKaart({
             {klaar ? "Betaald" : "Openstaand"}
           </button>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ fontWeight: 700, fontSize: groot ? 17 : 15 }}>
-            {p.user.naam}{jezelf && <span className="muted" style={{ fontWeight: 600, fontSize: 14 }}> — jij</span>}
-          </div>
-          <div style={{ fontSize: groot ? 16 : 14 }}>
-            <span className="muted">{terugTeKrijgen ? "Terug te krijgen" : "Te betalen"} </span>
-            <span className="money" style={{ fontWeight: 700, color: klaar ? undefined : terugTeKrijgen ? "var(--success-text)" : "var(--danger-deep)" }}>
-              {euro(Math.abs(p.totaal))}
-            </span>
-          </div>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <span className="money" style={{ fontSize: groot ? 16 : 14, fontWeight: 700, color: klaar ? "var(--success-text)" : "var(--danger-deep)" }}>
+            {terugTeKrijgen ? "−" : ""}{euro(Math.abs(p.totaal))}
+          </span>
         </div>
         {terugTeKrijgen && (
           <div className="subtle" style={{ fontSize: 13 }}>
