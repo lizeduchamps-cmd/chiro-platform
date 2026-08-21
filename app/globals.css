@@ -753,6 +753,12 @@ tbody tr:hover {
   .btn-plain {
     min-width: 44px;
   }
+  /* Statuspil in FV (enige <button> met .badge) is een compacte weergave,
+     geen los te tikken snelknop naast andere content — mag strak rond de
+     tekst blijven i.p.v. de algemene duimvriendelijke 44px te erven. */
+  .badge {
+    min-height: 0;
+  }
 }
 
 /* ============ TOASTS (vervangt alert()) ============ */

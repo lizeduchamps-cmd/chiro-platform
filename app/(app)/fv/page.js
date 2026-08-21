@@ -78,8 +78,8 @@ function PersoonKaart({
   const perSoort = perSoortVoorPersoon(p);
 
   return (
-    <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+    <div className={`card ${groot ? `card-lg card-${kleur}` : ""}`} style={{ pageBreakInside: "avoid", display: "flex", flexDirection: "column", gap: 6, padding: groot ? 18 : 16 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <button
             className={`no-print badge ${klaar ? "badge-success" : "badge-danger"}`}
